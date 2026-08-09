@@ -3,8 +3,7 @@ package com.example.domain.model
 import com.example.domain.action.ActionRef
 
 /**
- * Geometria wizualna i geometria interakcji to dwie różne rzeczy (Zasada 9).
- * Canonical vector sensitivity model.
+ * Canonical vector sensitivity model (Zasada 17).
  */
 sealed interface VectorShape {
     data class Rect(val width: Float, val height: Float, val offsetX: Float = 0f, val offsetY: Float = 0f) : VectorShape
@@ -14,16 +13,13 @@ sealed interface VectorShape {
 
 data class Point(val x: Float, val y: Float)
 
-/**
- * Reprezentuje obszar czułości i jego wagę (Zasada 10).
- */
 data class SensitivityField(
     val baseShape: VectorShape,
     val weight: Float = 1.0f
 )
 
 /**
- * Zmiany naniesione przez proces uczenia maszynowego użytkownika (Zasada 12).
+ * User learning/adaptation (Zasada 20).
  */
 data class UserAdaptation(
     val offsetX: Float = 0f,
@@ -32,66 +28,68 @@ data class UserAdaptation(
     val scaleY: Float = 1.0f
 )
 
-/**
- * Sumaryczne pole czułości (Zasada 12).
- */
 data class EffectiveSensitivity(
     val field: SensitivityField,
     val adaptation: UserAdaptation = UserAdaptation()
 )
 
 /**
- * Warstwy (States/Layers)
- * Zgodnie z wytycznymi, state może być momentary, sticky/one-shot, latched.
+ * States/Layers
  */
 data class LayerState(
     val name: String,
-    val activationMode: ActivationMode = ActivationMode.MOMENTARY,
+    val activationMode: ActivationMode = ActivationMode.Momentary,
     val isActive: Boolean = false
 )
 
-enum class ActivationMode {
-    MOMENTARY, // Active while held
-    STICKY,    // One-shot, active for next action
-    LATCHED    // Active until explicitly toggled off
+sealed interface ActivationMode {
+    object Momentary : ActivationMode
+    data class Sticky(val actionCountLimit: Int = 1) : ActivationMode
+    object Latched : ActivationMode
+    data class Timeout(val durationMs: Long) : ActivationMode
+    data class PredicateDriven(val continuationRuleId: String) : ActivationMode
 }
 
 /**
- * Typy wyzwalaczy (Triggers) zamiast sztywnych pól onTap, onLongPress.
+ * Triggers (Zasada 24).
  */
 sealed interface Trigger {
     object Tap : Trigger
     object LongPress : Trigger
     object DoubleTap : Trigger
-    data class Swipe(val direction: SwipeDirection) : Trigger
+    data class Swipe(val angleDegrees: Float, val distanceDp: Float, val velocity: Float? = null) : Trigger
     data class MultiTap(val count: Int) : Trigger
     data class TapAndHold(val count: Int) : Trigger
-    data class Sequence(val actionIds: List<String>) : Trigger // ZMK Leader-like sequence
+    data class Sequence(val inputs: List<InputToken>) : Trigger // generic input sequence
 }
 
-enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
+sealed interface InputToken {
+    data class KeyPress(val keyName: String) : InputToken
+}
 
 /**
- * Wiązanie wyzwalacza z akcją.
+ * Action Binding.
  */
 data class ActionBinding(
     val trigger: Trigger,
     val actionRef: ActionRef
 )
 
-/**
- * Klawisz ma niezależne warstwy: interaction, action.
- * Zastąpienie sztywnych pól dynamiczną listą bindowań.
- */
 data class InteractionBehavior(
     val bindings: List<ActionBinding> = emptyList(),
-    // Opcjonalna polityka rozwiązywania konfliktów tap vs hold
-    val tapHoldPolicy: TapHoldPolicy = TapHoldPolicy.BALANCED
+    val tapHoldPolicy: TapHoldPolicy = TapHoldPolicy(TapHoldType.BALANCED)
 )
 
-enum class TapHoldPolicy {
-    HOLD_PREFERRED,
-    BALANCED,
-    TAP_PREFERRED,
-    TAP_UNLESS_INTERRUPTED
+data class TapHoldPolicy(
+    val type: TapHoldType,
+    val timeoutMs: Long = 200L,
+    val interruptRule: InterruptRule = InterruptRule.DEFAULT
+)
+
+enum class TapHoldType {
+    HOLD_PREFERRED, BALANCED, TAP_PREFERRED, TAP_UNLESS_INTERRUPTED
+}
+
+enum class InterruptRule {
+    DEFAULT, REQUIRE_PRIOR_RELEASE, ALLOW_INTERLEAVED
 }

@@ -1,17 +1,19 @@
 package com.example.domain.input
 
-/**
- * Input processor pipeline boundary (Zasada 22, 71).
- */
+sealed interface ProcessorResult {
+    object Pass : ProcessorResult
+    object Consume : ProcessorResult
+    data class Replace(val newEvents: List<InputEvent>) : ProcessorResult
+    data class Emit(val additionalEvents: List<InputEvent>) : ProcessorResult
+    data class DispatchAction(val actionId: String) : ProcessorResult
+    data class UpdateState(val stateMutations: Map<String, Any>) : ProcessorResult
+}
+
 interface InputProcessor {
-    /**
-     * Zwraca true jeśli przetworzył zdarzenie (i nie należy przekazywać go dalej)
-     * lub modyfikuje strumień zdarzeń.
-     */
-    fun process(event: InputEvent, context: ProcessorContext): Boolean
+    fun process(event: InputEvent, context: ProcessorContext): ProcessorResult
 }
 
 interface ProcessorContext {
-    fun emit(event: InputEvent)
-    fun dispatchAction(actionId: String)
+    val activeLayoutRevision: Int
+    // ...
 }

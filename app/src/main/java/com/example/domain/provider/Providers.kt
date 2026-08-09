@@ -1,31 +1,20 @@
 package com.example.domain.provider
 
-/**
- * Generic capability lifecycle/health model (Zasada 54).
- */
+import com.example.domain.clipboard.ContentRepresentation
+
 enum class CapabilityState {
-    UNAVAILABLE,
-    AVAILABLE_COLD,
-    LOADING,
-    READY,
-    BUSY,
-    DEGRADED,
-    FAILED
+    UNAVAILABLE, AVAILABLE_COLD, LOADING, READY, BUSY, DEGRADED, FAILED
 }
 
 interface Capability<T> {
     val state: CapabilityState
     val providerId: String
-    val isLocal: Boolean // Zasada 63
-    
+    val isLocal: Boolean
     fun getInterface(): T?
 }
 
-/**
- * Provider-independent AI/OCR/ASR domain interfaces (Zasada 64).
- */
 interface LayoutRecognitionProvider {
-    suspend fun recognize(imageBytes: ByteArray): String?
+    suspend fun recognize(imageRef: ContentRepresentation): String?
 }
 
 interface TextGenerationProvider {
@@ -33,18 +22,15 @@ interface TextGenerationProvider {
 }
 
 interface OCRProvider {
-    suspend fun recognizeText(imageBytes: ByteArray): String?
+    suspend fun recognizeText(imageRef: ContentRepresentation): String?
 }
 
-/**
- * ContextProvider interface with provenance (Zasada 66).
- */
 interface ContextProvider {
     val providerId: String
     val isAvailable: Boolean
     val sensitivityClassification: SensitivityLevel
     
-    fun getContext(): ExtractedContext?
+    suspend fun getContext(): ExtractedContext?
 }
 
 enum class SensitivityLevel { LOW, MEDIUM, HIGH, RESTRICTED }

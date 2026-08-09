@@ -1,9 +1,5 @@
 package com.example.domain.security
 
-/**
- * SecurityContext (Zasada 61).
- * Central policy object for privacy decisions.
- */
 data class SecurityContext(
     val allowLearning: Boolean = true,
     val allowHistory: Boolean = true,
@@ -11,25 +7,24 @@ data class SecurityContext(
     val allowContextCapture: Boolean = true,
     val allowPersistence: Boolean = true,
     val allowLocalAI: Boolean = true,
-    val allowExternalProcessing: Boolean = false, // Zewnętrzne wyłączone domyślnie
+    val allowExternalProcessing: Boolean = false,
     val allowScreenContext: Boolean = false
 )
 
 object SecurityContextResolver {
-    
-    /**
-     * Zwraca konfigurację uwzględniając wymuszone ograniczenia np. pól na hasła (Zasada 62).
-     */
     fun resolvePolicy(
         isPasswordField: Boolean,
         isIncognitoMode: Boolean,
+        isSensitiveApp: Boolean,
         userSettings: SecurityContext
     ): SecurityContext {
-        if (isPasswordField || isIncognitoMode) {
+        if (isPasswordField || isIncognitoMode || isSensitiveApp) {
             return userSettings.copy(
                 allowLearning = false,
                 allowHistory = false,
+                allowClipboardCapture = false,
                 allowContextCapture = false,
+                allowPersistence = false,
                 allowExternalProcessing = false,
                 allowScreenContext = false
             )
