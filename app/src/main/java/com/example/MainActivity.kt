@@ -473,7 +473,16 @@ fun SettingsScreen(modifier: Modifier = Modifier, onEnableKeyboard: () -> Unit, 
                             inputStream?.close()
                             if (bitmap != null) {
                                 val result = com.example.GeminiLayoutRecognizer.recognizeLayout(bitmap)
-                                recognizeResult = result
+                                if (result != null) {
+                                    val parsedLayout = com.example.domain.parser.LayoutParser.parseGeminiResponse(result)
+                                    if (parsedLayout != null) {
+                                        recognizeResult = "Udało się zmapować układ!\nLiczba paneli: ${parsedLayout.panels.size}\n\nSurowy JSON:\n$result"
+                                    } else {
+                                        recognizeResult = "Zwrócono wynik, ale parsowanie zawiodło:\n$result"
+                                    }
+                                } else {
+                                    recognizeResult = "Zwrócono pusty wynik z Gemini."
+                                }
                             } else {
                                 recognizeResult = "Błąd: nie można załadować obrazu."
                             }
@@ -540,4 +549,3 @@ fun SettingsScreen(modifier: Modifier = Modifier, onEnableKeyboard: () -> Unit, 
     }
   }
 }
-
