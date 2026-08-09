@@ -26,9 +26,6 @@ data class RecognizedKey(
     val specialType: String? = null
 )
 
-/**
- * Zwracamy pełny wynik importu ze wszystkimi nowymi obiektami (Zasada 10).
- */
 data class ImportResult(
     val importedLayoutId: String,
     val newElements: Map<String, Element>,
@@ -72,9 +69,16 @@ object LayoutParser {
                 val longPressAction = key.altChars?.firstOrNull()?.let { ActionDefinition.CommitText(text = it) }
                 longPressAction?.let { actions[it.id] = it }
                 
+                val bindings = mutableListOf<ActionBinding>()
+                if (tapAction != null) {
+                    bindings.add(ActionBinding(Trigger.Tap, ActionRef(tapAction.id)))
+                }
+                if (longPressAction != null) {
+                    bindings.add(ActionBinding(Trigger.LongPress, ActionRef(longPressAction.id)))
+                }
+                
                 val behavior = InteractionBehavior(
-                    onTapRef = tapAction?.let { ActionRef(it.id) },
-                    onLongPressRef = longPressAction?.let { ActionRef(it.id) }
+                    bindings = bindings
                 )
                 
                 val visual = VisualRepresentation(
@@ -83,7 +87,7 @@ object LayoutParser {
                 )
                 
                 val element = Element.Key(
-                    name = "Key_${rowIndex}_${colIndex}", // Naprawiono interpolację (Zasada 10)
+                    name = "Key_${rowIndex}_${colIndex}",
                     visual = visual,
                     sensitivity = null,
                     interactionBehavior = behavior

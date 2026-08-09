@@ -61,7 +61,9 @@ class ArchitectureTest {
             name = "Key_A",
             visual = VisualRepresentation(label = "A"),
             sensitivity = null,
-            interactionBehavior = InteractionBehavior(onTapRef = ActionRef(actionId))
+            interactionBehavior = InteractionBehavior(
+                bindings = listOf(ActionBinding(Trigger.Tap, ActionRef(actionId)))
+            )
         )
         
         val groupId = "group-1"
@@ -101,7 +103,9 @@ class ArchitectureTest {
         assertNotNull(document.groupRegistry[groupId])
         
         // Reusable action check
-        val actionRefId = (document.elementRegistry[elementId] as Element.Key).interactionBehavior.onTapRef?.actionId
+        val actionRefId = (document.elementRegistry[elementId] as Element.Key)
+            .interactionBehavior.bindings.firstOrNull { it.trigger == Trigger.Tap }?.actionRef?.actionId
+            
         assertEquals(actionId, actionRefId)
         val resolvedAction = document.actionRegistry[actionRefId]
         assertTrue(resolvedAction is ActionDefinition.CommitText)
