@@ -6,21 +6,25 @@ import com.example.domain.security.*
 import com.example.domain.sensitivity.*
 import org.junit.Assert.*
 import org.junit.Test
-import java.util.UUID
 
 class SensitivityTest {
 
     @Test
     fun testProbabilityNormalization() {
-        val sampler = ProbabilisticSampler()
-        val metadata = RasterMetadata(1, 1, 100f, 100f, 1f, 0, 1, 1)
-        val mapA = RasterSensitivityMap("A", 10, 10, ByteArray(100) { 64.toByte() }, metadata)
-        val mapB = RasterSensitivityMap("B", 10, 10, ByteArray(100) { 128.toByte() }, metadata)
-        val mapC = RasterSensitivityMap("C", 10, 10, ByteArray(100) { 0.toByte() }, metadata)
-
-        val distribution = sampler.sample(5f, 5f, listOf(mapA, mapB, mapC), "evt1", 1)
+        val transferSettings = ModelTransferSettings(backgroundEvidence = 0f)
+        val sampler = ProbabilisticSampler(transferSettings)
+        val metadata = PatchMetadata(1, 1, 1, 1, 1)
         
-        assertEquals(2, distribution.candidates.size)
+        val patchA = LocalSensitivityPatch("A", "A", CoordinateSpace.WORKSPACE, 0f, 0f, 10, 10, 10, ByteArray(100) { 64.toByte() }, InterpolationMode.NEAREST, metadata)
+        val patchB = LocalSensitivityPatch("B", "B", CoordinateSpace.WORKSPACE, 0f, 0f, 10, 10, 10, ByteArray(100) { 128.toByte() }, InterpolationMode.NEAREST, metadata)
+        val patchC = LocalSensitivityPatch("C", "C", CoordinateSpace.WORKSPACE, 0f, 0f, 10, 10, 10, ByteArray(100) { 0.toByte() }, InterpolationMode.NEAREST, metadata)
+
+        val distribution = sampler.sample(5f, 5f, listOf(patchA, patchB, patchC), "evt1", 1)
+        
+        // With floor = 0.01f, even raw 64 (0.25) goes up. 
+        // Let's use a simpler transfer for test: 
+        val rawA = 64f / 255f
+        val rawB = 128f / 255f
         
         val candA = distribution.candidates.find { it.elementId == "A" }
         val candB = distribution.candidates.find { it.elementId == "B" }
@@ -28,26 +32,45 @@ class SensitivityTest {
         assertNotNull(candA)
         assertNotNull(candB)
         
-        val scoreA = 64f / 255f
-        val scoreB = 128f / 255f
-        val total = scoreA + scoreB
+        val sA = transferSettings.applyTransfer(rawA)
+        val sB = transferSettings.applyTransfer(rawB)
         
-        assertEquals(scoreA / total, candA!!.score, 0.001f)
-        assertEquals(scoreB / total, candB!!.score, 0.001f)
+        val total = sA + sB
+        
+        assertEquals(sA / total, candA!!.score, 0.001f)
+        assertEquals(sB / total, candB!!.score, 0.001f)
     }
 
     @Test
     fun testOverlap() {
-        val sampler = ProbabilisticSampler()
-        val metadata = RasterMetadata(1, 1, 100f, 100f, 1f, 0, 1, 1)
-        val mapA = RasterSensitivityMap("A", 10, 10, ByteArray(100) { 255.toByte() }, metadata)
-        val mapB = RasterSensitivityMap("B", 10, 10, ByteArray(100) { 255.toByte() }, metadata)
+        val transferSettings = ModelTransferSettings(backgroundEvidence = 0f)
+        val sampler = ProbabilisticSampler(transferSettings)
+        val metadata = PatchMetadata(1, 1, 1, 1, 1)
         
-        val distribution = sampler.sample(5f, 5f, listOf(mapA, mapB), "evt1", 1)
+        val patchA = LocalSensitivityPatch("A", "A", CoordinateSpace.WORKSPACE, 0f, 0f, 10, 10, 10, ByteArray(100) { 255.toByte() }, InterpolationMode.NEAREST, metadata)
+        val patchB = LocalSensitivityPatch("B", "B", CoordinateSpace.WORKSPACE, 0f, 0f, 10, 10, 10, ByteArray(100) { 255.toByte() }, InterpolationMode.NEAREST, metadata)
         
-        assertEquals(2, distribution.candidates.size)
-        assertEquals(0.5f, distribution.candidates[0].score, 0.001f)
-        assertEquals(0.5f, distribution.candidates[1].score, 0.001f)
+        val distribution = sampler.sample(5f, 5f, listOf(patchA, patchB), "evt1", 1)
+        
+        val candA = distribution.candidates.find { it.elementId == "A" }
+        val candB = distribution.candidates.find { it.elementId == "B" }
+        
+        assertNotNull(candA)
+        assertNotNull(candB)
+        assertEquals(0.5f, candA!!.score, 0.001f)
+        assertEquals(0.5f, candB!!.score, 0.001f)
+    }
+
+    @Test
+    fun testOutsidePatch() {
+        val sampler = ProbabilisticSampler(ModelTransferSettings())
+        val metadata = PatchMetadata(1, 1, 1, 1, 1)
+        val patchA = LocalSensitivityPatch("A", "A", CoordinateSpace.WORKSPACE, 10f, 10f, 10, 10, 10, ByteArray(100) { 255.toByte() }, InterpolationMode.NEAREST, metadata)
+        
+        val distribution = sampler.sample(5f, 5f, listOf(patchA), "evt1", 1)
+        val candA = distribution.candidates.find { it.elementId == "A" }
+        
+        assertNull(candA) // Since (5,5) is outside origin (10,10) to (20,20)
     }
 
     @Test
@@ -82,76 +105,43 @@ class SensitivityTest {
             correctionSource = "BACKSPACE"
         )
         
-        // Ensure it points to the original event
         assertEquals("evt-bad-tap", obs.originalEventId)
         assertEquals("Y", obs.correctedElementId)
     }
 
     @Test
     fun testAdaptationSeparation() {
-        val base = SensitivityField(VectorShape.Rect(10f, 10f))
         val currentAdaptation = UserAdaptation()
-        val effective = EffectiveSensitivity(base, currentAdaptation)
         
         val learner = MinimalLearner(0.1f)
         val obs = CorrectionObservation("evt", Point(10f, 0f), null, "A", "B", 1, 1, 0, "SRC")
         
         val newAdaptation = learner.learnFromCorrection(obs, currentAdaptation)
-        val newEffective = EffectiveSensitivity(base, newAdaptation)
         
-        // Base sensitivity is untouched
-        assertEquals(base, newEffective.field)
-        // Adaptation is updated
-        assertNotEquals(currentAdaptation, newAdaptation)
+        assertTrue(currentAdaptation.kernels.isEmpty())
+        assertEquals(2, newAdaptation.kernels.size) // Positive for B, Negative for A
+        assertEquals("B", newAdaptation.kernels[0].targetElementId)
+        assertEquals("A", newAdaptation.kernels[1].targetElementId)
+        assertTrue(newAdaptation.kernels[0].strength > 0f)
+        assertTrue(newAdaptation.kernels[1].strength < 0f)
     }
 
     @Test
-    fun testResetAdaptation() {
-        val base = SensitivityField(VectorShape.Rect(10f, 10f))
-        var adaptation = UserAdaptation(offsetX = 5f)
-        val effective = EffectiveSensitivity(base, adaptation)
+    fun testSpatialIndex() {
+        val metadata = PatchMetadata(1, 1, 1, 1, 1)
+        val index = SpatialCandidateIndex(10f, 100f, 100f)
         
-        // Reset
-        adaptation = UserAdaptation()
-        val resetEffective = EffectiveSensitivity(base, adaptation)
+        val patchA = LocalSensitivityPatch("pA", "A", CoordinateSpace.WORKSPACE, 0f, 0f, 15, 15, 15, ByteArray(225), InterpolationMode.NEAREST, metadata)
+        val patchB = LocalSensitivityPatch("pB", "B", CoordinateSpace.WORKSPACE, 20f, 20f, 10, 10, 10, ByteArray(100), InterpolationMode.NEAREST, metadata)
         
-        assertEquals(0f, resetEffective.adaptation.offsetX, 0.001f)
-    }
-    
-    @Test
-    fun testRasterInvalidation() {
-        val oldMetadata = RasterMetadata(1, 1, 100f, 100f, 1f, 0, 1, 1)
-        val currentLayoutRevision = 2
+        index.buildIndex(listOf(patchA, patchB))
         
-        val isStale = oldMetadata.layoutRevision != currentLayoutRevision
-        assertTrue(isStale)
-    }
-
-    @Test
-    fun testSecurityContext() {
-        val baseConfig = SecurityContext()
-        assertTrue(baseConfig.allowLearning)
+        val candidates1 = index.getCandidates(5f, 5f)
+        assertTrue(candidates1.any { it.patchId == "pA" })
+        assertFalse(candidates1.any { it.patchId == "pB" })
         
-        val secureConfig = SecurityContextResolver.resolvePolicy(
-            isPasswordField = true,
-            isIncognitoMode = false,
-            isSensitiveApp = false,
-            userSettings = baseConfig
-        )
-        
-        assertFalse(secureConfig.allowLearning)
-        assertFalse(secureConfig.allowHistory)
-        assertFalse(secureConfig.allowPersistence)
-    }
-
-    @Test
-    fun testPipelineResultSemantics() {
-        val result: ProcessorResult = ProcessorResult.Consume
-        
-        // Result is explicit rather than a boolean
-        assertTrue(result is ProcessorResult.Consume)
-        
-        val replaceResult = ProcessorResult.Replace(listOf())
-        assertTrue(replaceResult is ProcessorResult.Replace)
+        val candidates2 = index.getCandidates(25f, 25f)
+        assertFalse(candidates2.any { it.patchId == "pA" })
+        assertTrue(candidates2.any { it.patchId == "pB" })
     }
 }

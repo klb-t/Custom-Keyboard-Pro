@@ -2,6 +2,7 @@ package com.example.domain.sensitivity
 
 import com.example.domain.model.Point
 import com.example.domain.model.UserAdaptation
+import com.example.domain.model.AdaptationKernel
 
 data class CorrectionObservation(
     val originalEventId: String,
@@ -23,20 +24,39 @@ data class CalibrationSample(
     val timestamp: Long
 )
 
-class MinimalLearner(val learningRate: Float = 0.05f) {
+class MinimalLearner(
+    val learningRate: Float = 0.05f,
+    val kernelRadius: Float = 30f,
+    val positiveStrength: Float = 1.0f,
+    val negativeStrength: Float = 0.2f
+) {
 
     fun learnFromCorrection(
         observation: CorrectionObservation,
         currentAdaptation: UserAdaptation
     ): UserAdaptation {
-        val deltaX = observation.originalTapPoint.x * learningRate
-        val deltaY = observation.originalTapPoint.y * learningRate
+        val kernels = currentAdaptation.kernels.toMutableList()
         
-        return UserAdaptation(
-            offsetX = currentAdaptation.offsetX + deltaX,
-            offsetY = currentAdaptation.offsetY + deltaY,
-            scaleX = currentAdaptation.scaleX,
-            scaleY = currentAdaptation.scaleY
-        )
+        kernels.add(AdaptationKernel(
+            targetElementId = observation.correctedElementId,
+            center = observation.originalTapPoint,
+            radius = kernelRadius,
+            strength = positiveStrength * learningRate,
+            revision = observation.sensitivityRevision
+        ))
+        
+        observation.originalSelectedElementId?.let { wrongId ->
+            if (wrongId != ProbabilisticSampler.BACKGROUND_KEY_ID) {
+                kernels.add(AdaptationKernel(
+                    targetElementId = wrongId,
+                    center = observation.originalTapPoint,
+                    radius = kernelRadius,
+                    strength = -negativeStrength * learningRate,
+                    revision = observation.sensitivityRevision
+                ))
+            }
+        }
+        
+        return UserAdaptation(kernels)
     }
 }

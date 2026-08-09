@@ -2,9 +2,6 @@ package com.example.domain.model
 
 import com.example.domain.action.ActionRef
 
-/**
- * Canonical vector sensitivity model (Zasada 17).
- */
 sealed interface VectorShape {
     data class Rect(val width: Float, val height: Float, val offsetX: Float = 0f, val offsetY: Float = 0f) : VectorShape
     data class Circle(val radius: Float, val offsetX: Float = 0f, val offsetY: Float = 0f) : VectorShape
@@ -18,14 +15,16 @@ data class SensitivityField(
     val weight: Float = 1.0f
 )
 
-/**
- * User learning/adaptation (Zasada 20).
- */
+data class AdaptationKernel(
+    val targetElementId: String,
+    val center: Point,
+    val radius: Float,
+    val strength: Float,
+    val revision: Int
+)
+
 data class UserAdaptation(
-    val offsetX: Float = 0f,
-    val offsetY: Float = 0f,
-    val scaleX: Float = 1.0f,
-    val scaleY: Float = 1.0f
+    val kernels: List<AdaptationKernel> = emptyList()
 )
 
 data class EffectiveSensitivity(
@@ -33,9 +32,6 @@ data class EffectiveSensitivity(
     val adaptation: UserAdaptation = UserAdaptation()
 )
 
-/**
- * States/Layers
- */
 data class LayerState(
     val name: String,
     val activationMode: ActivationMode = ActivationMode.Momentary,
@@ -50,9 +46,6 @@ sealed interface ActivationMode {
     data class PredicateDriven(val continuationRuleId: String) : ActivationMode
 }
 
-/**
- * Triggers (Zasada 24).
- */
 sealed interface Trigger {
     object Tap : Trigger
     object LongPress : Trigger
@@ -60,16 +53,13 @@ sealed interface Trigger {
     data class Swipe(val angleDegrees: Float, val distanceDp: Float, val velocity: Float? = null) : Trigger
     data class MultiTap(val count: Int) : Trigger
     data class TapAndHold(val count: Int) : Trigger
-    data class Sequence(val inputs: List<InputToken>) : Trigger // generic input sequence
+    data class Sequence(val inputs: List<InputToken>) : Trigger
 }
 
 sealed interface InputToken {
     data class KeyPress(val keyName: String) : InputToken
 }
 
-/**
- * Action Binding.
- */
 data class ActionBinding(
     val trigger: Trigger,
     val actionRef: ActionRef

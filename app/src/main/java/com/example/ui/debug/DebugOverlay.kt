@@ -12,6 +12,26 @@ import com.example.domain.model.Point
 import com.example.domain.sensitivity.DecisionMetrics
 import com.example.domain.sensitivity.KeyProbabilityDistribution
 
+data class FieldDisplaySettings(
+    val brightness: Float = 0f,
+    val contrast: Float = 1.0f,
+    val gamma: Float = 1.0f,
+    val alpha: Float = 0.7f,
+    val palette: String = "DEFAULT",
+    val minDisplayRange: Float = 0f,
+    val maxDisplayRange: Float = 1f
+)
+
+enum class DiagnosticViewMode {
+    NORMAL_KEYBOARD,
+    RAW_SENSITIVITY,
+    EFFECTIVE_SENSITIVITY,
+    WINNER_REGION,
+    ENTROPY,
+    ADAPTATION,
+    COMPOSITE
+}
+
 @Composable
 fun DebugOverlay(
     lastTap: Point?,
