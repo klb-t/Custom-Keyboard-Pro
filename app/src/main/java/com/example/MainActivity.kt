@@ -476,7 +476,7 @@ fun SettingsScreen(modifier: Modifier = Modifier, onEnableKeyboard: () -> Unit, 
                                 if (result != null) {
                                     val parsedLayout = com.example.domain.parser.LayoutParser.parseGeminiResponse(result)
                                     if (parsedLayout != null) {
-                                        recognizeResult = "Udało się zmapować układ!\nLiczba paneli: ${parsedLayout.panels.size}\n\nSurowy JSON:\n$result"
+                                        recognizeResult = "Udało się zmapować układ!\nLiczba paneli: ${parsedLayout.newPanels.size}\n\nSurowy JSON:\n$result"
                                     } else {
                                         recognizeResult = "Zwrócono wynik, ale parsowanie zawiodło:\n$result"
                                     }

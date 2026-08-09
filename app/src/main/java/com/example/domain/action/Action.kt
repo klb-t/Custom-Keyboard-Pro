@@ -3,47 +3,52 @@ package com.example.domain.action
 import java.util.UUID
 
 /**
- * Zgodnie z wytycznymi architektonicznymi, Klawisz nie musi wysyłać tylko znaków.
- * Klawisz referuje Action. To umożliwia bibliotekę akcji, makra, skrypty, import/export.
+ * Zgodnie z wytycznymi architektonicznymi (Zasada 34), Actions to obiekty wielokrotnego użytku.
+ * ActionDefinition określa zachowanie, a klawisze trzymają ActionRef.
  */
-sealed interface Action {
+sealed interface ActionDefinition {
     val id: String
 
     data class CommitText(
-        val text: String,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val text: String
+    ) : ActionDefinition
 
     data class SendKeyEvent(
-        val keyCode: Int,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val keyCode: Int
+    ) : ActionDefinition
     
     data class ToggleModifier(
-        val modifier: ModifierType,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val modifier: ModifierType
+    ) : ActionDefinition
 
     data class SwitchLayer(
-        val layerName: String,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val layerName: String
+    ) : ActionDefinition
 
     data class OpenPanel(
-        val panelId: String,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val panelId: String
+    ) : ActionDefinition
     
     data class ExecuteMacro(
-        val actions: List<Action>,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val actionIds: List<String> // odniesienia do innych ActionDefinition
+    ) : ActionDefinition
     
     data class ClipboardAction(
-        val type: ClipboardActionType,
-        override val id: String = UUID.randomUUID().toString()
-    ) : Action
+        override val id: String = UUID.randomUUID().toString(),
+        val type: ClipboardActionType
+    ) : ActionDefinition
 }
+
+/**
+ * Odniesienie do ActionDefinition.
+ */
+data class ActionRef(val actionId: String)
 
 enum class ModifierType {
     SHIFT, CTRL, ALT, META

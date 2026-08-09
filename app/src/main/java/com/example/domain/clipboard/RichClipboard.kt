@@ -5,41 +5,53 @@ import java.util.UUID
 /**
  * Clipboard - nie lista stringów, lecz object store (Zasada 18)
  * Capability model zamiast wyjątków (Zasada 23, 38)
+ * Domain model is the canonical one (Zasada 7)
  */
 data class ClipboardItem(
     val id: String = UUID.randomUUID().toString(),
     val timestamp: Long = System.currentTimeMillis(),
-    val sourceUri: String? = null,
     val representations: List<ContentRepresentation>,
     val metadata: Map<String, String> = emptyMap(),
     val isPinned: Boolean = false,
     val editHistory: List<String> = emptyList() // ID poprzednich wersji w ramach edycji
 )
 
-data class ContentRepresentation(
-    val mimeType: String,
-    val payload: ByteArray, // w przypadku większych plików to będzie URI wskazujące na lokalny plik zmaterializowany (Zasada 20)
-    val isLocalFile: Boolean = false
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
+/**
+ * Explicit typed storage representations (Zasada 6).
+ */
+sealed interface ContentRepresentation {
+    val mimeType: String
 
-        other as ContentRepresentation
+    data class InlineText(
+        override val mimeType: String = "text/plain",
+        val text: String
+    ) : ContentRepresentation
 
-        if (mimeType != other.mimeType) return false
-        if (!payload.contentEquals(other.payload)) return false
-        if (isLocalFile != other.isLocalFile) return false
-
-        return true
+    data class InlineBinary(
+        override val mimeType: String,
+        val data: ByteArray
+    ) : ContentRepresentation {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as InlineBinary
+            if (mimeType != other.mimeType) return false
+            return data.contentEquals(other.data)
+        }
+        override fun hashCode(): Int {
+            return 31 * mimeType.hashCode() + data.contentHashCode()
+        }
     }
 
-    override fun hashCode(): Int {
-        var result = mimeType.hashCode()
-        result = 31 * result + payload.contentHashCode()
-        result = 31 * result + isLocalFile.hashCode()
-        return result
-    }
+    data class UriReference(
+        override val mimeType: String,
+        val uri: String
+    ) : ContentRepresentation
+
+    data class LocalMaterializedFile(
+        override val mimeType: String,
+        val filePath: String
+    ) : ContentRepresentation
 }
 
 /**

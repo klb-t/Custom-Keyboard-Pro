@@ -1,11 +1,27 @@
 package com.example.domain.model
 
+import com.example.domain.action.ActionDefinition
 import java.util.UUID
 
 /**
- * Podstawowa hierarchia modelu (Zasada 1):
- * Workspace -> Layout -> Panel -> Group -> Element
+ * Główny dokument (Zasada 1, Zasada 9).
+ * Canonical document that owns all reusable definitions.
  */
+data class KeyboardDocument(
+    val schemaVersion: Int = 1,
+    val workspace: Workspace,
+    val layoutRegistry: Map<String, Layout> = emptyMap(),
+    val panelRegistry: Map<String, Panel> = emptyMap(),
+    val groupRegistry: Map<String, Group> = emptyMap(),
+    val elementRegistry: Map<String, Element> = emptyMap(),
+    val actionRegistry: Map<String, ActionDefinition> = emptyMap(),
+    val styleRegistry: Map<String, StyleDefinition> = emptyMap()
+)
+
+data class StyleDefinition(
+    val id: String = UUID.randomUUID().toString(),
+    val appearance: Appearance? = null
+)
 
 /**
  * Workspace jest przestrzenią, w której materializowane są wszystkie elementy (Zasada 2)
@@ -13,12 +29,11 @@ import java.util.UUID
 data class Workspace(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val layouts: List<Layout>,
     val activeLayoutId: String? = null
 )
 
 /**
- * Layout to konfiguracja kompozycji, nie enum w kodzie (Zasada 3).
+ * Layout to konfiguracja kompozycji (Zasada 3).
  */
 data class Layout(
     val id: String = UUID.randomUUID().toString(),
@@ -28,30 +43,63 @@ data class Layout(
 )
 
 /**
+ * Referencje i typed overrides (Zasada 2, Zasada 31).
+ */
+data class PanelReference(
+    val panelId: String,
+    val positionOverride: PositionConstraint? = null,
+    val appearanceOverride: Appearance? = null
+)
+
+data class GroupReference(
+    val groupId: String,
+    val appearanceOverride: Appearance? = null
+)
+
+data class ElementReference(
+    val elementId: String,
+    val visualOverride: VisualOverrides? = null,
+    val interactionOverride: InteractionOverrides? = null
+)
+
+data class VisualOverrides(
+    val label: String? = null,
+    val widthWeight: Float? = null,
+    val appearance: Appearance? = null
+)
+
+data class InteractionOverrides(
+    val behaviorOverride: InteractionBehavior? = null
+)
+
+/**
+ * System constraints zamiast Docking enum (Zasada 3).
+ */
+sealed interface PositionConstraint {
+    data class AnchorToEdge(val edge: Edge, val marginDp: Float = 0f) : PositionConstraint
+    data class AnchorToPanel(val targetPanelId: String, val myEdge: Edge, val targetEdge: Edge, val offsetDp: Float = 0f) : PositionConstraint
+    data class RelativeOffset(val xDp: Float, val yDp: Float) : PositionConstraint
+    object Floating : PositionConstraint
+}
+
+enum class Edge { Top, Bottom, Left, Right }
+
+/**
  * Panel to region prezentacyjny (Zasada 6).
  */
 data class Panel(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val docking: Docking = Docking.Bottom,
+    val positionConstraint: PositionConstraint = PositionConstraint.AnchorToEdge(Edge.Bottom),
     val size: SizeConfig = SizeConfig.ContentSized,
     val appearance: Appearance = Appearance.Transparent,
     val content: PanelContent
 )
 
 sealed interface PanelContent {
-    data class GroupRef(val groupId: String) : PanelContent
-    data class Elements(val elements: List<Element>) : PanelContent
+    data class GroupRef(val group: GroupReference) : PanelContent
+    data class Elements(val elements: List<ElementReference>) : PanelContent
     data class Panels(val panels: List<PanelReference>) : PanelContent
-}
-
-data class PanelReference(
-    val panelId: String,
-    val overrides: Map<String, Any> = emptyMap() // dziedziczenie/nadpisywanie (Zasada 31)
-)
-
-enum class Docking {
-    Bottom, Top, Left, Right, Floating
 }
 
 sealed interface SizeConfig {
@@ -74,11 +122,6 @@ data class Group(
     val elements: List<ElementReference>
 )
 
-data class ElementReference(
-    val elementId: String,
-    val overrides: Map<String, Any> = emptyMap()
-)
-
 /**
  * Element interaktywny. "Key" to nie jedyny typ (Zasada 7)
  */
@@ -86,13 +129,13 @@ sealed interface Element {
     val id: String
     val name: String
     val visual: VisualRepresentation
-    val interactionField: InteractionField?
+    val sensitivity: EffectiveSensitivity?
 
     data class Key(
         override val id: String = UUID.randomUUID().toString(),
         override val name: String,
         override val visual: VisualRepresentation,
-        override val interactionField: InteractionField?,
+        override val sensitivity: EffectiveSensitivity?,
         val interactionBehavior: InteractionBehavior,
         val layerOverrides: Map<String, InteractionBehavior> = emptyMap() // zachowanie zalezne od layer (Zasada 13)
     ) : Element
@@ -101,7 +144,7 @@ sealed interface Element {
         override val id: String = UUID.randomUUID().toString(),
         override val name: String,
         override val visual: VisualRepresentation,
-        override val interactionField: InteractionField? = null
+        override val sensitivity: EffectiveSensitivity? = null
     ) : Element
 }
 
