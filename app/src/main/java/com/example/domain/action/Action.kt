@@ -43,6 +43,10 @@ sealed interface ActionDefinition {
         override val id: String = UUID.randomUUID().toString(),
         val type: ClipboardActionType
     ) : ActionDefinition
+    data class SelectionAction(
+        override val id: String = UUID.randomUUID().toString(),
+        val intent: com.example.domain.selection.SelectionIntent
+    ) : ActionDefinition
 }
 
 /**

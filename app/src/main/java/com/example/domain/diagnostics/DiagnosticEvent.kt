@@ -26,6 +26,6 @@ data class DiagnosticEvent(
     val eventType: String,
     val correlationId: String? = null,
     val parentCorrelationId: String? = null,
-    val fields: Map<String, Any?> = emptyMap(),
+    val fields: Map<String, DiagnosticValue> = emptyMap(),
     val sensitivityClassification: SensitivityClassification = SensitivityClassification.INTERNAL
 )

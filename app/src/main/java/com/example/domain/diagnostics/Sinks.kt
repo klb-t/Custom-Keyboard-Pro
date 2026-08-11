@@ -5,6 +5,9 @@ import java.util.ArrayDeque
 class RingBufferSink(val capacity: Int, val minLevel: DiagnosticLevel = DiagnosticLevel.TRACE) : DiagnosticSink {
     private val buffer = ArrayDeque<DiagnosticEvent>(capacity)
     
+    override var isHealthy: Boolean = true
+        private set
+    
     override fun onEvent(event: DiagnosticEvent) {
         if (event.level.severity < minLevel.severity) return
         

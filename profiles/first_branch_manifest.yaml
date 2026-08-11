@@ -1,0 +1,12 @@
+schemaVersion: 1
+profileId: first_branches
+abstractionId: project_manifest
+implementation_metadata:
+  description: "First branches of the open variations in the project."
+capabilities: []
+platform: android
+renderer: compose
+sensitivity_runtime: local_8bit_patches
+selection_backend: android_input_connection
+inference_provider: openrouter
+diagnostics_runtime: android_jvm_current

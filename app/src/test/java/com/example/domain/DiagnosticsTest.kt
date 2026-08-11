@@ -1,6 +1,7 @@
 package com.example.domain
 
 import com.example.domain.diagnostics.*
+import com.example.domain.diagnostics.toDiagnosticValue
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.UUID
@@ -19,13 +20,13 @@ class DiagnosticsTest {
             category = DiagnosticCategory.INPUT,
             component = "Test",
             eventType = "TestEvent",
-            fields = mapOf("testField" to "testValue")
+            fields = mapOf("testField" to "testValue".toDiagnosticValue())
         ))
         
         val events = sink.getEvents()
         assertEquals(1, events.size)
         assertEquals("evt1", events[0].eventId)
-        assertEquals("testValue", events[0].fields["testField"])
+        assertEquals("testValue", (events[0].fields["testField"] as DiagnosticValue.StringValue).value)
     }
 
     @Test

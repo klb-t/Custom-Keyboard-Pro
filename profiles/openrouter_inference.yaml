@@ -1,0 +1,18 @@
+schemaVersion: 1
+profileId: openrouter_v1
+abstractionId: inference_provider
+implementation_metadata:
+  description: "Broad first inference-provider profile using OpenRouter."
+capabilities:
+  - text_generation
+  - chat
+inputs:
+  - messages
+outputs:
+  - text
+parameters:
+  temperature: OPTIONAL_STANDARD
+  max_tokens: OPTIONAL_STANDARD
+  top_p: OPTIONAL_STANDARD
+extensions:
+  route: PROVIDER_EXTENSION

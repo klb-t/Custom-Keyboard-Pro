@@ -1,5 +1,7 @@
 package com.example.domain.sensitivity
 
+import kotlin.math.ln
+
 interface DecisionPolicy {
     fun decide(distribution: KeyProbabilityDistribution): DecisionResult
 }
@@ -28,11 +30,18 @@ class ArgmaxDecisionPolicy(private val fallbackThreshold: Float = 0f) : Decision
         val top2 = sorted.getOrNull(1)
         val margin = if (top2 != null) top1.score - top2.score else null
         
+        var entropy = 0f
+        for (c in sorted) {
+            if (c.score > 0f) {
+                entropy -= c.score * ln(c.score)
+            }
+        }
+        
         val metrics = DecisionMetrics(
             top1Prob = top1.score,
             top2Prob = top2?.score,
             margin = margin,
-            entropy = 0f, 
+            entropy = entropy, 
             relevantCandidatesCount = sorted.size
         )
         
