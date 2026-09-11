@@ -85,7 +85,7 @@ object SettingsStore {
     // so a settings file from an older or newer build still loads.
     // -----------------------------------------------------------------------
 
-    private fun toJson(s: Settings): JSONObject = JSONObject().apply {
+    internal fun toJson(s: Settings): JSONObject = JSONObject().apply {
         put("expertMode", s.expertMode)
         put("themeId", s.themeId)
         put("presentation", s.presentation.name)
@@ -190,7 +190,7 @@ object SettingsStore {
         put("gestureSwipeRight", s.gestureSwipeRight)
     }
 
-    private fun fromJson(o: JSONObject): Settings {
+    internal fun fromJson(o: JSONObject): Settings {
         val d = Settings()
         return Settings(
             expertMode = o.optBoolean("expertMode", d.expertMode),
