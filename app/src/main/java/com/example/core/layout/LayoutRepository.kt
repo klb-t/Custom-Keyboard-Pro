@@ -55,7 +55,8 @@ object LayoutRepository {
 
     fun all(): List<LayoutDef> = _layouts.value
 
-    fun byId(id: String): LayoutDef? = _layouts.value.firstOrNull { it.id == id }
+    fun byId(id: String?): LayoutDef? =
+        if (id.isNullOrBlank()) null else _layouts.value.firstOrNull { it.id == id }
 
     /** Never fails: falls back through the enabled list to the stock Polish QWERTY. */
     fun resolve(id: String?, enabled: List<String>): LayoutDef =

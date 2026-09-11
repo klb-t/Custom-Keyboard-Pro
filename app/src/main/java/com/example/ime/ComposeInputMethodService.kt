@@ -1,7 +1,6 @@
 package com.example.ime
 
 import android.inputmethodservice.InputMethodService
-import com.example.util.AppLogger
 import android.view.View
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -14,128 +13,75 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.example.util.AppLogger
 
-abstract class ComposeInputMethodService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+/**
+ * The plumbing a Compose UI needs to live inside an `InputMethodService`.
+ *
+ * An IME is not an Activity, so nothing gives its views a lifecycle owner, a
+ * ViewModelStore or a saved-state registry; Compose requires all three and crashes
+ * without them. This supplies them and drives the lifecycle from the IME's own
+ * callbacks.
+ */
+abstract class ComposeInputMethodService :
+    InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
+    private val savedStateController = SavedStateRegistryController.create(this)
 
-    override val lifecycle: Lifecycle
-        get() = lifecycleRegistry
-        
-    override val viewModelStore: ViewModelStore
-        get() = store
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore: ViewModelStore get() = store
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
 
     override fun onCreate() {
         super.onCreate()
         AppLogger.init(applicationContext)
-        AppLogger.d("IME_DEBUG", "onCreate")
-        savedStateRegistryController.performRestore(null)
+        savedStateController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
     }
 
-    override fun onInitializeInterface() {
-        try {
-            super.onInitializeInterface()
-            AppLogger.d("IME_DEBUG", "onInitializeInterface")
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onInitializeInterface", e)
-        }
-    }
-
-    override fun onBindInput() {
-        try {
-            super.onBindInput()
-            AppLogger.d("IME_DEBUG", "onBindInput")
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onBindInput", e)
-        }
-    }
-
-    override fun onStartInput(attribute: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
-        try {
-            super.onStartInput(attribute, restarting)
-            AppLogger.d("IME_DEBUG", "onStartInput restarting=$restarting")
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onStartInput", e)
-        }
-    }
-
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
-        try {
-            super.onStartInputView(info, restarting)
-            AppLogger.d("IME_DEBUG", "onStartInputView restarting=$restarting")
-            
-            if (lifecycleRegistry.currentState == Lifecycle.State.CREATED) {
-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            }
-            if (lifecycleRegistry.currentState == Lifecycle.State.STARTED) {
-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-            }
-            
-            window?.window?.decorView?.let { setupComposeViewTree(it) }
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onStartInputView", e)
-        }
-    }
-
-    override fun onEvaluateInputViewShown(): Boolean {
-        try {
-            val shown = super.onEvaluateInputViewShown()
-            AppLogger.d("IME_DEBUG", "onEvaluateInputViewShown returns $shown")
-            return true // FORCE show
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onEvaluateInputViewShown", e)
-            return true
-        }
-    }
-
-    override fun onWindowShown() {
-        try {
-            super.onWindowShown()
-            AppLogger.d("IME_DEBUG", "onWindowShown")
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onWindowShown", e)
-        }
-    }
-
-    override fun onWindowHidden() {
-        try {
-            super.onWindowHidden()
-            AppLogger.d("IME_DEBUG", "onWindowHidden")
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onWindowHidden", e)
-        }
+        super.onStartInputView(info, restarting)
+        moveTo(Lifecycle.State.RESUMED)
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
-        try {
-            super.onFinishInputView(finishingInput)
-            AppLogger.d("IME_DEBUG", "onFinishInputView finishingInput=$finishingInput")
-            if (lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-            }
-            if (lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-            }
-        } catch (e: Throwable) {
-            AppLogger.e("IME_DEBUG", "Crash in onFinishInputView", e)
-        }
+        super.onFinishInputView(finishingInput)
+        moveTo(Lifecycle.State.CREATED)
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        AppLogger.d("IME_DEBUG", "onDestroy")
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         store.clear()
+        super.onDestroy()
     }
 
-    protected fun setupComposeViewTree(view: View) {
-        AppLogger.d("IME_DEBUG", "setupComposeViewTree view=$view")
+    /**
+     * Steps the registry towards [target] one event at a time. `LifecycleRegistry`
+     * rejects a jump from CREATED straight to RESUMED, and an IME's callbacks do not
+     * arrive in the order an Activity's do, so the transition has to be walked.
+     */
+    private fun moveTo(target: Lifecycle.State) {
+        if (lifecycleRegistry.currentState == Lifecycle.State.DESTROYED) return
+        while (lifecycleRegistry.currentState < target) {
+            when (lifecycleRegistry.currentState) {
+                Lifecycle.State.INITIALIZED -> lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                Lifecycle.State.CREATED -> lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                Lifecycle.State.STARTED -> lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+                else -> return
+            }
+        }
+        while (lifecycleRegistry.currentState > target) {
+            when (lifecycleRegistry.currentState) {
+                Lifecycle.State.RESUMED -> lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+                Lifecycle.State.STARTED -> lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+                else -> return
+            }
+        }
+    }
+
+    protected fun attachViewTreeOwners(view: View) {
         view.setViewTreeLifecycleOwner(this)
         view.setViewTreeViewModelStoreOwner(this)
         view.setViewTreeSavedStateRegistryOwner(this)

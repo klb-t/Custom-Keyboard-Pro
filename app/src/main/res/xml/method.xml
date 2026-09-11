@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Subtypes are what the system's language switcher and the globe key operate on.
+  The previous version declared none, so there was nothing for the platform to switch
+  between, and claimed android:isDefault, which is reserved for a system default IME.
+-->
 <input-method xmlns:android="http://schemas.android.com/apk/res/android"
-    android:isDefault="true"
-    android:settingsActivity="com.example.MainActivity" />
+    android:settingsActivity="com.example.MainActivity"
+    android:supportsSwitchingToNextInputMethod="true">
+
+    <subtype
+        android:label="@string/subtype_polish"
+        android:imeSubtypeLocale="pl_PL"
+        android:languageTag="pl"
+        android:imeSubtypeMode="keyboard"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=qwerty_pl" />
+
+    <subtype
+        android:label="@string/subtype_english"
+        android:imeSubtypeLocale="en_US"
+        android:languageTag="en"
+        android:imeSubtypeMode="keyboard"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=qwerty_en" />
+</input-method>

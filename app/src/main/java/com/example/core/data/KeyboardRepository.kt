@@ -32,6 +32,8 @@ class KeyboardRepository(context: Context) {
         if (maxItems > 0) clipboard.trimTo(maxItems)
     }
 
+    suspend fun newestClip(): ClipboardEntity? = clipboard.newest()
+
     suspend fun deleteClip(id: Long) = clipboard.deleteById(id)
     suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned)
     suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content)
