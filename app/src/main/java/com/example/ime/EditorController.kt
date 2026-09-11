@@ -143,6 +143,14 @@ class EditorController(
             }
         }
 
+        if (applyConventions && s.autoSpaceAfterPunctuation && text.length == 1 &&
+            TextOps.wantsTrailingSpace(text[0]) && !textAfter(1).startsWith(" ")
+        ) {
+            ic.commitText("$text ", 1)
+            lastCommit = "$text "
+            return
+        }
+
         ic.commitText(text, 1)
         lastCommit = text
     }
@@ -192,6 +200,11 @@ class EditorController(
     // -----------------------------------------------------------------------
     // Deleting
     // -----------------------------------------------------------------------
+
+    /** Deletes exactly [count] characters before the cursor, ignoring grapheme rules. */
+    fun deleteExactly(count: Int) {
+        if (count > 0) connection()?.deleteSurroundingText(count, 0)
+    }
 
     fun backspace(unit: TextUnit) {
         val ic = connection() ?: return

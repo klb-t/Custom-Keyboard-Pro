@@ -89,6 +89,12 @@ class KeyboardRepository(context: Context) {
         dictionary.clearBigrams()
     }
 
+    /** True when the user has typed this word before and has not blocked it. */
+    suspend fun knows(word: String): Boolean {
+        val entity = dictionary.find(word) ?: return false
+        return !entity.blocked
+    }
+
     suspend fun wordsStartingWith(prefix: String, limit: Int): List<WordEntity> =
         if (prefix.isEmpty()) emptyList() else dictionary.startingWith(prefix, limit)
 

@@ -48,6 +48,46 @@ object LayerTransforms {
         )
     }
 
+    /**
+     * Strips bindings the user has switched off.
+     *
+     * Done here rather than checked at press time so the key surface never has to ask
+     * "is this gesture allowed?" — a binding the user disabled simply is not there, and
+     * the hint glyph disappears with it.
+     */
+    fun applyPreferences(
+        layer: LayerDef,
+        allowFlick: Boolean,
+        allowBackspaceWordSwipe: Boolean
+    ): LayerDef {
+        if (allowFlick && allowBackspaceWordSwipe) return layer
+
+        fun keep(binding: Binding): Boolean {
+            val trigger = binding.trigger
+            if (trigger !is KeyTrigger.Swipe) return true
+            if (!allowFlick && binding.action is KeyAction.Text) return false
+            if (!allowBackspaceWordSwipe &&
+                binding.action is KeyAction.Backspace &&
+                (binding.action as KeyAction.Backspace).unit == TextUnit.WORD
+            ) return false
+            return true
+        }
+
+        fun strip(key: KeyDef): KeyDef {
+            val kept = key.bindings.filter(::keep)
+            if (kept.size == key.bindings.size) return key
+            val lostFlick = !allowFlick && key.bindings.any {
+                it.trigger is KeyTrigger.Swipe && it.action is KeyAction.Text
+            }
+            return key.copy(bindings = kept, hint = if (lostFlick) null else key.hint)
+        }
+
+        return layer.copy(
+            rows = layer.rows.map { row -> row.copy(keys = row.keys.map(::strip)) },
+            freeKeys = layer.freeKeys.map(::strip)
+        )
+    }
+
     /** Drops rows from the top, for a shorter keyboard that keeps the important rows. */
     fun trimRows(layer: LayerDef, keep: Int): LayerDef =
         if (keep <= 0 || keep >= layer.rows.size) layer

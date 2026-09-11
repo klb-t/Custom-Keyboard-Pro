@@ -543,14 +543,29 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                 )
 
                 is AsrState.Results -> {
+                    // Committing the top hypothesis for the user is available but not the
+                    // default: the recogniser's ranking is a guess, and the second entry
+                    // is right often enough that choosing is worth one tap.
+                    LaunchedEffect(current) {
+                        if (settings.asrAutoCommitBest) {
+                            current.alternatives.firstOrNull()?.let {
+                                host.perform(KeyAction.Text(it.text))
+                            }
+                            host.voice.dismiss()
+                            onClose()
+                        }
+                    }
+                    val shown =
+                        if (settings.asrShowAlternatives) current.alternatives
+                        else current.alternatives.take(1)
+
                     Text(
-                        if (current.alternatives.size > 1) "Pick what you said"
-                        else "Transcription",
+                        if (shown.size > 1) "Pick what you said" else "Transcription",
                         theme.keyHintText, 13.sp
                     )
                     Spacer(Modifier.height(8.dp))
                     LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth()) {
-                        itemsIndexed(current.alternatives) { index, alternative ->
+                        itemsIndexed(shown) { index, alternative ->
                             Box(
                                 Modifier.fillMaxWidth()
                                     .padding(vertical = 3.dp)

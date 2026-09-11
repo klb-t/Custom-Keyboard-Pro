@@ -26,17 +26,21 @@ import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.data.ClipboardEntity
 import com.example.core.data.KeyboardRepository
+import com.example.core.hitmap.TouchLearner
 import com.example.core.layout.ClipboardOp
 import com.example.core.layout.IndicatorKeys
 import com.example.core.layout.KeyAction
 import com.example.core.layout.KeyDef
 import com.example.core.layout.KeyCodes
 import com.example.core.layout.LayoutDef
+import com.example.core.layout.LayoutJson
 import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
 import com.example.core.layout.PanelId
 import com.example.core.layout.PresentationMode
+import com.example.core.layout.SwipeDirection
 import com.example.core.layout.SwitchTarget
+import com.example.core.suggest.Correction
 import com.example.core.suggest.SuggestionEngine
 import com.example.core.text.TextOps
 import com.example.ui.kb.KeyboardHost
@@ -48,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * The input method itself.
@@ -62,7 +67,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    override val state = KeyboardState()
+    override val state = KeyboardState { SettingsStore.current }
+
+    override val touchLearner: TouchLearner by lazy { TouchLearner(this) }
 
     override val editor: EditorController by lazy {
         EditorController(
@@ -96,6 +103,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     /** The last word committed, so the bigram model knows what followed what. */
     private var previousWord: String = ""
 
+    /**
+     * What the last auto-correction changed, so one press of backspace can put it back.
+     * Auto-correction without that escape is a keyboard arguing with its user.
+     */
+    private data class AutoCorrection(val original: String, val corrected: String, val terminator: String)
+
+    private var lastAutoCorrection: AutoCorrection? = null
+
     override val openPanelId: PanelId?
         get() = panelState.value
 
@@ -116,6 +131,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         super.onCreate()
         SettingsStore.init(this)
         LayoutRepository.init(this)
+        touchLearner.load(layout.id)
 
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         clipboardManager?.addPrimaryClipChangedListener(clipboardListener)
@@ -283,6 +299,27 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun feedback(key: KeyDef?) = feedbackController.onKeyPress(key)
 
+    /**
+     * A long swipe across the keyboard that no key claimed. The bound value is an
+     * action in the same notation layouts use, so a gesture can do anything a key can.
+     */
+    override fun performSurfaceGesture(direction: SwipeDirection) {
+        val settings = SettingsStore.current
+        val raw = when (direction) {
+            SwipeDirection.UP, SwipeDirection.UP_LEFT, SwipeDirection.UP_RIGHT -> settings.gestureSwipeUp
+            SwipeDirection.DOWN, SwipeDirection.DOWN_LEFT, SwipeDirection.DOWN_RIGHT -> settings.gestureSwipeDown
+            SwipeDirection.LEFT -> settings.gestureSwipeLeft
+            SwipeDirection.RIGHT -> settings.gestureSwipeRight
+        }
+        if (raw.isBlank()) return
+        val action = try {
+            LayoutJson.parseAction(JSONObject(LayoutJson.stripCodeFence(raw)))
+        } catch (e: Exception) {
+            LayoutJson.parseAction(raw)
+        }
+        if (action != null && action !is KeyAction.None) perform(action)
+    }
+
     override fun openPanel(panel: PanelId?) {
         panelState.value = panel
         if (panel == null) voice.dismiss()
@@ -292,6 +329,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         layoutIdState.value = id
         SettingsStore.update { it.copy(activeLayoutId = id) }
         state.setLayer(LayoutDef.BASE_LAYER)
+        touchLearner.load(id)
     }
 
     override fun openApp(route: String?) {
@@ -352,7 +390,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             is KeyAction.SwitchLanguage -> switchLanguage(action.locale, action.target, settings)
 
             is KeyAction.Backspace -> {
-                editor.backspace(action.unit)
+                // Backspace immediately after an auto-correction undoes it rather than
+                // deleting a character, which is the only thing that makes replacing
+                // what someone typed acceptable.
+                if (!revertAutoCorrection()) editor.backspace(action.unit)
                 state.clearPending()
                 refreshSuggestions()
             }
@@ -483,7 +524,17 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         state.consumeOneShotLayer()
 
         val endsWord = text.isNotEmpty() && !TextOps.isWordChar(text.last())
-        if (endsWord) learnCurrentWordBefore(text)
+        if (endsWord) {
+            val completed = TextOps.currentWord(editor.textBefore(160).dropLast(text.length))
+            learnCurrentWordBefore(text)
+            if (settings.autoCorrect && !editor.isSensitive && completed.isNotBlank()) {
+                autoCorrect(completed, text)
+            } else {
+                lastAutoCorrection = null
+            }
+        } else {
+            lastAutoCorrection = null
+        }
         refreshSuggestions()
 
         if (settings.autoCapitalize && endsWord) {
@@ -509,6 +560,38 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             suggestions.learn(previousWord, word, editor.isSensitive, layout.locale.orEmpty())
             previousWord = word
         }
+    }
+
+    /**
+     * Looks for a better spelling of the word just finished and, if there is a clear
+     * one, swaps it in. Runs off the input path, and re-checks that the text still ends
+     * the way it did before touching anything, because the user keeps typing.
+     */
+    private fun autoCorrect(word: String, terminator: String) {
+        lastAutoCorrection = null
+        serviceScope.launch {
+            val replacement = Correction.suggest(repository, word) ?: return@launch
+            val tail = word + terminator
+            if (!editor.textBefore(tail.length + 2).endsWith(tail)) return@launch
+            editor.batch {
+                editor.deleteExactly(tail.length)
+                editor.commitText(replacement + terminator, applyConventions = false)
+            }
+            lastAutoCorrection = AutoCorrection(word, replacement, terminator)
+        }
+    }
+
+    /** Puts back what the user actually typed. Returns false if there is nothing to undo. */
+    private fun revertAutoCorrection(): Boolean {
+        val correction = lastAutoCorrection ?: return false
+        lastAutoCorrection = null
+        val applied = correction.corrected + correction.terminator
+        if (!editor.textBefore(applied.length + 2).endsWith(applied)) return false
+        editor.batch {
+            editor.deleteExactly(applied.length)
+            editor.commitText(correction.original + correction.terminator, applyConventions = false)
+        }
+        return true
     }
 
     private fun refreshSuggestions() {

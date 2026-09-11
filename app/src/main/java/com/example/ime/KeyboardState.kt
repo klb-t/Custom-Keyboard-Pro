@@ -19,7 +19,11 @@ import com.example.core.layout.ModifierMode
  * Held in Compose snapshot state so the key surface redraws when a modifier lights
  * up, without an observer of its own.
  */
-class KeyboardState {
+class KeyboardState(
+    private val settings: () -> com.example.core.config.Settings = {
+        com.example.core.config.Settings()
+    }
+) {
 
     // -----------------------------------------------------------------------
     // Modifiers
@@ -49,7 +53,14 @@ class KeyboardState {
      */
     fun pressModifier(kind: ModifierKind, mode: ModifierMode) {
         val s = modifier(kind)
-        modifiers[kind] = when (mode) {
+        // A layout asks for one-shot Shift because that is the phone convention; a user
+        // who wants Shift to stay on until pressed again overrides it here.
+        val effective = if (kind == ModifierKind.SHIFT &&
+            mode == ModifierMode.ONE_SHOT &&
+            !settings().shiftOneShot
+        ) ModifierMode.TOGGLE else mode
+
+        modifiers[kind] = when (effective) {
             ModifierMode.MOMENTARY -> ModifierState(active = true, held = true)
             ModifierMode.TOGGLE -> if (s.active) ModifierState() else ModifierState(active = true)
             ModifierMode.LOCK -> if (s.locked) ModifierState() else ModifierState(active = true, locked = true)

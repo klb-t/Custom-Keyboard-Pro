@@ -241,8 +241,16 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
         layerName == layout.defaultLayer &&
         !layout.layers.containsKey(LayoutDef.SHIFT_LAYER)
 
-    val effectiveLayer = remember(rawLayer, shifted, settings.presentation, settings.splitGapFraction) {
+    val effectiveLayer = remember(
+        rawLayer, shifted, settings.presentation, settings.splitGapFraction,
+        settings.flickInput, settings.backspaceSwipeDeletesWord
+    ) {
         var result = if (shifted) LayerTransforms.uppercased(rawLayer) else rawLayer
+        result = LayerTransforms.applyPreferences(
+            layer = result,
+            allowFlick = settings.flickInput,
+            allowBackspaceWordSwipe = settings.backspaceSwipeDeletesWord
+        )
         if (settings.presentation == PresentationMode.SPLIT) {
             result = LayerTransforms.split(result, settings.splitGapFraction)
         }
@@ -265,6 +273,8 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
             host.perform(action)
         },
         onKeyDown = { key -> host.feedback(key) },
+        onSurfaceSwipe = { direction -> host.performSurfaceGesture(direction) },
+        learner = host.touchLearner,
         onCursorNudge = { steps ->
             repeat(kotlin.math.abs(steps)) {
                 host.perform(
@@ -338,11 +348,17 @@ private fun FloatingShell(
     var offsetX by remember { mutableStateOf(settings.floatingX) }
     var offsetY by remember { mutableStateOf(settings.floatingY) }
     var width by remember { mutableStateOf(settings.floatingWidthDp) }
+    // A floating panel has no reason to be as tall as a docked keyboard, so it carries
+    // its own height; zero means "whatever the content needs".
+    var height by remember {
+        mutableStateOf(
+            if (settings.floatingHeightDp > 0f) settings.floatingHeightDp else contentHeightDp + 26f
+        )
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val maxW = maxWidth.value
         val maxH = maxHeight.value
-        val height = contentHeightDp + 26f
 
         Box(
             modifier = Modifier
@@ -402,12 +418,13 @@ private fun FloatingShell(
                         detectDragGestures(
                             onDragEnd = {
                                 com.example.core.config.SettingsStore.update {
-                                    it.copy(floatingWidthDp = width)
+                                    it.copy(floatingWidthDp = width, floatingHeightDp = height)
                                 }
                             }
                         ) { change, drag ->
                             change.consume()
                             width = (width + drag.x / density.density).coerceIn(220f, maxW)
+                            height = (height + drag.y / density.density).coerceIn(140f, maxH)
                         }
                     },
                 contentAlignment = Alignment.Center

@@ -34,6 +34,12 @@ interface KeyboardHost {
     /** Feedback for a press: haptics and sound, subject to settings. */
     fun feedback(key: KeyDef?)
 
+    /** Runs whatever the user bound to a long swipe across the whole keyboard. */
+    fun performSurfaceGesture(direction: com.example.core.layout.SwipeDirection)
+
+    /** Where per-key touch offsets are learned and kept. */
+    val touchLearner: com.example.core.hitmap.TouchLearner
+
     fun openPanel(panel: PanelId?)
     val openPanelId: PanelId?
 

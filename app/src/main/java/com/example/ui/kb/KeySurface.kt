@@ -87,6 +87,9 @@ fun KeySurface(
     onAction: (KeyDef, KeyAction) -> Unit,
     onKeyDown: (KeyDef) -> Unit,
     onCursorNudge: (Int) -> Unit,
+    /** A long swipe no key claimed. Null means the surface handles nothing globally. */
+    onSurfaceSwipe: (SwipeDirection) -> Unit = {},
+    learner: com.example.core.hitmap.TouchLearner? = null,
     modifier: Modifier = Modifier
 ) {
     val layer: LayerDef = layout.layer(layerName) ?: layout.base
@@ -99,6 +102,12 @@ fun KeySurface(
 
         val placement = remember(layer, widthPx, heightPx) {
             KeyPlacement.place(layer, widthPx, heightPx)
+        }
+
+        // Learned offsets are stored per key as a fraction of its size, so they are
+        // rescaled whenever the placement changes rather than going stale.
+        val learnedOffsets = remember(placement, settings.touchModelEnabled) {
+            if (settings.touchModelEnabled) learner?.offsetsFor(placement).orEmpty() else emptyMap()
         }
 
         val pressed: SnapshotStateList<String> = remember { mutableStateListOf() }
@@ -134,7 +143,8 @@ fun KeySurface(
                         if (settings.touchModelEnabled) {
                             KeyPlacement.probableKey(
                                 placement, x, y,
-                                with(density) { settings.touchModelSigmaDp.dp.toPx() }
+                                with(density) { settings.touchModelSigmaDp.dp.toPx() },
+                                learnedOffsets
                             )
                         } else {
                             KeyPlacement.hitTest(placement, x, y)
@@ -232,6 +242,19 @@ fun KeySurface(
                             return
                         }
 
+                        // A long swipe that no key wanted belongs to the keyboard as a
+                        // whole. The extra distance is what keeps it from firing on a
+                        // sloppy tap near an unbound key.
+                        val longSwipe = SwipeDirection.of(
+                            touch.currentX - touch.startX,
+                            touch.currentY - touch.startY,
+                            swipeThresholdPx * 3f
+                        )
+                        if (longSwipe != null) {
+                            onSurfaceSwipe(longSwipe)
+                            return
+                        }
+
                         val now = System.currentTimeMillis()
                         val isDoubleTap = taps.keyId == key.id &&
                             now - taps.atMillis < settings.doubleTapMs
@@ -241,6 +264,17 @@ fun KeySurface(
                         val action = (if (isDoubleTap) key.actionFor(KeyTrigger.DoubleTap) else null)
                             ?: key.tapAction
                             ?: return
+
+                        if (settings.touchModelEnabled) {
+                            if (action is KeyAction.Backspace) {
+                                learner?.onBackspace()
+                            } else {
+                                learner?.onTap(
+                                    touch.placed, touch.startX, touch.startY,
+                                    learn = settings.touchModelLearning
+                                )
+                            }
+                        }
                         onAction(key, action)
                     }
 
@@ -481,12 +515,16 @@ private fun KeyView(
         }
 
         if (settings.indicatorsEnabled) {
+            // A layout may name its own lamp colours; otherwise the user's choice wins,
+            // and the theme is the last word.
             key.indicators.forEach { indicator ->
                 Indicator(
                     on = state.indicatorOn(indicator.source),
                     style = indicator.style,
-                    onColor = indicator.onColor?.let { Color(it.toInt()) } ?: theme.indicatorOn,
-                    offColor = indicator.offColor?.let { Color(it.toInt()) },
+                    onColor = indicator.onColor?.let { Color(it.toInt() ) }
+                        ?: Color(settings.indicatorOnColor.toInt()),
+                    offColor = indicator.offColor?.let { Color(it.toInt()) }
+                        ?: Color(settings.indicatorOffColor.toInt()).takeIf { it.alpha > 0f },
                     keyHeight = placed.height
                 )
             }

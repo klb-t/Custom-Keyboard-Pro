@@ -7,12 +7,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.hitmap.TouchLearner
 
 @Composable
 fun TypingSettingsScreen(settings: Settings) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
 
         SettingsSection("Text conventions") {
@@ -145,6 +148,34 @@ fun TypingSettingsScreen(settings: Settings) {
             }
         }
 
+        SettingsSection(
+            title = "Swipes across the whole keyboard",
+            subtitle = "A long swipe that no key claimed. Bound to actions, so anything a " +
+                "key can do, a gesture can do."
+        ) {
+            SurfaceGestureRow("Swipe up", settings.gestureSwipeUp) { action ->
+                SettingsStore.update { it.copy(gestureSwipeUp = action) }
+            }
+            Divider()
+            SurfaceGestureRow("Swipe down", settings.gestureSwipeDown) { action ->
+                SettingsStore.update { it.copy(gestureSwipeDown = action) }
+            }
+            Divider()
+            SurfaceGestureRow("Swipe left", settings.gestureSwipeLeft) { action ->
+                SettingsStore.update { it.copy(gestureSwipeLeft = action) }
+            }
+            Divider()
+            SurfaceGestureRow("Swipe right", settings.gestureSwipeRight) { action ->
+                SettingsStore.update { it.copy(gestureSwipeRight = action) }
+            }
+            if (settings.expertMode) {
+                InfoRow(
+                    "Not listed here? Any action from the layout format works — paste its " +
+                        "JSON into a layout's key instead, or edit the exported settings."
+                )
+            }
+        }
+
         SettingsSection("Clipboard") {
             SwitchRow(
                 label = "Remember what you copy",
@@ -219,6 +250,20 @@ fun TypingSettingsScreen(settings: Settings) {
                         format = { "${it.toInt()} dp" },
                         onChange = { v -> SettingsStore.update { it.copy(touchModelSigmaDp = v) } }
                     )
+                    Divider()
+                    SwitchRow(
+                        label = "Learn where you actually press",
+                        description = "When you type a letter, delete it and type a " +
+                            "different one in the same spot, that key moves slightly " +
+                            "towards where your finger was. Nothing else is recorded.",
+                        checked = settings.touchModelLearning,
+                        onChange = { on -> SettingsStore.update { it.copy(touchModelLearning = on) } }
+                    )
+                    ActionRow(
+                        "Forget what it has learned",
+                        "Puts every key back at its drawn position",
+                        onClick = { TouchLearner.forgetAll(context) }
+                    )
                 }
             }
 
@@ -250,4 +295,45 @@ fun TypingSettingsScreen(settings: Settings) {
             }
         }
     }
+}
+
+
+/**
+ * The presets a surface gesture can be bound to.
+ *
+ * Stored as action JSON rather than an enum, so the list here is a convenience and
+ * not a limit: anything the layout format can express is a legal value.
+ */
+private val SURFACE_GESTURE_ACTIONS: List<Pair<String, String>> = listOf(
+    "" to "Nothing",
+    "{\"type\":\"hide\"}" to "Hide the keyboard",
+    "{\"type\":\"layout\",\"target\":\"next\"}" to "Next layout",
+    "{\"type\":\"layout\",\"target\":\"previous\"}" to "Previous layout",
+    "{\"type\":\"language\",\"target\":\"next\"}" to "Next language",
+    "{\"type\":\"panel\",\"panel\":\"emoji\"}" to "Emoji",
+    "{\"type\":\"panel\",\"panel\":\"clipboard\"}" to "Clipboard",
+    "{\"type\":\"panel\",\"panel\":\"cursor\"}" to "Cursor pad",
+    "{\"type\":\"panel\",\"panel\":\"ai_tools\"}" to "AI tools",
+    "{\"type\":\"voice\"}" to "Dictation",
+    "{\"type\":\"presentation\",\"mode\":\"cycle\"}" to "Cycle one-handed / split / floating",
+    "{\"type\":\"undo\"}" to "Undo",
+    "{\"type\":\"redo\"}" to "Redo",
+    "{\"type\":\"select\",\"unit\":\"all\"}" to "Select all",
+    "{\"type\":\"settings\"}" to "Open settings"
+)
+
+@Composable
+private fun SurfaceGestureRow(label: String, current: String, onSelect: (String) -> Unit) {
+    val known = SURFACE_GESTURE_ACTIONS.map { it.first }
+    val options = if (current in known) known else known + current
+    ChoiceRow(
+        label = label,
+        options = options,
+        selected = current,
+        optionLabel = { value ->
+            SURFACE_GESTURE_ACTIONS.firstOrNull { it.first == value }?.second
+                ?: "Custom: ${value.take(30)}"
+        },
+        onSelect = onSelect
+    )
 }

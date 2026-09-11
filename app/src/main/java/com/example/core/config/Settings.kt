@@ -27,8 +27,6 @@ data class Settings(
     val heightPortrait: Float = 0.33f,
     val heightLandscape: Float = 0.50f,
     val widthFraction: Float = 1.0f,
-    /** 0 centres the keyboard; -1 hard left, +1 hard right. Used for one-handed mode. */
-    val horizontalBias: Float = 0f,
     val bottomPaddingDp: Float = 0f,
     val sidePaddingDp: Float = 2f,
     val keyGapDp: Float = 3f,
@@ -63,10 +61,13 @@ data class Settings(
     val backspaceSwipeDeletesWord: Boolean = true,
     val keyPreviewPopup: Boolean = true,
     val longPressPopup: Boolean = true,
-    val flickInput: Boolean = false,
+    /**
+     * Honour a layout's swipe-up-for-the-printed-symbol bindings. Layouts opt in by
+     * carrying them; this is how someone who keeps triggering them by accident opts out.
+     */
+    val flickInput: Boolean = true,
     /** Shift returns to lowercase after one character rather than staying on. */
     val shiftOneShot: Boolean = true,
-    val modifiersAreSticky: Boolean = true,
 
     // --- feedback ---------------------------------------------------------
     val hapticEnabled: Boolean = true,
@@ -109,8 +110,6 @@ data class Settings(
     val asrAlternativeCount: Int = 5,
     /** Off: the best guess is offered, the user commits it. */
     val asrAutoCommitBest: Boolean = false,
-    val asrContinuous: Boolean = false,
-    val asrProfanityFilter: Boolean = false,
 
     // --- clipboard --------------------------------------------------------
     val clipboardEnabled: Boolean = true,
@@ -133,16 +132,19 @@ data class Settings(
 
     // --- privacy ----------------------------------------------------------
     val incognitoInPasswordFields: Boolean = true,
-    val diagnosticsEnabled: Boolean = false,
     val debugOverlay: Boolean = false,
 
     // --- input hardware ---------------------------------------------------
     val volumeKeysResize: Boolean = false,
     val showOnHardwareKeyboard: Boolean = false,
 
-    // --- gestures on the keyboard body ------------------------------------
+    // --- gestures across the whole keyboard --------------------------------
+    /**
+     * A long swipe that no key claimed. Each is an action in the same notation
+     * layouts use, so anything a key can do, a gesture can do. Empty means nothing.
+     */
     val gestureSwipeUp: String = "",
-    val gestureSwipeDown: String = "hide",
+    val gestureSwipeDown: String = "{\"type\":\"hide\"}",
     val gestureSwipeLeft: String = "",
     val gestureSwipeRight: String = ""
 ) {

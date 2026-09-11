@@ -92,7 +92,6 @@ object SettingsStore {
         put("heightPortrait", s.heightPortrait.toDouble())
         put("heightLandscape", s.heightLandscape.toDouble())
         put("widthFraction", s.widthFraction.toDouble())
-        put("horizontalBias", s.horizontalBias.toDouble())
         put("bottomPaddingDp", s.bottomPaddingDp.toDouble())
         put("sidePaddingDp", s.sidePaddingDp.toDouble())
         put("keyGapDp", s.keyGapDp.toDouble())
@@ -125,7 +124,6 @@ object SettingsStore {
         put("longPressPopup", s.longPressPopup)
         put("flickInput", s.flickInput)
         put("shiftOneShot", s.shiftOneShot)
-        put("modifiersAreSticky", s.modifiersAreSticky)
 
         put("hapticEnabled", s.hapticEnabled)
         put("hapticMs", s.hapticMs)
@@ -160,8 +158,6 @@ object SettingsStore {
         put("asrShowAlternatives", s.asrShowAlternatives)
         put("asrAlternativeCount", s.asrAlternativeCount)
         put("asrAutoCommitBest", s.asrAutoCommitBest)
-        put("asrContinuous", s.asrContinuous)
-        put("asrProfanityFilter", s.asrProfanityFilter)
 
         put("clipboardEnabled", s.clipboardEnabled)
         put("clipboardRetentionDays", s.clipboardRetentionDays)
@@ -178,7 +174,6 @@ object SettingsStore {
         put("touchModelSigmaDp", s.touchModelSigmaDp.toDouble())
 
         put("incognitoInPasswordFields", s.incognitoInPasswordFields)
-        put("diagnosticsEnabled", s.diagnosticsEnabled)
         put("debugOverlay", s.debugOverlay)
 
         put("volumeKeysResize", s.volumeKeysResize)
@@ -199,7 +194,6 @@ object SettingsStore {
             heightPortrait = o.optDouble("heightPortrait", d.heightPortrait.toDouble()).toFloat(),
             heightLandscape = o.optDouble("heightLandscape", d.heightLandscape.toDouble()).toFloat(),
             widthFraction = o.optDouble("widthFraction", d.widthFraction.toDouble()).toFloat(),
-            horizontalBias = o.optDouble("horizontalBias", d.horizontalBias.toDouble()).toFloat(),
             bottomPaddingDp = o.optDouble("bottomPaddingDp", d.bottomPaddingDp.toDouble()).toFloat(),
             sidePaddingDp = o.optDouble("sidePaddingDp", d.sidePaddingDp.toDouble()).toFloat(),
             keyGapDp = o.optDouble("keyGapDp", d.keyGapDp.toDouble()).toFloat(),
@@ -234,7 +228,6 @@ object SettingsStore {
             longPressPopup = o.optBoolean("longPressPopup", d.longPressPopup),
             flickInput = o.optBoolean("flickInput", d.flickInput),
             shiftOneShot = o.optBoolean("shiftOneShot", d.shiftOneShot),
-            modifiersAreSticky = o.optBoolean("modifiersAreSticky", d.modifiersAreSticky),
 
             hapticEnabled = o.optBoolean("hapticEnabled", d.hapticEnabled),
             hapticMs = o.optInt("hapticMs", d.hapticMs),
@@ -269,8 +262,6 @@ object SettingsStore {
             asrShowAlternatives = o.optBoolean("asrShowAlternatives", d.asrShowAlternatives),
             asrAlternativeCount = o.optInt("asrAlternativeCount", d.asrAlternativeCount),
             asrAutoCommitBest = o.optBoolean("asrAutoCommitBest", d.asrAutoCommitBest),
-            asrContinuous = o.optBoolean("asrContinuous", d.asrContinuous),
-            asrProfanityFilter = o.optBoolean("asrProfanityFilter", d.asrProfanityFilter),
 
             clipboardEnabled = o.optBoolean("clipboardEnabled", d.clipboardEnabled),
             clipboardRetentionDays = o.optInt("clipboardRetentionDays", d.clipboardRetentionDays),
@@ -287,7 +278,6 @@ object SettingsStore {
             touchModelSigmaDp = o.optDouble("touchModelSigmaDp", d.touchModelSigmaDp.toDouble()).toFloat(),
 
             incognitoInPasswordFields = o.optBoolean("incognitoInPasswordFields", d.incognitoInPasswordFields),
-            diagnosticsEnabled = o.optBoolean("diagnosticsEnabled", d.diagnosticsEnabled),
             debugOverlay = o.optBoolean("debugOverlay", d.debugOverlay),
 
             volumeKeysResize = o.optBoolean("volumeKeysResize", d.volumeKeysResize),
