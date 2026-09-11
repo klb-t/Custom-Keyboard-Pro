@@ -82,3 +82,17 @@ indicator lamps make visible.
    digits" — and the model writes the JSON.
 
 All four end at the same editable JSON, so none of them is a dead end.
+
+## Editing without JSON
+
+Layouts → open a layout → **Keys** lists every key with what it currently does, and
+for absolutely-placed keys where it sits — which after a mask import is the only thing
+telling them apart. Opening one gives label, hint, icon, width, style, repeat,
+long-press alternates, and a picker for the tap and long-press actions covering every
+action type above.
+
+It writes through this same parser, so the editor and the JSON cannot disagree about
+what a key means, and it preserves bindings it does not show: editing a tap action will
+not discard a swipe you set up by hand.
+
+Swipes, double tap, chords, macros and indicator lamps are JSON-only for now.
