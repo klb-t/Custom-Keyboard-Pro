@@ -32,6 +32,7 @@ import com.example.core.layout.LayoutRepository
 import com.example.ui.settings.AboutScreen
 import com.example.ui.settings.AiSettingsScreen
 import com.example.ui.settings.AppearanceScreen
+import com.example.ui.settings.DiagnosticsScreen
 import com.example.ui.settings.DictionaryScreen
 import com.example.ui.settings.HomeScreen
 import com.example.ui.settings.LayoutStudioScreen
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_VOICE = "voice"
         const val ROUTE_DICTIONARY = "dictionary"
         const val ROUTE_ABOUT = "about"
+        const val ROUTE_DIAGNOSTICS = "diagnostics"
         const val ROUTE_PERMISSIONS = "permissions"
     }
 
@@ -109,6 +111,7 @@ class MainActivity : ComponentActivity() {
                             )
                             ROUTE_DICTIONARY -> DictionaryScreen()
                             ROUTE_ABOUT -> AboutScreen()
+                            ROUTE_DIAGNOSTICS -> DiagnosticsScreen()
                             else -> HomeScreen(
                                 settings = settings,
                                 onNavigate = { route = it },
@@ -162,5 +165,6 @@ private fun titleFor(route: String): String = when (route) {
     MainActivity.ROUTE_VOICE, MainActivity.ROUTE_PERMISSIONS -> "Dictation"
     MainActivity.ROUTE_DICTIONARY -> "Dictionary & shortcuts"
     MainActivity.ROUTE_ABOUT -> "About & help"
+    MainActivity.ROUTE_DIAGNOSTICS -> "Diagnostics"
     else -> "Custom Keyboard Pro"
 }

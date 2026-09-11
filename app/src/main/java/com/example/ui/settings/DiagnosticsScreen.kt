@@ -1,0 +1,99 @@
+package com.example.ui.settings
+
+import android.content.Intent
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import com.example.util.AppLogger
+
+/**
+ * The log, readable without a computer.
+ *
+ * This screen exists for exactly one situation: the keyboard failed and the only
+ * tools at hand are this app and a phone. [AppLogger] already keeps a timestamped,
+ * hierarchical trail of keyboard startup and a full stack trace for anything that
+ * crashed the process — this is the way to actually read it, copy it, or hand it to
+ * someone else, since there is no Logcat here.
+ */
+@Composable
+fun DiagnosticsScreen() {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val logs: SnapshotStateList<String> = AppLogger.logs
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+
+        SettingsSection(
+            title = "Diagnostics",
+            subtitle = "Every entry the keyboard has logged since it was installed, " +
+                "newest first — including a full stack trace for any crash. Nothing " +
+                "here leaves the device unless you share it yourself."
+        ) {
+            val crashCount = logs.count { it.contains(" CRASH:") }
+            InfoRow(
+                if (logs.isEmpty()) "No log entries yet."
+                else "${logs.size} entries" +
+                    if (crashCount > 0) ", $crashCount of them crashes." else "."
+            )
+            ActionRow(
+                "Copy everything",
+                "Puts the whole log on the clipboard",
+                onClick = { clipboard.setText(AnnotatedString(AppLogger.exportText())) }
+            )
+            Divider()
+            ActionRow(
+                "Share…",
+                "Send the log as text, e.g. to an email or a chat",
+                onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Custom Keyboard Pro — diagnostics")
+                        putExtra(Intent.EXTRA_TEXT, AppLogger.exportText())
+                    }
+                    context.startActivity(Intent.createChooser(send, "Share diagnostics"))
+                }
+            )
+            Divider()
+            ActionRow(
+                "Clear log",
+                "Cannot be undone",
+                onClick = { AppLogger.clear() }
+            )
+        }
+
+        SettingsSection("Log") {
+            if (logs.isEmpty()) {
+                InfoRow("Nothing logged yet. Trigger the problem, then come back here.")
+            } else {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    logs.forEach { entry ->
+                        val isCrash = entry.contains(" CRASH:") || entry.contains(" - ") &&
+                            entry.contains("Exception")
+                        Text(
+                            entry,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isCrash) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+}

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.example.MainActivity
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.util.AppLogger
 
 /**
  * The first screen.
@@ -106,6 +107,15 @@ fun HomeScreen(
                 "About & help",
                 "Compose sequences, key reference, import and export",
                 onClick = { onNavigate(MainActivity.ROUTE_ABOUT) }
+            )
+            Divider()
+            ActionRow(
+                "Diagnostics",
+                "The keyboard's own log — for when something goes wrong and there is " +
+                    "no computer to plug it into",
+                trailing = AppLogger.logs.count { it.contains(" CRASH:") }
+                    .let { if (it > 0) "$it crash" + (if (it == 1) "" else "es") else null },
+                onClick = { onNavigate(MainActivity.ROUTE_DIAGNOSTICS) }
             )
         }
 

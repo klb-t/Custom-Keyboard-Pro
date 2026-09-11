@@ -43,6 +43,7 @@ import com.example.core.layout.SwitchTarget
 import com.example.core.suggest.Correction
 import com.example.core.suggest.SuggestionEngine
 import com.example.core.text.TextOps
+import com.example.ui.kb.CrashBoundary
 import com.example.ui.kb.KeyboardHost
 import com.example.ui.kb.KeyboardRoot
 import com.example.ui.kb.LocalKeyboardHost
@@ -134,37 +135,51 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onCreate() {
         super.onCreate()
-        SettingsStore.init(this)
-        LayoutRepository.init(this)
-        touchLearner.load(layout.id)
+        val tag = "IME.onCreate"
+        AppLogger.d(tag, "start")
+        try {
+            SettingsStore.init(this)
+            AppLogger.d(tag, "> SettingsStore.init ok")
+            LayoutRepository.init(this)
+            AppLogger.d(tag, "> LayoutRepository.init ok (${LayoutRepository.all().size} layouts)")
+            val activeLayout = layout
+            AppLogger.d(tag, "> active layout resolved: id=${activeLayout.id}")
+            touchLearner.load(activeLayout.id)
+            AppLogger.d(tag, "> touchLearner.load ok")
 
-        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        clipboardManager?.addPrimaryClipChangedListener(clipboardListener)
+            clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboardManager?.addPrimaryClipChangedListener(clipboardListener)
+            AppLogger.d(tag, "> clipboard listener attached")
 
-        serviceScope.launch {
-            voice.state.collect { asr ->
-                state.setFlag(IndicatorKeys.ASR_LISTENING, asr is AsrState.Listening)
-                state.setFlag(
-                    IndicatorKeys.ASR_ACTIVE,
-                    asr is AsrState.Listening || asr is AsrState.Processing
-                )
+            serviceScope.launch {
+                voice.state.collect { asr ->
+                    state.setFlag(IndicatorKeys.ASR_LISTENING, asr is AsrState.Listening)
+                    state.setFlag(
+                        IndicatorKeys.ASR_ACTIVE,
+                        asr is AsrState.Listening || asr is AsrState.Processing
+                    )
+                }
             }
-        }
-        serviceScope.launch {
-            suggestions.aiBusy.collect { busy -> state.setFlag(IndicatorKeys.AI_BUSY, busy) }
-        }
-        serviceScope.launch {
-            repository.sweepClipboard(SettingsStore.current.clipboardRetentionDays)
-        }
+            serviceScope.launch {
+                suggestions.aiBusy.collect { busy -> state.setFlag(IndicatorKeys.AI_BUSY, busy) }
+            }
+            serviceScope.launch {
+                repository.sweepClipboard(SettingsStore.current.clipboardRetentionDays)
+            }
 
-        // The touchable region for floating mode is computed from these, and the
-        // framework only recomputes insets when the view lays out — so nudge it when
-        // the panel is moved or resized, or it would keep capturing the old rectangle.
-        serviceScope.launch {
-            SettingsStore.state
-                .map { listOf(it.presentation, it.floatingX, it.floatingY, it.floatingWidthDp, it.floatingHeightDp) }
-                .distinctUntilChanged()
-                .collect { composeView?.requestLayout() }
+            // The touchable region for floating mode is computed from these, and the
+            // framework only recomputes insets when the view lays out — so nudge it when
+            // the panel is moved or resized, or it would keep capturing the old rectangle.
+            serviceScope.launch {
+                SettingsStore.state
+                    .map { listOf(it.presentation, it.floatingX, it.floatingY, it.floatingWidthDp, it.floatingHeightDp) }
+                    .distinctUntilChanged()
+                    .collect { composeView?.requestLayout() }
+            }
+            AppLogger.d(tag, "done")
+        } catch (crash: Throwable) {
+            AppLogger.e(tag, "failed — the service will not come up", crash)
+            throw crash
         }
     }
 
@@ -176,23 +191,41 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onCreateInputView(): View {
-        val view = ComposeView(this)
-        view.layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        view.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        view.setContent {
-            val settings by SettingsStore.state.collectAsState()
-            CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
-                KeyboardRoot(
-                    settings = settings,
-                    onHeightChanged = { px -> applyInputViewHeight(view, px) }
+        val tag = "IME.onCreateInputView"
+        AppLogger.d(tag, "start")
+        val view = try {
+            ComposeView(this).also {
+                it.layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
                 )
+                it.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                AppLogger.d(tag, "> ComposeView constructed")
+            }
+        } catch (crash: Throwable) {
+            // Constructing the view itself failing is rare, but with nothing on
+            // screen yet there is nothing to fall back to except logging and letting
+            // it surface — the alternative is a silent process death either way.
+            AppLogger.e(tag, "failed constructing the ComposeView", crash)
+            throw crash
+        }
+        // The composition itself runs later, once the framework attaches this view to
+        // a window — outside this method's own try/catch, which is why the fallback
+        // for it lives inside the composable tree (CrashBoundary) rather than here.
+        view.setContent {
+            CrashBoundary(tag = "$tag.compose") {
+                val settings by SettingsStore.state.collectAsState()
+                CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
+                    KeyboardRoot(
+                        settings = settings,
+                        onHeightChanged = { px -> applyInputViewHeight(view, px) }
+                    )
+                }
             }
         }
         composeView = view
         attachViewTreeOwners(view)
+        AppLogger.d(tag, "done, view returned")
         return view
     }
 
@@ -210,25 +243,38 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        currentPackage = info?.packageName
-        restoreLayoutForApp()
-        panelState.value = null
-        state.clearAllModifiers()
-        state.resetLayer(LayoutDef.BASE_LAYER)
-        state.clearPending()
-        suggestions.clear()
-        previousWord = ""
+        val tag = "IME.onStartInputView"
+        AppLogger.d(tag, "start (restarting=$restarting, package=${info?.packageName})")
+        // Caught rather than rethrown: by this point the input view already exists
+        // and may already be visible, so a throw here would tear down a keyboard that
+        // was doing fine a moment ago over what is, at worst, stale per-editor state
+        // (wrong capitalisation, a stale suggestion). Logged in full either way.
+        try {
+            currentPackage = info?.packageName
+            restoreLayoutForApp()
+            AppLogger.d(tag, "> layout for app resolved: ${layout.id}")
+            panelState.value = null
+            state.clearAllModifiers()
+            state.resetLayer(LayoutDef.BASE_LAYER)
+            state.clearPending()
+            suggestions.clear()
+            previousWord = ""
 
-        val sensitive = editor.isSensitive
-        state.setFlag(IndicatorKeys.PASSWORD_FIELD, editor.isPasswordField)
-        state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
+            val sensitive = editor.isSensitive
+            state.setFlag(IndicatorKeys.PASSWORD_FIELD, editor.isPasswordField)
+            state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
+            AppLogger.d(tag, "> editor state read: sensitive=$sensitive")
 
-        if (SettingsStore.current.autoCapitalize && !sensitive) {
-            if (TextOps.shouldCapitalise(editor.textBefore(64))) {
-                state.setModifier(ModifierKind.SHIFT, active = true)
+            if (SettingsStore.current.autoCapitalize && !sensitive) {
+                if (TextOps.shouldCapitalise(editor.textBefore(64))) {
+                    state.setModifier(ModifierKind.SHIFT, active = true)
+                }
             }
+            refreshSuggestions()
+            AppLogger.d(tag, "done")
+        } catch (crash: Throwable) {
+            AppLogger.e(tag, "failed partway through — keyboard may be in a stale state", crash)
         }
-        refreshSuggestions()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
