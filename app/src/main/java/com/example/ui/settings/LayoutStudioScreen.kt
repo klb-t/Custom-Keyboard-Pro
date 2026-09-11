@@ -59,6 +59,8 @@ fun LayoutStudioScreen(settings: Settings) {
     var describing by remember { mutableStateOf(false) }
     var description by remember { mutableStateOf("") }
     var pendingImageMode by remember { mutableStateOf(ImageMode.MASK) }
+    var keyListFor by remember { mutableStateOf<LayoutDef?>(null) }
+    var editingKey by remember { mutableStateOf<com.example.core.layout.KeyDef?>(null) }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -234,9 +236,41 @@ fun LayoutStudioScreen(settings: Settings) {
         LayoutEditorDialog(
             layout = layout,
             onDismiss = { editing = null },
+            onEditKeys = {
+                keyListFor = layout
+                editing = null
+            },
             onSaved = { saved ->
                 status = "Saved \"${saved.name}\"."
                 editing = null
+            }
+        )
+    }
+
+    keyListFor?.let { layout ->
+        KeyListDialog(
+            layout = layout,
+            onEdit = { key -> editingKey = key },
+            onDismiss = { keyListFor = null }
+        )
+    }
+
+    editingKey?.let { key ->
+        val owner = keyListFor
+        KeyEditorDialog(
+            key = key,
+            onDismiss = { editingKey = null },
+            onSave = { updated ->
+                if (owner != null) {
+                    val next = LayoutAuthoring.replaceKey(owner, key.id, updated)
+                    LayoutRepository.save(next)
+                        .onSuccess {
+                            keyListFor = next
+                            status = "Updated \"${updated.effectiveLabel.ifEmpty { updated.id }}\"."
+                        }
+                        .onFailure { status = "Could not save it: ${it.message}" }
+                }
+                editingKey = null
             }
         )
     }
@@ -309,6 +343,7 @@ private fun blankLayout(): LayoutDef {
 private fun LayoutEditorDialog(
     layout: LayoutDef,
     onDismiss: () -> Unit,
+    onEditKeys: () -> Unit,
     onSaved: (LayoutDef) -> Unit
 ) {
     var json by remember(layout.id) { mutableStateOf(LayoutJson.writeString(layout)) }
@@ -356,6 +391,7 @@ private fun LayoutEditorDialog(
         },
         dismissButton = {
             Row {
+                TextButton(onClick = onEditKeys) { Text("Keys") }
                 TextButton(onClick = { showSchema = !showSchema }) {
                     Text(if (showSchema) "Hide format" else "Format")
                 }
