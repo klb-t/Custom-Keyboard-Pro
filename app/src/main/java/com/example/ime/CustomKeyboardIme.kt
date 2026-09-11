@@ -43,7 +43,6 @@ import com.example.core.layout.SwitchTarget
 import com.example.core.suggest.Correction
 import com.example.core.suggest.SuggestionEngine
 import com.example.core.text.TextOps
-import com.example.ui.kb.CrashBoundary
 import com.example.ui.kb.KeyboardHost
 import com.example.ui.kb.KeyboardRoot
 import com.example.ui.kb.LocalKeyboardHost
@@ -210,17 +209,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             throw crash
         }
         // The composition itself runs later, once the framework attaches this view to
-        // a window — outside this method's own try/catch, which is why the fallback
-        // for it lives inside the composable tree (CrashBoundary) rather than here.
+        // a window — outside this method's own try/catch. A throw from in here cannot
+        // be caught in place: the Compose compiler rejects a try/catch wrapped around
+        // a composable call outright (it cannot guarantee the slot table stays
+        // balanced if an exception jumps out of one), so there is no supported way to
+        // show a fallback screen instead of the crash. It still gets logged in full —
+        // Compose does not intercept the exception either, so it reaches AppLogger's
+        // uncaught-exception handler exactly like any other main-thread crash.
         view.setContent {
-            CrashBoundary(tag = "$tag.compose") {
-                val settings by SettingsStore.state.collectAsState()
-                CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
-                    KeyboardRoot(
-                        settings = settings,
-                        onHeightChanged = { px -> applyInputViewHeight(view, px) }
-                    )
-                }
+            val settings by SettingsStore.state.collectAsState()
+            CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
+                KeyboardRoot(
+                    settings = settings,
+                    onHeightChanged = { px -> applyInputViewHeight(view, px) }
+                )
             }
         }
         composeView = view
