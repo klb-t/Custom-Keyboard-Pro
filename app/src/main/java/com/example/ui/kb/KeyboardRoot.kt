@@ -313,7 +313,7 @@ private fun EmptyLayoutNotice(layoutName: String, theme: KeyboardTheme) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            ""$layoutName" has no keys to press.",
+            "\u201c$layoutName\u201d has no keys to press.",
             color = theme.keyText,
             fontSize = 15.sp
         )
