@@ -107,6 +107,7 @@ object SettingsStore {
 
         put("enabledLayoutIds", JSONArray(s.enabledLayoutIds))
         put("activeLayoutId", s.activeLayoutId)
+        put("rememberLayoutPerApp", s.rememberLayoutPerApp)
 
         put("longPressMs", s.longPressMs)
         put("repeatStartMs", s.repeatStartMs)
@@ -163,6 +164,8 @@ object SettingsStore {
         put("clipboardRetentionDays", s.clipboardRetentionDays)
         put("clipboardMaxItems", s.clipboardMaxItems)
         put("clipboardIgnorePasswordFields", s.clipboardIgnorePasswordFields)
+        put("clipboardSuggestions", s.clipboardSuggestions)
+        put("clipboardSuggestionSeconds", s.clipboardSuggestionSeconds)
 
         put("indicatorsEnabled", s.indicatorsEnabled)
         put("indicatorStripVisible", s.indicatorStripVisible)
@@ -211,6 +214,7 @@ object SettingsStore {
                 (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }
             }?.takeIf { it.isNotEmpty() } ?: d.enabledLayoutIds,
             activeLayoutId = o.optString("activeLayoutId", d.activeLayoutId),
+            rememberLayoutPerApp = o.optBoolean("rememberLayoutPerApp", d.rememberLayoutPerApp),
 
             longPressMs = o.optLong("longPressMs", d.longPressMs),
             repeatStartMs = o.optLong("repeatStartMs", d.repeatStartMs),
@@ -267,6 +271,8 @@ object SettingsStore {
             clipboardRetentionDays = o.optInt("clipboardRetentionDays", d.clipboardRetentionDays),
             clipboardMaxItems = o.optInt("clipboardMaxItems", d.clipboardMaxItems),
             clipboardIgnorePasswordFields = o.optBoolean("clipboardIgnorePasswordFields", d.clipboardIgnorePasswordFields),
+            clipboardSuggestions = o.optBoolean("clipboardSuggestions", d.clipboardSuggestions),
+            clipboardSuggestionSeconds = o.optInt("clipboardSuggestionSeconds", d.clipboardSuggestionSeconds),
 
             indicatorsEnabled = o.optBoolean("indicatorsEnabled", d.indicatorsEnabled),
             indicatorStripVisible = o.optBoolean("indicatorStripVisible", d.indicatorStripVisible),

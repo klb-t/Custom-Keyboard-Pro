@@ -136,6 +136,9 @@ fun SuggestionStrip(
                                 if (suggestion.source == SuggestionSource.SHORTCUT) {
                                     PanelText("⌁ ", color = theme.stripAiText, fontSize = 13.sp)
                                 }
+                                if (suggestion.source == SuggestionSource.CLIPBOARD) {
+                                    PanelText("▤ ", color = theme.stripAiText, fontSize = 13.sp)
+                                }
                                 PanelText(
                                     text = suggestion.display,
                                     color = if (suggestion.source == SuggestionSource.AI) theme.stripAiText

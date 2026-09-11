@@ -44,6 +44,13 @@ data class Settings(
     /** Ordered; the layout-switch key cycles through exactly this list. */
     val enabledLayoutIds: List<String> = listOf("qwerty_pl", "symbols", "numpad", "navigation", "hacker"),
     val activeLayoutId: String = "qwerty_pl",
+    /**
+     * Remember which layout was last used in each app and return to it.
+     *
+     * Off by default because a keyboard that changes shape when you change app is
+     * startling if you did not ask for it — and excellent if you did.
+     */
+    val rememberLayoutPerApp: Boolean = false,
 
     // --- timing -----------------------------------------------------------
     val longPressMs: Long = 300L,
@@ -116,6 +123,10 @@ data class Settings(
     val clipboardRetentionDays: Int = 0,
     val clipboardMaxItems: Int = 200,
     val clipboardIgnorePasswordFields: Boolean = true,
+    /** Offer something just copied as a suggestion while the field is still empty. */
+    val clipboardSuggestions: Boolean = true,
+    /** How long after copying it stays on offer. */
+    val clipboardSuggestionSeconds: Int = 90,
 
     // --- indicators -------------------------------------------------------
     val indicatorsEnabled: Boolean = true,

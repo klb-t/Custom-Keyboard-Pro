@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class SuggestionSource { SHORTCUT, DICTIONARY, NEXT_WORD, AI, CORRECTION }
+enum class SuggestionSource { SHORTCUT, CLIPBOARD, DICTIONARY, NEXT_WORD, AI, CORRECTION }
 
 data class Suggestion(
     val text: String,
@@ -87,8 +87,9 @@ class SuggestionEngine(
         val precedingText = textBeforeCursor.dropLast(word.length)
         val previousWord = TextOps.currentWord(precedingText.trimEnd())
 
+        val fieldIsEmpty = textBeforeCursor.isEmpty()
         localJob = scope.launch {
-            val local = collectLocal(word, previousWord, locale, s)
+            val local = collectLocal(word, previousWord, locale, s, fieldIsEmpty)
             if (myGeneration == generation) _suggestions.value = local
         }
 
@@ -123,9 +124,29 @@ class SuggestionEngine(
         word: String,
         previousWord: String,
         locale: String,
-        s: Settings
+        s: Settings,
+        fieldIsEmpty: Boolean
     ): List<Suggestion> {
         val out = LinkedHashMap<String, Suggestion>()
+
+        // Something copied a moment ago, offered while the field is still empty. The
+        // window is short on purpose: a clipboard entry on display is only welcome
+        // while it is obviously the thing you just copied.
+        if (s.clipboardEnabled && s.clipboardSuggestions && fieldIsEmpty) {
+            val clip = repository.newestClip()
+            if (clip != null &&
+                System.currentTimeMillis() - clip.timestamp < s.clipboardSuggestionSeconds * 1000L &&
+                clip.content.length in 1..120
+            ) {
+                out[clip.content] = Suggestion(
+                    text = clip.content,
+                    source = SuggestionSource.CLIPBOARD,
+                    replacesWord = false,
+                    score = 2000f,
+                    display = clip.content.replace('\n', ' ').take(28)
+                )
+            }
+        }
 
         // A text shortcut that matches exactly wins: the user asked for it by name.
         if (word.isNotEmpty()) {

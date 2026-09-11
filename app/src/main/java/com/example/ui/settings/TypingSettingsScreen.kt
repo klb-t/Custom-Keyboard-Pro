@@ -190,6 +190,14 @@ fun TypingSettingsScreen(settings: Settings) {
                 onChange = { on -> SettingsStore.update { it.copy(clipboardIgnorePasswordFields = on) } }
             )
             Divider()
+            SwitchRow(
+                label = "Offer what you just copied",
+                description = "While a field is still empty, something copied a moment ago " +
+                    "appears in the suggestion strip. Never in a password field.",
+                checked = settings.clipboardSuggestions,
+                onChange = { on -> SettingsStore.update { it.copy(clipboardSuggestions = on) } }
+            )
+            Divider()
             ChoiceRow(
                 label = "Forget after",
                 options = listOf(0, 1, 7, 30, 90),

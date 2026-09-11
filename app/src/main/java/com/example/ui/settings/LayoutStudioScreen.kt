@@ -133,6 +133,17 @@ fun LayoutStudioScreen(settings: Settings) {
             )
         }
 
+        SettingsSection("Per-app") {
+            SwitchRow(
+                label = "Remember a layout per app",
+                description = "The layout you last used in an app comes back when you " +
+                    "return to it. Off by default: a keyboard that changes shape on its " +
+                    "own is startling if you did not ask for it.",
+                checked = settings.rememberLayoutPerApp,
+                onChange = { on -> SettingsStore.update { it.copy(rememberLayoutPerApp = on) } }
+            )
+        }
+
         SettingsSection(
             title = "Make a layout",
             subtitle = "All four produce the same editable JSON."

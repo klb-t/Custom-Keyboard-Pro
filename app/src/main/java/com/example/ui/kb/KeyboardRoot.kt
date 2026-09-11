@@ -220,9 +220,12 @@ private fun acceptSuggestion(host: KeyboardHost, suggestion: com.example.core.su
     if (suggestion.replacesWord) {
         host.editor.replaceCurrentWord(suggestion.text)
     } else {
-        val needsSpace = suggestion.source != com.example.core.suggest.SuggestionSource.AI
+        // A model's continuation and a pasted clip are inserted verbatim; a word from
+        // the next-word model is a word, so it gets the space that follows one.
+        val verbatim = suggestion.source == com.example.core.suggest.SuggestionSource.AI ||
+            suggestion.source == com.example.core.suggest.SuggestionSource.CLIPBOARD
         host.editor.commitCompletion(
-            if (needsSpace) suggestion.text + " " else suggestion.text
+            if (verbatim) suggestion.text else suggestion.text + " "
         )
     }
     host.suggestions.clear()

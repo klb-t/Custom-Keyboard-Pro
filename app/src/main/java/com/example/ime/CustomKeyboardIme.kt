@@ -111,6 +111,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private var lastAutoCorrection: AutoCorrection? = null
 
+    /** The app being typed into, for per-app layout memory. */
+    private var currentPackage: String? = null
+
     override val openPanelId: PanelId?
         get() = panelState.value
 
@@ -195,6 +198,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        currentPackage = info?.packageName
+        restoreLayoutForApp()
         panelState.value = null
         state.clearAllModifiers()
         state.setLayer(LayoutDef.BASE_LAYER)
@@ -330,7 +335,30 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         SettingsStore.update { it.copy(activeLayoutId = id) }
         state.setLayer(LayoutDef.BASE_LAYER)
         touchLearner.load(id)
+        rememberLayoutForApp(id)
     }
+
+    /**
+     * Per-app layout memory: a numeric pad in the calculator, the full PC layout in a
+     * terminal, without switching by hand every time.
+     */
+    private fun restoreLayoutForApp() {
+        if (!SettingsStore.current.rememberLayoutPerApp) return
+        val packageName = currentPackage ?: return
+        val remembered = appLayoutPrefs().getString(packageName, null) ?: return
+        if (remembered == layout.id) return
+        if (LayoutRepository.byId(remembered) == null) return
+        layoutIdState.value = remembered
+        touchLearner.load(remembered)
+    }
+
+    private fun rememberLayoutForApp(id: String) {
+        if (!SettingsStore.current.rememberLayoutPerApp) return
+        val packageName = currentPackage ?: return
+        appLayoutPrefs().edit().putString(packageName, id).apply()
+    }
+
+    private fun appLayoutPrefs() = getSharedPreferences("app_layouts", Context.MODE_PRIVATE)
 
     override fun openApp(route: String?) {
         val intent = Intent(this, MainActivity::class.java).apply {
