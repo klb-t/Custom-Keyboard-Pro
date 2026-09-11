@@ -232,6 +232,15 @@ fun TypingSettingsScreen(settings: Settings) {
                 )
                 Divider()
                 SwitchRow(
+                    label = "Show a diagnostic overlay",
+                    description = "Draws the current layer, modifier states, selection " +
+                        "range and any pending dead key over the keys. Useful while " +
+                        "building a layout.",
+                    checked = settings.debugOverlay,
+                    onChange = { on -> SettingsStore.update { it.copy(debugOverlay = on) } }
+                )
+                Divider()
+                SwitchRow(
                     label = "Volume keys resize the keyboard",
                     description = "While the keyboard is up, volume up and down change its " +
                         "height instead of the volume.",

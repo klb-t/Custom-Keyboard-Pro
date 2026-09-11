@@ -175,7 +175,20 @@ private fun KeyboardBody(
                 .padding(horizontal = settings.sidePaddingDp.dp)
         ) {
             when (panel) {
-                null -> KeyArea(layout = layout, settings = settings, theme = theme)
+                null -> Box(Modifier.fillMaxSize()) {
+                    KeyArea(layout = layout, settings = settings, theme = theme)
+                    if (settings.debugOverlay) {
+                        DebugOverlay(
+                            state = host.state,
+                            layout = layout,
+                            layerName = host.state.renderLayer(layout),
+                            selectionStart = host.editor.selectionStart,
+                            selectionEnd = host.editor.selectionEnd,
+                            suggestionCount = suggestions.size,
+                            theme = theme
+                        )
+                    }
+                }
                 PanelId.EMOJI -> EmojiPanel(theme) { host.openPanel(null) }
                 PanelId.CLIPBOARD -> ClipboardPanel(theme) { host.openPanel(null) }
                 PanelId.VOICE -> VoicePanel(theme, settings) { host.openPanel(null) }
