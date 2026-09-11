@@ -51,6 +51,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -154,6 +156,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         serviceScope.launch {
             repository.sweepClipboard(SettingsStore.current.clipboardRetentionDays)
         }
+
+        // The touchable region for floating mode is computed from these, and the
+        // framework only recomputes insets when the view lays out — so nudge it when
+        // the panel is moved or resized, or it would keep capturing the old rectangle.
+        serviceScope.launch {
+            SettingsStore.state
+                .map { listOf(it.presentation, it.floatingX, it.floatingY, it.floatingWidthDp, it.floatingHeightDp) }
+                .distinctUntilChanged()
+                .collect { composeView?.requestLayout() }
+        }
     }
 
     override fun onDestroy() {
@@ -256,17 +268,34 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         super.onComputeInsets(outInsets)
         val insets = outInsets ?: return
         val view = composeView
-        if (SettingsStore.current.presentation == PresentationMode.FLOATING && view != null) {
-            // Only the floating panel should swallow touches; the rest of the screen
-            // belongs to the app underneath.
-            val bounds = Rect(0, 0, view.width, view.height)
-            insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
-            insets.touchableRegion.set(bounds)
-            insets.contentTopInsets = view.height
-            insets.visibleTopInsets = view.height
-        } else {
+        val settings = SettingsStore.current
+
+        if (settings.presentation != PresentationMode.FLOATING || view == null) {
             insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            return
         }
+
+        // In floating mode the input view is full-height so the panel can be dragged
+        // anywhere, but only the panel itself may take touches — everything around it
+        // belongs to the app underneath. The region therefore has to be the panel's
+        // own rectangle, not the view's: setting it to the view would capture the
+        // whole screen, which is the opposite of floating.
+        val density = resources.displayMetrics.density
+        fun px(dp: Float) = (dp * density).toInt()
+
+        val handleHeightDp = 26f
+        val width = px(settings.floatingWidthDp)
+        val height = px(
+            (if (settings.floatingHeightDp > 0f) settings.floatingHeightDp else 240f) + handleHeightDp
+        )
+        val left = px(settings.floatingX).coerceIn(0, (view.width - width).coerceAtLeast(0))
+        val top = px(settings.floatingY).coerceIn(0, (view.height - height).coerceAtLeast(0))
+
+        insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+        insets.touchableRegion.set(Rect(left, top, left + width, top + height))
+        // The app keeps its full height: a floating keyboard does not push it up.
+        insets.contentTopInsets = view.height
+        insets.visibleTopInsets = view.height
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
