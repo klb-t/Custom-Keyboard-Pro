@@ -33,14 +33,31 @@ jobs:
         with:
           gradle-version: '9.7.1'
 
+      # Compiler diagnostics are re-printed at the very end of the step so that a
+      # failure is legible from the log tail instead of buried under a stack trace.
       - name: Compile
-        run: gradle :app:compileDebugKotlin --stacktrace
+        run: |
+          set -o pipefail
+          if ! gradle :app:compileDebugKotlin --console=plain 2>&1 | tee compile.log; then
+            echo "::group::Kotlin diagnostics"
+            grep -E '^(e|w): ' compile.log | head -120 || true
+            echo "::endgroup::"
+            echo "---- COMPILE ERRORS ----"
+            grep -E '^e: ' compile.log | head -80 || echo "(no 'e:' lines; see full log)"
+            exit 1
+          fi
 
       - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
+        run: |
+          set -o pipefail
+          if ! gradle :app:testDebugUnitTest --console=plain 2>&1 | tee test.log; then
+            echo "---- TEST FAILURES ----"
+            grep -E 'FAILED|expected:|actual:|AssertionError|Exception' test.log | head -80 || true
+            exit 1
+          fi
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --console=plain
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
