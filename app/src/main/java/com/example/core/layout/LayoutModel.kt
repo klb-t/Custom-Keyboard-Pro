@@ -1,0 +1,353 @@
+package com.example.core.layout
+
+/**
+ * The keyboard is data, not code.
+ *
+ * Everything a layout can do is described by the types in this file, every one of
+ * them serialisable (see [LayoutJson]). A built-in layout, a layout traced off a
+ * screenshot, a layout an LLM wrote from a prose description and a layout the user
+ * hand-edited are all the same thing by the time they reach the renderer, so any
+ * capability one of them has is available to all of them.
+ *
+ * Nothing here is required. Every field that can carry a default does, and the
+ * defaults are the boring ones, so the smallest legal layout is a handful of rows
+ * of characters.
+ */
+
+// ---------------------------------------------------------------------------
+// Triggers
+// ---------------------------------------------------------------------------
+
+enum class SwipeDirection {
+    UP, DOWN, LEFT, RIGHT, UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT;
+
+    companion object {
+        /** Nearest of the eight directions to a drag vector, or null if it is too short. */
+        fun of(dx: Float, dy: Float, minDistance: Float): SwipeDirection? {
+            val distance = kotlin.math.hypot(dx, dy)
+            if (distance < minDistance) return null
+            // Screen y grows downwards; negate so 90 degrees means "up".
+            var degrees = Math.toDegrees(kotlin.math.atan2(-dy.toDouble(), dx.toDouble()))
+            if (degrees < 0) degrees += 360.0
+            return when (((degrees + 22.5) / 45.0).toInt() % 8) {
+                0 -> RIGHT
+                1 -> UP_RIGHT
+                2 -> UP
+                3 -> UP_LEFT
+                4 -> LEFT
+                5 -> DOWN_LEFT
+                6 -> DOWN
+                else -> DOWN_RIGHT
+            }
+        }
+    }
+}
+
+sealed interface KeyTrigger {
+    object Tap : KeyTrigger
+    object LongPress : KeyTrigger
+    object DoubleTap : KeyTrigger
+
+    /** Fired repeatedly while the key stays down. */
+    object Repeat : KeyTrigger
+
+    data class Swipe(val direction: SwipeDirection) : KeyTrigger
+
+    /** Fired when this key is pressed while [otherKeyId] is already held. */
+    data class Chord(val otherKeyId: String) : KeyTrigger
+}
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+
+enum class ModifierKind { SHIFT, CTRL, ALT, META, FN, ALT_GR }
+
+/**
+ * How a modifier behaves when pressed.
+ *
+ * Different keyboards disagree about this and users disagree harder, so all four
+ * classic behaviours exist and the layout picks per key.
+ */
+enum class ModifierMode {
+    /** Active only while physically held. */
+    MOMENTARY,
+
+    /** Applies to exactly the next key, then clears. The Android default for Shift. */
+    ONE_SHOT,
+
+    /** Toggles, stays until pressed again. */
+    TOGGLE,
+
+    /** Toggles and also sets the corresponding lock indicator (Caps Lock and friends). */
+    LOCK
+}
+
+enum class LayerMode { MOMENTARY, ONE_SHOT, TOGGLE, LOCK }
+
+enum class TextUnit { CHARACTER, WORD, LINE, PARAGRAPH, ALL }
+
+enum class CursorDirection { LEFT, RIGHT, UP, DOWN, LINE_START, LINE_END, DOC_START, DOC_END }
+
+enum class ClipboardOp { COPY, CUT, PASTE, PASTE_PLAIN, HISTORY, PIN_CURRENT, CLEAR }
+
+enum class SwitchTarget { NEXT, PREVIOUS }
+
+/** Panels that can be raised above the key surface. */
+enum class PanelId { EMOJI, CLIPBOARD, VOICE, AI_TOOLS, CURSOR, SETTINGS, LAYOUT_PICKER, INDICATORS, NUMPAD }
+
+sealed interface KeyAction {
+
+    /** Does nothing. Useful as an explicit "unbound" marker in the editor. */
+    object None : KeyAction
+
+    /** Commit literal text. The workhorse: every character key is one of these. */
+    data class Text(val text: String) : KeyAction
+
+    /**
+     * Send a raw key event with modifier bits. This is what lets the keyboard drive
+     * terminals, remote desktops and games rather than only text fields.
+     */
+    data class SendKey(val keyCode: Int, val metaState: Int = 0) : KeyAction
+
+    data class Modifier(val kind: ModifierKind, val mode: ModifierMode = ModifierMode.ONE_SHOT) : KeyAction
+
+    data class Layer(val layer: String, val mode: LayerMode = LayerMode.MOMENTARY) : KeyAction
+
+    /** Switch whole layout: by id, or cycle. */
+    data class SwitchLayout(val layoutId: String? = null, val target: SwitchTarget = SwitchTarget.NEXT) : KeyAction
+
+    /** Switch input language / subtype. */
+    data class SwitchLanguage(val locale: String? = null, val target: SwitchTarget = SwitchTarget.NEXT) : KeyAction
+
+    data class Backspace(val unit: TextUnit = TextUnit.CHARACTER) : KeyAction
+
+    data class ForwardDelete(val unit: TextUnit = TextUnit.CHARACTER) : KeyAction
+
+    /** Editor action if the field asks for one (Search, Send, Go...), newline otherwise. */
+    object Enter : KeyAction
+
+    object Space : KeyAction
+
+    data class MoveCursor(
+        val direction: CursorDirection,
+        val unit: TextUnit = TextUnit.CHARACTER,
+        val extendSelection: Boolean = false
+    ) : KeyAction
+
+    data class Select(val unit: TextUnit) : KeyAction
+
+    data class Clipboard(val op: ClipboardOp) : KeyAction
+
+    object Undo : KeyAction
+    object Redo : KeyAction
+
+    data class OpenPanel(val panel: PanelId) : KeyAction
+
+    /** Start speech recognition. */
+    object Voice : KeyAction
+
+    /** Run a named AI task over the selection or the surrounding text. */
+    data class Ai(val taskId: String) : KeyAction
+
+    /** Run several actions in order. */
+    data class Macro(val steps: List<KeyAction>) : KeyAction
+
+    /**
+     * Dead key: combines with the next character typed. `´` then `e` gives `é`.
+     * [combining] is the Unicode combining mark used to compose.
+     */
+    data class DeadKey(val combining: String, val display: String = combining) : KeyAction
+
+    /** Start an X11-style compose sequence: Compose, then `'`, then `e` gives `é`. */
+    object Compose : KeyAction
+
+    /** Start hex Unicode entry: type digits, confirm, get the code point. */
+    object UnicodeInput : KeyAction
+
+    /** Insert the current selection's text again, or re-commit the last commit. */
+    object RepeatLast : KeyAction
+
+    object ShowSettings : KeyAction
+
+    /** Open the system input-method picker. */
+    object SwitchIme : KeyAction
+
+    object HideKeyboard : KeyAction
+
+    /** Toggle the one-handed / split / floating presentation. */
+    data class Presentation(val mode: PresentationMode) : KeyAction
+}
+
+enum class PresentationMode { NORMAL, ONE_HANDED_LEFT, ONE_HANDED_RIGHT, SPLIT, FLOATING, CYCLE }
+
+data class Binding(val trigger: KeyTrigger, val action: KeyAction)
+
+// ---------------------------------------------------------------------------
+// Indicators (the "LED" ask)
+// ---------------------------------------------------------------------------
+
+/** What an indicator watches. */
+sealed interface IndicatorSource {
+    data class Modifier(val kind: ModifierKind) : IndicatorSource
+
+    /** True while the modifier is *locked* rather than merely active. */
+    data class ModifierLock(val kind: ModifierKind) : IndicatorSource
+
+    data class Layer(val layer: String) : IndicatorSource
+
+    /** Named boolean the runtime publishes: see [IndicatorKeys]. */
+    data class Runtime(val key: String) : IndicatorSource
+}
+
+object IndicatorKeys {
+    const val CAPS_LOCK = "caps_lock"
+    const val NUM_LOCK = "num_lock"
+    const val SCROLL_LOCK = "scroll_lock"
+    const val AI_BUSY = "ai_busy"
+    const val ASR_ACTIVE = "asr_active"
+    const val ASR_LISTENING = "asr_listening"
+    const val NETWORK = "network"
+    const val PASSWORD_FIELD = "password_field"
+    const val INCOGNITO = "incognito"
+    const val COMPOSING = "composing"
+    const val DEAD_KEY = "dead_key_pending"
+    const val UNICODE_ENTRY = "unicode_entry"
+    const val SELECTION = "has_selection"
+    const val RECORDING_MACRO = "recording_macro"
+}
+
+enum class IndicatorStyle {
+    DOT_TOP_LEFT, DOT_TOP_RIGHT, DOT_BOTTOM_LEFT, DOT_BOTTOM_RIGHT,
+    BAR_TOP, BAR_BOTTOM, BAR_LEFT, BAR_RIGHT,
+    OUTLINE, FILL, GLOW, LABEL_TINT
+}
+
+data class IndicatorDef(
+    val source: IndicatorSource,
+    val style: IndicatorStyle = IndicatorStyle.DOT_TOP_RIGHT,
+    /** ARGB. Null means "use the theme's accent". */
+    val onColor: Long? = null,
+    /** ARGB. Null means "draw nothing when off". */
+    val offColor: Long? = null
+)
+
+// ---------------------------------------------------------------------------
+// Keys, rows, layers, layouts
+// ---------------------------------------------------------------------------
+
+enum class KeyShape { RECT, ROUNDED, CIRCLE, PILL }
+
+/** Normalised rectangle, 0..1 in both axes, relative to the key surface. */
+data class NormRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    val width: Float get() = right - left
+    val height: Float get() = bottom - top
+    fun contains(x: Float, y: Float): Boolean = x >= left && x < right && y >= top && y < bottom
+    val centerX: Float get() = (left + right) / 2f
+    val centerY: Float get() = (top + bottom) / 2f
+}
+
+data class KeyDef(
+    val id: String,
+    /** Drawn on the key. Null means "derive it from the tap action". */
+    val label: String? = null,
+    /** Small secondary glyph, conventionally the long-press result. */
+    val hint: String? = null,
+    /** Named icon from [com.example.ui.keyboard.KeyIcons]; wins over [label] when set. */
+    val icon: String? = null,
+    val widthWeight: Float = 1f,
+    /** Style id resolved against the theme. Built-ins: "normal", "special", "modifier", "accent". */
+    val style: String? = null,
+    val bindings: List<Binding> = emptyList(),
+    /** Long-press mini-keyboard. Plain strings are committed as text. */
+    val popup: List<String> = emptyList(),
+    /** Auto-repeat while held (backspace, arrows). */
+    val repeatable: Boolean = false,
+    val indicators: List<IndicatorDef> = emptyList(),
+    val shape: KeyShape = KeyShape.ROUNDED,
+    /**
+     * Absolute placement over a background image. When set the key ignores row flow,
+     * which is how bitmap-traced layouts are represented.
+     */
+    val bounds: NormRect? = null,
+    /**
+     * Extra touch weight for the probabilistic hit model. 1.0 is neutral; a bigger
+     * number makes the key easier to hit without changing how it looks.
+     */
+    val touchWeight: Float = 1f,
+    /** Visible at all? An invisible key still takes touches: useful for bitmap skins. */
+    val visible: Boolean = true
+) {
+    fun actionFor(trigger: KeyTrigger): KeyAction? =
+        bindings.firstOrNull { it.trigger == trigger }?.action
+
+    val tapAction: KeyAction? get() = actionFor(KeyTrigger.Tap)
+
+    /** What to draw, falling back to the tap action's own text. */
+    val effectiveLabel: String
+        get() = label ?: when (val a = tapAction) {
+            is KeyAction.Text -> a.text
+            is KeyAction.DeadKey -> a.display
+            else -> ""
+        }
+}
+
+data class RowDef(
+    val keys: List<KeyDef>,
+    val heightWeight: Float = 1f,
+    /** Leading/trailing gap measured in key-weight units, for staggered rows. */
+    val padStart: Float = 0f,
+    val padEnd: Float = 0f
+)
+
+data class LayerDef(
+    val name: String,
+    val rows: List<RowDef> = emptyList(),
+    /** Absolutely-placed keys, used by bitmap layouts. Rendered above [rows]. */
+    val freeKeys: List<KeyDef> = emptyList()
+) {
+    val allKeys: List<KeyDef> get() = rows.flatMap { it.keys } + freeKeys
+}
+
+enum class BackgroundFit { STRETCH, CONTAIN, COVER, TILE }
+
+data class BackgroundDef(
+    /** File name inside the app's `layout_assets` directory. */
+    val imageFile: String,
+    val fit: BackgroundFit = BackgroundFit.STRETCH,
+    val opacity: Float = 1f,
+    /**
+     * Optional grayscale weight map, same directory. Brighter pixels attract touches
+     * more strongly. Feeds the probabilistic hit model, never drawn.
+     */
+    val sensitivityFile: String? = null
+)
+
+data class LayoutDef(
+    val id: String,
+    val name: String,
+    val layers: Map<String, LayerDef>,
+    val defaultLayer: String = BASE_LAYER,
+    /** BCP-47-ish tag used for language cycling and dictionary selection. */
+    val locale: String? = null,
+    val background: BackgroundDef? = null,
+    val author: String? = null,
+    val description: String? = null,
+    /** Suggested aspect: rows tall. Used to pick a default height. */
+    val rowCountHint: Int = 4,
+    val builtIn: Boolean = false
+) {
+    fun layer(name: String): LayerDef? = layers[name]
+    val base: LayerDef get() = layers[defaultLayer] ?: layers[BASE_LAYER] ?: layers.values.first()
+
+    fun key(id: String): KeyDef? = layers.values.firstNotNullOfOrNull { layer ->
+        layer.allKeys.firstOrNull { it.id == id }
+    }
+
+    companion object {
+        const val BASE_LAYER = "base"
+        const val SHIFT_LAYER = "shift"
+        const val SYMBOL_LAYER = "symbols"
+        const val SYMBOL_SHIFT_LAYER = "symbols_shift"
+    }
+}
