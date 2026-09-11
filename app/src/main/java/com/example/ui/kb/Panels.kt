@@ -103,7 +103,7 @@ fun SuggestionStrip(
             ToolbarButton("⌨", "Layouts", theme) { onToolbar(PanelId.LAYOUT_PICKER) }
             Spacer(Modifier.weight(1f))
             if (aiBusy) {
-                Text("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
+                PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
             }
             ToolbarButton("⚙", "Settings", theme) { host.openApp() }
         } else {
@@ -131,12 +131,12 @@ fun SuggestionStrip(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (suggestion.source == SuggestionSource.AI) {
-                                    Text("✦ ", color = theme.stripAiText, fontSize = 13.sp)
+                                    PanelText("✦ ", color = theme.stripAiText, fontSize = 13.sp)
                                 }
                                 if (suggestion.source == SuggestionSource.SHORTCUT) {
-                                    Text("⌁ ", color = theme.stripAiText, fontSize = 13.sp)
+                                    PanelText("⌁ ", color = theme.stripAiText, fontSize = 13.sp)
                                 }
-                                Text(
+                                PanelText(
                                     text = suggestion.display,
                                     color = if (suggestion.source == SuggestionSource.AI) theme.stripAiText
                                     else theme.stripText,
@@ -149,7 +149,7 @@ fun SuggestionStrip(
                     }
                 }
             }
-            if (aiBusy) Text("…", color = theme.stripAiText, modifier = Modifier.padding(end = 8.dp))
+            if (aiBusy) PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 8.dp))
             ToolbarButton("▾", "More", theme) { onToolbar(PanelId.CLIPBOARD) }
         }
     }
@@ -161,12 +161,18 @@ private fun ToolbarButton(glyph: String, label: String, theme: KeyboardTheme, on
         modifier = Modifier.fillMaxHeight().clickable(onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(glyph, color = theme.stripText, fontSize = 17.sp)
+        PanelText(glyph, color = theme.stripText, fontSize = 17.sp)
     }
 }
 
+/**
+ * Panel text, with the theme colour and size up front.
+ *
+ * Named rather than shadowing `Text`: a same-package private overload wins resolution
+ * over the imported one, which silently changes what a neighbouring file compiles to.
+ */
 @Composable
-private fun Text(
+private fun PanelText(
     text: String,
     color: Color,
     fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
@@ -198,14 +204,14 @@ private fun PanelFrame(
             modifier = Modifier.fillMaxWidth().height(38.dp).background(theme.stripBackground),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, theme.stripText, 14.sp, FontWeight.Medium, modifier = Modifier.padding(start = 12.dp))
+            PanelText(title, theme.stripText, 14.sp, FontWeight.Medium, modifier = Modifier.padding(start = 12.dp))
             Spacer(Modifier.weight(1f))
             actions()
             Box(
                 Modifier.fillMaxHeight().clickable(onClick = onClose).padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("✕", theme.stripText, 16.sp)
+                PanelText("✕", theme.stripText, 16.sp)
             }
         }
         Box(Modifier.weight(1f)) { content() }
@@ -233,14 +239,14 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     .padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (showKaomoji) "😀" else "¯\\_(ツ)_/¯", theme.stripText, 13.sp)
+                PanelText(if (showKaomoji) "😀" else "¯\\_(ツ)_/¯", theme.stripText, 13.sp)
             }
             Box(
                 Modifier.fillMaxHeight().clickable { host.perform(KeyAction.Backspace(EditUnit.CHARACTER)) }
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("⌫", theme.stripText, 16.sp)
+                PanelText("⌫", theme.stripText, 16.sp)
             }
         }
     ) {
@@ -250,10 +256,10 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     items(EmojiData.KAOMOJI) { face ->
                         Box(
                             Modifier.fillMaxWidth()
-                                .clickable { host.perform(KeyAction.Text(face)) }
+                                .clickable { host.perform(KeyAction.PanelText(face)) }
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            Text(face, theme.keyText, 16.sp)
+                            PanelText(face, theme.keyText, 16.sp)
                         }
                     }
                 }
@@ -272,12 +278,12 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                             modifier = Modifier
                                 .size(44.dp)
                                 .clickable {
-                                    host.perform(KeyAction.Text(glyph))
+                                    host.perform(KeyAction.PanelText(glyph))
                                     recents.value = EmojiRecents.remember(glyph)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(glyph, theme.keyText, 24.sp)
+                            PanelText(glyph, theme.keyText, 24.sp)
                         }
                     }
                 }
@@ -299,7 +305,7 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(category.icon, theme.stripText, 18.sp)
+                            PanelText(category.icon, theme.stripText, 18.sp)
                         }
                     }
                 }
@@ -349,7 +355,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     .padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Clear", theme.stripText, 13.sp)
+                PanelText("Clear", theme.stripText, 13.sp)
             }
         }
     ) {
@@ -367,7 +373,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
 
             if (clips.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
+                    PanelText(
                         if (query.isBlank()) "Nothing copied yet." else "No match.",
                         theme.keyHintText, 14.sp
                     )
@@ -378,11 +384,11 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { host.perform(KeyAction.Text(item.content)) }
+                                .clickable { host.perform(KeyAction.PanelText(item.content)) }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
+                            PanelText(
                                 text = item.content.replace('\n', ' '),
                                 color = theme.keyText,
                                 fontSize = 14.sp,
@@ -441,7 +447,7 @@ private fun SearchField(query: String, theme: KeyboardTheme, onChange: (String) 
             .background(theme.keyBackground, RoundedCornerShape(8.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        if (query.isEmpty()) Text("Search…", theme.keyHintText, 14.sp)
+        if (query.isEmpty()) PanelText("Search…", theme.keyHintText, 14.sp)
         BasicTextField(
             value = query,
             onValueChange = onChange,
@@ -459,7 +465,7 @@ private fun IconAction(glyph: String, theme: KeyboardTheme, onClick: () -> Unit)
         Modifier.size(36.dp).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(glyph, theme.keyHintText, 15.sp)
+        PanelText(glyph, theme.keyHintText, 15.sp)
     }
 }
 
@@ -471,7 +477,7 @@ private fun TextButton(label: String, theme: KeyboardTheme, onClick: () -> Unit)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(label, theme.keyText, 14.sp)
+        PanelText(label, theme.keyText, 14.sp)
     }
 }
 
@@ -505,7 +511,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
         ) {
             when (val current = voiceState) {
                 is AsrState.Idle -> {
-                    Text("Ready.", theme.keyText, 16.sp)
+                    PanelText("Ready.", theme.keyText, 16.sp)
                     Spacer(Modifier.height(14.dp))
                     TextButton("Start", theme) { host.voice.start() }
                 }
@@ -518,10 +524,10 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                             .background(theme.keyActiveBackground.copy(alpha = 0.25f), RoundedCornerShape(50)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("🎤", theme.keyText, 26.sp)
+                        PanelText("🎤", theme.keyText, 26.sp)
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(
+                    PanelText(
                         current.partial.ifBlank { "Listening…" },
                         theme.keyText, 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis
                     )
@@ -536,7 +542,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                     }
                 }
 
-                is AsrState.Processing -> Text(
+                is AsrState.Processing -> PanelText(
                     "Transcribing via " +
                         com.example.core.config.AsrEngines.label(settings.asrEngine) + "…",
                     theme.keyText, 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
@@ -549,7 +555,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                     LaunchedEffect(current) {
                         if (settings.asrAutoCommitBest) {
                             current.alternatives.firstOrNull()?.let {
-                                host.perform(KeyAction.Text(it.text))
+                                host.perform(KeyAction.PanelText(it.text))
                             }
                             host.voice.dismiss()
                             onClose()
@@ -559,7 +565,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                         if (settings.asrShowAlternatives) current.alternatives
                         else current.alternatives.take(1)
 
-                    Text(
+                    PanelText(
                         if (shown.size > 1) "Pick what you said" else "Transcription",
                         theme.keyHintText, 13.sp
                     )
@@ -575,13 +581,13 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable {
-                                        host.perform(KeyAction.Text(alternative.text))
+                                        host.perform(KeyAction.PanelText(alternative.text))
                                         host.voice.dismiss()
                                         onClose()
                                     }
                                     .padding(12.dp)
                             ) {
-                                Text(alternative.text, theme.keyText, 15.sp)
+                                PanelText(alternative.text, theme.keyText, 15.sp)
                             }
                         }
                     }
@@ -597,7 +603,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                 }
 
                 is AsrState.Error -> {
-                    Text(current.message, theme.keyText, 15.sp)
+                    PanelText(current.message, theme.keyText, 15.sp)
                     Spacer(Modifier.height(14.dp))
                     Row {
                         if (current.needsPermission) {
@@ -636,7 +642,7 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
         Column(Modifier.fillMaxSize().padding(10.dp)) {
             when {
                 !settings.aiEnabled -> Column {
-                    Text(
+                    PanelText(
                         "AI is switched off. It is off by default because it sends what you " +
                             "are writing to a provider you choose.",
                         theme.keyText, 14.sp
@@ -645,7 +651,7 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                     TextButton("Set it up", theme) { host.openApp("ai") }
                 }
 
-                host.editor.isSensitive -> Text(
+                host.editor.isSensitive -> PanelText(
                     "This field is a password or has asked not to be personalised, so nothing " +
                         "from it is sent anywhere.",
                     theme.keyText, 14.sp
@@ -653,14 +659,14 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
 
                 result != null -> {
                     val text = result.orEmpty()
-                    Text("Result", theme.keyHintText, 12.sp)
+                    PanelText("Result", theme.keyHintText, 12.sp)
                     Spacer(Modifier.height(6.dp))
                     Box(
                         Modifier.weight(1f).fillMaxWidth()
                             .background(theme.keyBackground, RoundedCornerShape(8.dp))
                             .padding(10.dp)
                     ) {
-                        LazyColumn { item { Text(text, theme.keyText, 15.sp) } }
+                        LazyColumn { item { PanelText(text, theme.keyText, 15.sp) } }
                     }
                     Spacer(Modifier.height(10.dp))
                     Row {
@@ -671,13 +677,13 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                             if (activeTask?.replaceInPlace == true) {
                                 host.editor.replaceSelectionOrAll(text)
                             } else {
-                                host.perform(KeyAction.Text(text))
+                                host.perform(KeyAction.PanelText(text))
                             }
                             onClose()
                         }
                         Spacer(Modifier.width(8.dp))
                         TextButton("Copy", theme) {
-                            host.perform(KeyAction.Text(text))
+                            host.perform(KeyAction.PanelText(text))
                             onClose()
                         }
                         Spacer(Modifier.width(8.dp))
@@ -686,12 +692,12 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                 }
 
                 busy -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Working…", theme.keyText, 16.sp)
+                    PanelText("Working…", theme.keyText, 16.sp)
                 }
 
                 else -> {
                     error?.let {
-                        Text(it, theme.stripAiText, 13.sp)
+                        PanelText(it, theme.stripAiText, 13.sp)
                         Spacer(Modifier.height(8.dp))
                     }
                     LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 150.dp)) {
@@ -722,7 +728,7 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                                     }
                                     .padding(horizontal = 12.dp, vertical = 14.dp)
                             ) {
-                                Text(task.label, theme.keyText, 14.sp)
+                                PanelText(task.label, theme.keyText, 14.sp)
                             }
                         }
                     }
@@ -752,7 +758,7 @@ fun CursorPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                 .width((56 * weight).dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(label, theme.keyText, 15.sp)
+            PanelText(label, theme.keyText, 15.sp)
         }
     }
 
@@ -768,7 +774,7 @@ fun CursorPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (selecting) "Selecting" else "Select", theme.stripText, 13.sp)
+                PanelText(if (selecting) "Selecting" else "Select", theme.stripText, 13.sp)
             }
         }
     ) {
@@ -822,7 +828,7 @@ fun LayoutPickerPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> U
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Edit…", theme.stripText, 13.sp)
+                PanelText("Edit…", theme.stripText, 13.sp)
             }
         }
     ) {
@@ -840,16 +846,16 @@ fun LayoutPickerPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> U
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        PanelText(
                             candidate.name,
                             if (candidate.id == host.layout.id) theme.stripAiText else theme.keyText,
                             15.sp
                         )
                         candidate.description?.let {
-                            Text(it, theme.keyHintText, 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            PanelText(it, theme.keyHintText, 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    if (enabled) Text("in rotation", theme.keyHintText, 11.sp)
+                    if (enabled) PanelText("in rotation", theme.keyHintText, 11.sp)
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(theme.keyBorder))
             }
@@ -888,7 +894,7 @@ fun IndicatorStrip(theme: KeyboardTheme, height: androidx.compose.ui.unit.Dp) {
                     )
             )
             Spacer(Modifier.width(4.dp))
-            Text(label, if (on) theme.stripText else theme.keyHintText, 10.sp)
+            PanelText(label, if (on) theme.stripText else theme.keyHintText, 10.sp)
         }
     }
 
