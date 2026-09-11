@@ -264,6 +264,13 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
         LayoutRepository.loadAsset(layout.background?.imageFile)?.asImageBitmap()
     }
 
+    // A layout can be edited into a state with nothing to press. Stranding someone with
+    // a blank rectangle and no way back is the one failure a keyboard must not have.
+    if (effectiveLayer.allKeys.none { it.visible }) {
+        EmptyLayoutNotice(layout.name, theme)
+        return
+    }
+
     KeySurface(
         layout = layout.copy(layers = layout.layers + (effectiveLayer.name to effectiveLayer)),
         layerName = effectiveLayer.name,
@@ -291,6 +298,45 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
         },
         modifier = Modifier.fillMaxSize()
     )
+}
+
+/**
+ * Shown when the current layout has no usable keys — an empty JSON edit, a mask import
+ * with nothing bound. Offers the two ways out rather than leaving a blank surface.
+ */
+@Composable
+private fun EmptyLayoutNotice(layoutName: String, theme: KeyboardTheme) {
+    val host = LocalKeyboardHost.current
+    Column(
+        modifier = Modifier.fillMaxSize().background(theme.background).padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            ""$layoutName" has no keys to press.",
+            color = theme.keyText,
+            fontSize = 15.sp
+        )
+        Box(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier
+                    .background(theme.keyBackground, RoundedCornerShape(8.dp))
+                    .clickable { host.openPanel(PanelId.LAYOUT_PICKER) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text("Choose another", color = theme.keyText, fontSize = 14.sp)
+            }
+            Box(
+                Modifier
+                    .background(theme.keyBackground, RoundedCornerShape(8.dp))
+                    .clickable { host.openApp("layouts") }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text("Edit it", color = theme.keyText, fontSize = 14.sp)
+            }
+        }
+    }
 }
 
 /** The tab that pulls a one-handed keyboard back to full width. */
