@@ -33,6 +33,35 @@ class TextOpsTest {
     }
 
     @Test
+    fun `backspace removes a joined emoji sequence in one press`() {
+        // 👨‍👩‍👧 — three people joined by two zero-width joiners, one character to a reader.
+        val family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67"
+        assertEquals(family.length, TextOps.lastGraphemeLength(family))
+        assertEquals(family.length, TextOps.firstGraphemeLength(family))
+    }
+
+    @Test
+    fun `backspace removes a flag in one press`() {
+        // 🇵🇱 — two regional indicators.
+        val flag = "\uD83C\uDDF5\uD83C\uDDF1"
+        assertEquals(4, TextOps.lastGraphemeLength(flag))
+        assertEquals(4, TextOps.firstGraphemeLength(flag))
+    }
+
+    @Test
+    fun `backspace removes a keycap in one press`() {
+        val keycap = "1\uFE0F\u20E3"
+        assertEquals(3, TextOps.lastGraphemeLength(keycap))
+    }
+
+    @Test
+    fun `forward delete matches backspace on the same cluster`() {
+        val waveWithTone = "\uD83D\uDC4B\uD83C\uDFFD"
+        assertEquals(waveWithTone.length, TextOps.firstGraphemeLength(waveWithTone))
+        assertEquals(1, TextOps.firstGraphemeLength("abc"))
+    }
+
+    @Test
     fun `backspace on plain text removes one character`() {
         assertEquals(1, TextOps.lastGraphemeLength("abc"))
         assertEquals(0, TextOps.lastGraphemeLength(""))

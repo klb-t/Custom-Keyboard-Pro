@@ -1,6 +1,5 @@
 package com.example.core.text
 
-import java.text.BreakIterator
 
 /**
  * Text manipulation that is correct for real text rather than for ASCII.
@@ -8,31 +7,80 @@ import java.text.BreakIterator
  * The keyboard this replaced deleted one Java `char` per backspace. That splits
  * surrogate pairs, so one press of backspace turned an emoji into half of an emoji,
  * and it strips one combining mark at a time off an accented letter. Everything here
- * works in grapheme clusters instead, via [BreakIterator].
+ * works in user-perceived characters instead.
  */
 object TextOps {
 
-    /** Length in `char`s of the last grapheme cluster of [text], or 0 if empty. */
+    /**
+     * Length in `char`s of the last user-perceived character of [text], or 0 if empty.
+     *
+     * Written by hand rather than handed to `BreakIterator`, because the platform's
+     * grapheme rules are only as new as the device's ICU data: on Android 7 they
+     * predate skin-tone modifiers and most joined emoji entirely. Backspace has to
+     * behave the same everywhere, so the clustering that matters for text entry —
+     * combining marks, variation selectors, skin tones, keycaps, regional-indicator
+     * flags and zero-width-joiner sequences — is spelled out here.
+     */
     fun lastGraphemeLength(text: CharSequence): Int {
         if (text.isEmpty()) return 0
         val s = text.toString()
-        val it = BreakIterator.getCharacterInstance()
-        it.setText(s)
-        val end = s.length
-        val start = it.preceding(end)
-        return if (start == BreakIterator.DONE) end else end - start
+        var index = s.length
+
+        fun consumeClusterBackwards() {
+            while (index > 0) {
+                val cp = s.codePointBefore(index)
+                if (!isClusterExtender(cp)) break
+                index -= Character.charCount(cp)
+            }
+            if (index <= 0) return
+            val base = s.codePointBefore(index)
+            index -= Character.charCount(base)
+            // A flag is two regional indicators and deletes as one.
+            if (isRegionalIndicator(base) && index > 0) {
+                val previous = s.codePointBefore(index)
+                if (isRegionalIndicator(previous)) index -= Character.charCount(previous)
+            }
+        }
+
+        consumeClusterBackwards()
+        // A joined sequence — 👨‍👩‍👧 and friends — is one character to its reader.
+        while (index > 0 && s.codePointBefore(index) == ZWJ) {
+            index -= 1
+            consumeClusterBackwards()
+        }
+        if (index > 0 && s[index] == '\n' && s[index - 1] == '\r') index -= 1
+        return s.length - index
     }
 
-    /** Length in `char`s of the first grapheme cluster of [text]. */
+    /** Length in `char`s of the first user-perceived character of [text]. */
     fun firstGraphemeLength(text: CharSequence): Int {
         if (text.isEmpty()) return 0
         val s = text.toString()
-        val it = BreakIterator.getCharacterInstance()
-        it.setText(s)
-        it.first()
-        val next = it.next()
-        return if (next == BreakIterator.DONE) s.length else next
+        var index = 0
+
+        fun consumeClusterForwards() {
+            if (index >= s.length) return
+            val base = s.codePointAt(index)
+            index += Character.charCount(base)
+            if (isRegionalIndicator(base) && index < s.length) {
+                val next = s.codePointAt(index)
+                if (isRegionalIndicator(next)) index += Character.charCount(next)
+            }
+            while (index < s.length) {
+                val cp = s.codePointAt(index)
+                if (!isClusterExtender(cp)) break
+                index += Character.charCount(cp)
+            }
+        }
+
+        consumeClusterForwards()
+        while (index < s.length && s.codePointAt(index) == ZWJ) {
+            index += 1
+            consumeClusterForwards()
+        }
+        return index
     }
+
 
     /**
      * How many characters to remove to delete the word before the cursor.
@@ -197,4 +245,25 @@ object TextOps {
             null
         }
     }
+
+    private const val ZWJ = 0x200D
+
+    /** Code points that attach to what precedes them rather than standing alone. */
+    private fun isClusterExtender(codePoint: Int): Boolean {
+        when (codePoint) {
+            0xFE0F, 0xFE0E -> return true          // variation selectors
+            0x20E3 -> return true                  // combining enclosing keycap
+        }
+        if (codePoint in 0x1F3FB..0x1F3FF) return true   // skin-tone modifiers
+        if (codePoint in 0xE0020..0xE007F) return true   // tag characters, for subdivision flags
+        return when (Character.getType(codePoint)) {
+            Character.NON_SPACING_MARK.toInt(),
+            Character.ENCLOSING_MARK.toInt(),
+            Character.COMBINING_SPACING_MARK.toInt() -> true
+            else -> false
+        }
+    }
+
+    private fun isRegionalIndicator(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF
+
 }
