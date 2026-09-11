@@ -82,6 +82,34 @@ class KeyboardRepository(context: Context) {
         )
     }
 
+    /**
+     * Adds many words at once, for importing a real word list.
+     *
+     * Accepts one word per line, optionally followed by whitespace and a count, which
+     * is the format most published frequency lists already use. Imported words are
+     * marked as the user's own so automatic pruning leaves them alone.
+     */
+    suspend fun importWords(text: CharSequence, locale: String = ""): Int {
+        var imported = 0
+        text.lineSequence().forEach { line ->
+            val parts = line.trim().split(Regex("[\\s,;\\t]+"))
+            val word = parts.firstOrNull()?.lowercase().orEmpty()
+            if (word.length < 2 || word.any { !TextOps.isWordChar(it) }) return@forEach
+            val count = parts.getOrNull(1)?.toIntOrNull() ?: 1
+            dictionary.upsert(
+                WordEntity(
+                    id = dictionary.find(word)?.id ?: 0,
+                    word = word,
+                    count = count.coerceIn(1, 1_000_000),
+                    locale = locale,
+                    locked = true
+                )
+            )
+            imported++
+        }
+        return imported
+    }
+
     suspend fun blockWord(word: String) = dictionary.block(word)
     suspend fun deleteWord(word: String) = dictionary.delete(word)
     suspend fun clearLearnedWords() {

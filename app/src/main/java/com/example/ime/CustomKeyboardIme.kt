@@ -82,7 +82,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val repository: KeyboardRepository by lazy { KeyboardRepository.get(this) }
 
     override val suggestions: SuggestionEngine by lazy {
-        SuggestionEngine(serviceScope, repository) { SettingsStore.current }
+        SuggestionEngine(this, serviceScope, repository) { SettingsStore.current }
     }
 
     override val voice: VoiceController by lazy {
@@ -603,7 +603,12 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     private fun autoCorrect(word: String, terminator: String) {
         lastAutoCorrection = null
         serviceScope.launch {
-            val replacement = Correction.suggest(repository, word) ?: return@launch
+            val replacement = Correction.suggest(
+                context = this@CustomKeyboardIme,
+                repository = repository,
+                word = word,
+                locale = layout.locale.orEmpty()
+            ) ?: return@launch
             val tail = word + terminator
             if (!editor.textBefore(tail.length + 2).endsWith(tail)) return@launch
             editor.batch {

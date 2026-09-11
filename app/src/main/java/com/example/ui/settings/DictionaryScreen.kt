@@ -1,5 +1,7 @@
 package com.example.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +29,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.core.data.KeyboardRepository
 import com.example.core.data.ShortcutEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * What the keyboard has learned, and the expansions the user has defined.
@@ -45,6 +49,26 @@ fun DictionaryScreen() {
     val shortcuts by repository.observeShortcuts().collectAsState(initial = emptyList())
 
     var newWord by remember { mutableStateOf("") }
+    var importStatus by remember { mutableStateOf<String?>(null) }
+
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importStatus = "Reading…"
+        scope.launch {
+            val result = runCatching {
+                val text = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                } ?: error("That file could not be read.")
+                repository.importWords(text)
+            }
+            importStatus = result.fold(
+                onSuccess = { "Imported $it words." },
+                onFailure = { "Could not import: ${it.message}" }
+            )
+        }
+    }
     var shortcutKey by remember { mutableStateOf("") }
     var shortcutValue by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) }
@@ -83,10 +107,21 @@ fun DictionaryScreen() {
                 ) { Text("Add") }
             }
             Row(Modifier.padding(horizontal = 12.dp)) {
+                TextButton(onClick = { importPicker.launch("*/*") }) {
+                    Text("Import a word list")
+                }
                 TextButton(onClick = { scope.launch { repository.clearLearnedWords() } }) {
                     Text("Forget everything learned")
                 }
             }
+            importStatus?.let { InfoRow(it) }
+            InfoRow(
+                "Common English and Polish words are built in, so suggestions and " +
+                    "correction work from the first day — they are separate from this " +
+                    "list and are not affected by forgetting. Import accepts one word " +
+                    "per line, optionally followed by a frequency count, which is the " +
+                    "format published word lists already use."
+            )
             if (words.isEmpty()) {
                 InfoRow("Nothing learned yet. Words appear here as you type them.")
             }

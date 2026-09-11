@@ -25,6 +25,9 @@ import com.example.core.layout.ModifierKind
  * understand a layout you wrote yourself is to watch that state change as you press
  * things.
  */
+/** Amber: something is half-typed and waiting for the next key. */
+private val PENDING = Color(0xFFFFD400)
+
 @Composable
 fun DebugOverlay(
     state: com.example.ime.KeyboardState,
@@ -75,9 +78,15 @@ fun DebugOverlay(
                 color = Color(0xFFCCCCCC),
                 fontSize = 10.sp
             )
-            state.pendingDeadKey?.let { Text("pending dead key: $it", Color(0xFFFFD400), fontSize = 10.sp) }
-            state.composeBuffer?.let { Text("compose: $it", Color(0xFFFFD400), fontSize = 10.sp) }
-            state.unicodeBuffer?.let { Text("unicode: U+$it", Color(0xFFFFD400), fontSize = 10.sp) }
+            state.pendingDeadKey?.let {
+                Text(text = "pending dead key: $it", color = PENDING, fontSize = 10.sp)
+            }
+            state.composeBuffer?.let {
+                Text(text = "compose: $it", color = PENDING, fontSize = 10.sp)
+            }
+            state.unicodeBuffer?.let {
+                Text(text = "unicode: U+$it", color = PENDING, fontSize = 10.sp)
+            }
         }
     }
 }

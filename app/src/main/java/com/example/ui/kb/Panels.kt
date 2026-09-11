@@ -259,7 +259,7 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     items(EmojiData.KAOMOJI) { face ->
                         Box(
                             Modifier.fillMaxWidth()
-                                .clickable { host.perform(KeyAction.PanelText(face)) }
+                                .clickable { host.perform(KeyAction.Text(face)) }
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             PanelText(face, theme.keyText, 16.sp)
@@ -281,7 +281,7 @@ fun EmojiPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                             modifier = Modifier
                                 .size(44.dp)
                                 .clickable {
-                                    host.perform(KeyAction.PanelText(glyph))
+                                    host.perform(KeyAction.Text(glyph))
                                     recents.value = EmojiRecents.remember(glyph)
                                 },
                             contentAlignment = Alignment.Center
@@ -387,7 +387,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { host.perform(KeyAction.PanelText(item.content)) }
+                                .clickable { host.perform(KeyAction.Text(item.content)) }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -558,7 +558,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                     LaunchedEffect(current) {
                         if (settings.asrAutoCommitBest) {
                             current.alternatives.firstOrNull()?.let {
-                                host.perform(KeyAction.PanelText(it.text))
+                                host.perform(KeyAction.Text(it.text))
                             }
                             host.voice.dismiss()
                             onClose()
@@ -584,7 +584,7 @@ fun VoicePanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) {
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable {
-                                        host.perform(KeyAction.PanelText(alternative.text))
+                                        host.perform(KeyAction.Text(alternative.text))
                                         host.voice.dismiss()
                                         onClose()
                                     }
@@ -680,13 +680,13 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                             if (activeTask?.replaceInPlace == true) {
                                 host.editor.replaceSelectionOrAll(text)
                             } else {
-                                host.perform(KeyAction.PanelText(text))
+                                host.perform(KeyAction.Text(text))
                             }
                             onClose()
                         }
                         Spacer(Modifier.width(8.dp))
                         TextButton("Copy", theme) {
-                            host.perform(KeyAction.PanelText(text))
+                            host.perform(KeyAction.Text(text))
                             onClose()
                         }
                         Spacer(Modifier.width(8.dp))

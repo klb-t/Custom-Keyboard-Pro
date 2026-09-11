@@ -106,8 +106,11 @@ fun LayoutStudioScreen(settings: Settings) {
             busy = false
             result.onSuccess { layout ->
                 LayoutRepository.save(layout)
-                status = "Made \"${layout.name}\". Open it to check what each key does."
-                editing = layout
+                    .onSuccess {
+                        status = "Made \"${layout.name}\". Open it to check what each key does."
+                        editing = layout
+                    }
+                    .onFailure { status = "Could not save it: ${it.message}" }
             }.onFailure { status = it.message ?: "That did not work." }
         }
     }
@@ -195,8 +198,11 @@ fun LayoutStudioScreen(settings: Settings) {
                 onClick = {
                     val blank = blankLayout()
                     LayoutRepository.save(blank)
-                    editing = blank
-                    status = "Created an empty layout."
+                        .onSuccess {
+                            editing = blank
+                            status = "Created an empty layout."
+                        }
+                        .onFailure { status = "Could not save it: ${it.message}" }
                 }
             )
         }
@@ -250,8 +256,11 @@ fun LayoutStudioScreen(settings: Settings) {
                     busy = false
                     result.onSuccess { layout ->
                         LayoutRepository.save(layout)
-                        editing = layout
-                        status = "Made \"${layout.name}\"."
+                            .onSuccess {
+                                editing = layout
+                                status = "Made \"${layout.name}\"."
+                            }
+                            .onFailure { status = "Could not save it: ${it.message}" }
                     }.onFailure { status = it.message ?: "That did not work." }
                 }
             }
@@ -266,7 +275,16 @@ private fun blankLayout(): LayoutDef {
     val rows = (0 until 4).map { row ->
         com.example.core.layout.RowDef(
             keys = (0 until 10).map { column ->
-                com.example.core.layout.KeyDef(id = "k_${row}_$column", label = "·")
+                com.example.core.layout.KeyDef(
+                    id = "k_${row}_$column",
+                    label = "·",
+                    bindings = listOf(
+                        com.example.core.layout.Binding(
+                            com.example.core.layout.KeyTrigger.Tap,
+                            com.example.core.layout.KeyAction.None
+                        )
+                    )
+                )
             }
         )
     }
@@ -331,7 +349,8 @@ private fun LayoutEditorDialog(
                 val parsed = runCatching { LayoutJson.parse(json) }
                 parsed.onSuccess { updated ->
                     LayoutRepository.save(updated)
-                    onSaved(updated)
+                        .onSuccess { onSaved(updated) }
+                        .onFailure { error = "Could not save it: ${it.message}" }
                 }.onFailure { error = it.message ?: "That JSON could not be read." }
             }) { Text("Save") }
         },

@@ -35,6 +35,7 @@ data class Suggestion(
  * a plain word-completion keyboard rather than to an empty strip.
  */
 class SuggestionEngine(
+    private val context: android.content.Context,
     private val scope: CoroutineScope,
     private val repository: KeyboardRepository,
     private val settings: () -> Settings
@@ -163,6 +164,19 @@ class SuggestionEngine(
 
         if (s.personalDictionary) {
             if (word.isNotEmpty()) {
+                // The bundled list goes in first so a brand-new install has something
+                // to offer; the user's own words then overwrite and outrank these.
+                com.example.core.data.BundledDictionary
+                    .startingWith(context, locale, word, s.suggestionCount)
+                    .forEach { entry ->
+                        out.getOrPut(entry.word) {
+                            Suggestion(
+                                entry.word, SuggestionSource.DICTIONARY, true,
+                                score = (400 - entry.rank).coerceAtLeast(1).toFloat()
+                            )
+                        }
+                    }
+
                 // Words that continue what is being typed.
                 repository.wordsStartingWith(word, s.suggestionCount * 3).forEach { entity ->
                     if (entity.word != word) {

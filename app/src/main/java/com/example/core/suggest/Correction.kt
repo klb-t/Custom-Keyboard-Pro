@@ -1,5 +1,7 @@
 package com.example.core.suggest
 
+import android.content.Context
+import com.example.core.data.BundledDictionary
 import com.example.core.data.KeyboardRepository
 
 /**
@@ -60,29 +62,43 @@ object Correction {
      * Returns null when the word is already known, when nothing is close enough, or
      * when the closest candidate is not used much more often than the word itself.
      */
-    suspend fun suggest(repository: KeyboardRepository, word: String): String? {
+    suspend fun suggest(
+        context: Context,
+        repository: KeyboardRepository,
+        word: String,
+        locale: String
+    ): String? {
         if (word.length < MIN_LENGTH) return null
         if (word.any { !it.isLetter() }) return null
         if (word != word.lowercase()) return null  // Names and acronyms are not typos.
         if (repository.knows(word)) return null
+        if (BundledDictionary.knows(context, locale, word)) return null
 
         val limit = if (word.length >= 7) 2 else 1
-        val candidates = repository.wordsStartingWith(word.take(1), 120)
         var best: String? = null
-        var bestCount = 0
+        var bestWeight = 0
         var bestDistance = limit + 1
 
-        candidates.forEach { entry ->
-            if (entry.blocked || entry.count < MIN_CANDIDATE_COUNT) return@forEach
-            if (entry.word == word) return@forEach
-            val d = distance(word, entry.word, limit)
-            if (d > limit) return@forEach
-            // Prefer the closest; break ties by how often the user types it.
-            if (d < bestDistance || (d == bestDistance && entry.count > bestCount)) {
-                best = entry.word
-                bestCount = entry.count
+        fun consider(candidate: String, weight: Int) {
+            if (candidate == word) return
+            val d = distance(word, candidate, limit)
+            if (d > limit) return
+            // Prefer the closest; break ties by how common the word is.
+            if (d < bestDistance || (d == bestDistance && weight > bestWeight)) {
+                best = candidate
+                bestWeight = weight
                 bestDistance = d
             }
+        }
+
+        repository.wordsStartingWith(word.take(1), 120).forEach { entry ->
+            if (!entry.blocked && entry.count >= MIN_CANDIDATE_COUNT) consider(entry.word, entry.count)
+        }
+        // The bundled list is what makes correction work before the user has typed
+        // enough for their own dictionary to be any use. A common word outranks a rare
+        // one, which is what the rank encodes.
+        BundledDictionary.sharingFirstLetter(context, locale, word, 400).forEach { entry ->
+            consider(entry.word, MIN_CANDIDATE_COUNT + (400 - entry.rank).coerceAtLeast(1))
         }
         return best
     }
