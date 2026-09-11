@@ -214,7 +214,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         restoreLayoutForApp()
         panelState.value = null
         state.clearAllModifiers()
-        state.setLayer(LayoutDef.BASE_LAYER)
+        state.resetLayer(LayoutDef.BASE_LAYER)
         state.clearPending()
         suggestions.clear()
         previousWord = ""
@@ -364,7 +364,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override fun selectLayout(id: String) {
         layoutIdState.value = id
         SettingsStore.update { it.copy(activeLayoutId = id) }
-        state.setLayer(LayoutDef.BASE_LAYER)
+        state.resetLayer(LayoutDef.BASE_LAYER)
         touchLearner.load(id)
         rememberLayoutForApp(id)
     }

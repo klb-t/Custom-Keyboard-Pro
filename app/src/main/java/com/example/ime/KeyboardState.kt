@@ -158,7 +158,13 @@ class KeyboardState(
         }
     }
 
-    fun setLayer(name: String) {
+    /**
+     * Goes to [name] and forgets any momentary or one-shot layer that was pending.
+     *
+     * Not called setLayer: `layer` is a property, so that name is already taken by its
+     * generated setter.
+     */
+    fun resetLayer(name: String) {
         layer = name
         layerReturnsTo = null
         layerOneShot = false
