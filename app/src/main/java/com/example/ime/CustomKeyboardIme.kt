@@ -308,7 +308,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * A long swipe across the keyboard that no key claimed. The bound value is an
      * action in the same notation layouts use, so a gesture can do anything a key can.
      */
-    override fun performSurfaceGesture(direction: SwipeDirection) {
+    override fun performSurfaceGesture(direction: SwipeDirection): Boolean {
         val settings = SettingsStore.current
         val raw = when (direction) {
             SwipeDirection.UP, SwipeDirection.UP_LEFT, SwipeDirection.UP_RIGHT -> settings.gestureSwipeUp
@@ -316,13 +316,15 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             SwipeDirection.LEFT -> settings.gestureSwipeLeft
             SwipeDirection.RIGHT -> settings.gestureSwipeRight
         }
-        if (raw.isBlank()) return
+        if (raw.isBlank()) return false
         val action = try {
             LayoutJson.parseAction(JSONObject(LayoutJson.stripCodeFence(raw)))
         } catch (e: Exception) {
             LayoutJson.parseAction(raw)
         }
-        if (action != null && action !is KeyAction.None) perform(action)
+        if (action == null || action is KeyAction.None) return false
+        perform(action)
+        return true
     }
 
     override fun openPanel(panel: PanelId?) {
@@ -551,12 +553,15 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         state.consumeOneShots()
         state.consumeOneShotLayer()
 
-        val endsWord = text.isNotEmpty() && !TextOps.isWordChar(text.last())
+        // What landed in the field can differ from what the key said — a capital, a
+        // curly quote, punctuation with a space appended — so measure against that.
+        val committed = editor.lastCommit.ifEmpty { text }
+        val endsWord = committed.isNotEmpty() && !TextOps.isWordChar(committed.trimEnd().lastOrNull() ?: ' ')
         if (endsWord) {
-            val completed = TextOps.currentWord(editor.textBefore(160).dropLast(text.length))
-            learnCurrentWordBefore(text)
+            val completed = TextOps.currentWord(editor.textBefore(200).dropLast(committed.length))
+            learnCurrentWordBefore(committed)
             if (settings.autoCorrect && !editor.isSensitive && completed.isNotBlank()) {
-                autoCorrect(completed, text)
+                autoCorrect(completed, committed)
             } else {
                 lastAutoCorrection = null
             }

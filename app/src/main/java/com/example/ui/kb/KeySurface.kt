@@ -87,8 +87,12 @@ fun KeySurface(
     onAction: (KeyDef, KeyAction) -> Unit,
     onKeyDown: (KeyDef) -> Unit,
     onCursorNudge: (Int) -> Unit,
-    /** A long swipe no key claimed. Null means the surface handles nothing globally. */
-    onSurfaceSwipe: (SwipeDirection) -> Unit = {},
+    /**
+     * A long swipe that no key claimed. Returns true if it did something — if it did
+     * not, the press falls through and still types, so an unbound direction cannot
+     * silently eat a keystroke.
+     */
+    onSurfaceSwipe: (SwipeDirection) -> Boolean = { false },
     learner: com.example.core.hitmap.TouchLearner? = null,
     modifier: Modifier = Modifier
 ) {
@@ -250,10 +254,7 @@ fun KeySurface(
                             touch.currentY - touch.startY,
                             swipeThresholdPx * 3f
                         )
-                        if (longSwipe != null) {
-                            onSurfaceSwipe(longSwipe)
-                            return
-                        }
+                        if (longSwipe != null && onSurfaceSwipe(longSwipe)) return
 
                         val now = System.currentTimeMillis()
                         val isDoubleTap = taps.keyId == key.id &&
@@ -627,18 +628,19 @@ private fun LongPressPopup(popup: PopupState, surfaceWidthPx: Float, theme: Keyb
         alignment = Alignment.TopStart,
         offset = IntOffset(originX.roundToInt(), originY.roundToInt())
     ) {
+        // Cells are exactly one anchor-key wide with no padding around them, because
+        // the finger-tracking maths in moveTouch assumes that pitch.
         Row(
-            modifier = Modifier
-                .background(theme.popupBackground, RoundedCornerShape(10.dp))
-                .padding(2.dp)
+            modifier = Modifier.background(theme.popupBackground, RoundedCornerShape(10.dp))
         ) {
             popup.items.forEachIndexed { index, item ->
                 Box(
                     modifier = Modifier
                         .size(
-                            with(density) { (cellWidth - 4f).coerceAtLeast(1f).toDp() },
-                            with(density) { (cellHeight - 4f).coerceAtLeast(1f).toDp() }
+                            with(density) { cellWidth.coerceAtLeast(1f).toDp() },
+                            with(density) { cellHeight.coerceAtLeast(1f).toDp() }
                         )
+                        .padding(2.dp)
                         .background(
                             if (index == popup.selected) theme.popupSelected else Color.Transparent,
                             RoundedCornerShape(6.dp)
