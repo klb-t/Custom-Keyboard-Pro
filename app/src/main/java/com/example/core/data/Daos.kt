@@ -68,6 +68,10 @@ interface DictionaryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(word: WordEntity): Long
 
+    /** Bulk path for importing a word list; the unique index on `word` deduplicates. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(words: List<WordEntity>)
+
     @Query("UPDATE dictionary_words SET count = count + 1, lastUsed = :now WHERE word = :word")
     suspend fun bump(word: String, now: Long)
 

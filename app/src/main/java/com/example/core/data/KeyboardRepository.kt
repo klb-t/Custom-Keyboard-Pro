@@ -90,23 +90,28 @@ class KeyboardRepository(context: Context) {
      * marked as the user's own so automatic pruning leaves them alone.
      */
     suspend fun importWords(text: CharSequence, locale: String = ""): Int {
+        val separator = Regex("[\\s,;]+")
         var imported = 0
-        text.lineSequence().forEach { line ->
-            val parts = line.trim().split(Regex("[\\s,;\\t]+"))
-            val word = parts.firstOrNull()?.lowercase().orEmpty()
-            if (word.length < 2 || word.any { !TextOps.isWordChar(it) }) return@forEach
-            val count = parts.getOrNull(1)?.toIntOrNull() ?: 1
-            dictionary.upsert(
+        // Written in batches: one query per word turns a 100,000-line list into
+        // several minutes of work for no reason.
+        text.lineSequence()
+            .mapNotNull { line ->
+                val parts = line.trim().split(separator)
+                val word = parts.firstOrNull()?.lowercase().orEmpty()
+                if (word.length < 2 || word.any { !TextOps.isWordChar(it) }) return@mapNotNull null
                 WordEntity(
-                    id = dictionary.find(word)?.id ?: 0,
                     word = word,
-                    count = count.coerceIn(1, 1_000_000),
+                    count = (parts.getOrNull(1)?.toIntOrNull() ?: 1).coerceIn(1, 1_000_000),
                     locale = locale,
                     locked = true
                 )
-            )
-            imported++
-        }
+            }
+            .distinctBy { it.word }
+            .chunked(500)
+            .forEach { batch ->
+                dictionary.upsertAll(batch)
+                imported += batch.size
+            }
         return imported
     }
 

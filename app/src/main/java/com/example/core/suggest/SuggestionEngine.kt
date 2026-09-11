@@ -164,20 +164,8 @@ class SuggestionEngine(
 
         if (s.personalDictionary) {
             if (word.isNotEmpty()) {
-                // The bundled list goes in first so a brand-new install has something
-                // to offer; the user's own words then overwrite and outrank these.
-                com.example.core.data.BundledDictionary
-                    .startingWith(context, locale, word, s.suggestionCount)
-                    .forEach { entry ->
-                        out.getOrPut(entry.word) {
-                            Suggestion(
-                                entry.word, SuggestionSource.DICTIONARY, true,
-                                score = (400 - entry.rank).coerceAtLeast(1).toFloat()
-                            )
-                        }
-                    }
-
-                // Words that continue what is being typed.
+                // The user's own words come first, so a word they actually type wins
+                // over the same word's place in a generic frequency list.
                 repository.wordsStartingWith(word, s.suggestionCount * 3).forEach { entity ->
                     if (entity.word != word) {
                         out.getOrPut(entity.word) {
@@ -191,6 +179,18 @@ class SuggestionEngine(
                         Suggestion(bigram.next, SuggestionSource.NEXT_WORD, true, bigram.count * 10f)
                     }
                 }
+                // The bundled list fills what is left, which is what a fresh install
+                // has instead of nothing. Scored below anything the user has typed.
+                com.example.core.data.BundledDictionary
+                    .startingWith(context, locale, word, s.suggestionCount * 2)
+                    .forEach { entry ->
+                        out.getOrPut(entry.word) {
+                            Suggestion(
+                                entry.word, SuggestionSource.DICTIONARY, true,
+                                score = ((400 - entry.rank).coerceAtLeast(1)) / 1000f
+                            )
+                        }
+                    }
             } else if (previousWord.isNotEmpty()) {
                 // Nothing typed yet: offer what usually comes next.
                 repository.nextWords(previousWord, "", s.suggestionCount * 2).forEach { bigram ->
