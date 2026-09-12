@@ -216,6 +216,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // show a fallback screen instead of the crash. It still gets logged in full —
         // Compose does not intercept the exception either, so it reaches AppLogger's
         // uncaught-exception handler exactly like any other main-thread crash.
+        // Must happen before the view can possibly attach to the window — see
+        // attachViewTreeOwners' own doc for why it tags the window's decor view
+        // rather than this one.
+        attachViewTreeOwners()
+        AppLogger.d(tag, "> tree owners attached to window decor view")
         view.setContent {
             val settings by SettingsStore.state.collectAsState()
             CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
@@ -226,7 +231,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             }
         }
         composeView = view
-        attachViewTreeOwners(view)
         AppLogger.d(tag, "done, view returned")
         return view
     }

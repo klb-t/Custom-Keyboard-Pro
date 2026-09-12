@@ -1,7 +1,6 @@
 package com.example.ime
 
 import android.inputmethodservice.InputMethodService
-import android.view.View
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -81,9 +80,45 @@ abstract class ComposeInputMethodService :
         }
     }
 
-    protected fun attachViewTreeOwners(view: View) {
-        view.setViewTreeLifecycleOwner(this)
-        view.setViewTreeViewModelStoreOwner(this)
-        view.setViewTreeSavedStateRegistryOwner(this)
+    /**
+     * Tags the IME window's own decor view with these three owners — not the
+     * `ComposeView` that ends up inside it.
+     *
+     * Compose resolves a per-window "window recomposer" the first time any
+     * `ComposeView` in a window attaches, and it does that by walking *up* from
+     * that window's `rootView`, not from the `ComposeView` itself
+     * (`View.getWindowRecomposer()` → `rootView.getTag(...)`). An IME's window is
+     * a `Dialog` ([InputMethodService.getWindow]), and its root is not our
+     * `ComposeView` — the framework wraps it in its own decor first (a
+     * `LinearLayout` tagged `android:id/parentPanel` in the logs this turned up).
+     * Tagging the `ComposeView` directly, as an earlier version of this method
+     * did, left nothing to find walking up *from* that root, since the
+     * `ComposeView` sits *below* it: `ViewTreeLifecycleOwner.get()` never looks
+     * down at descendants. The result was `createLifecycleAwareWindowRecomposer`
+     * forcing a null lifecycle owner open with `!!` the instant the keyboard
+     * tried to draw — every single time, which is exactly what made it look like
+     * the keyboard could not open at all rather than like one bad case.
+     *
+     * Tagging the decor view instead fixes both directions: `getWindowRecomposer`
+     * finds it immediately since it starts the walk at that exact view, and
+     * anything a `ComposeView` queries from further down still finds it by
+     * walking up through the decor view as an ancestor. There is nothing this
+     * needs a specific view for any more, so it takes none — call it once the
+     * window exists (any time from [onCreate] onward) and every view attached
+     * afterward, anywhere in this window, is covered.
+     */
+    protected fun attachViewTreeOwners() {
+        val decorView = window?.window?.decorView
+        if (decorView == null) {
+            AppLogger.e(
+                "ComposeIME",
+                "no window decor view yet — tree owners not attached, " +
+                    "Compose will crash the moment this view is attached"
+            )
+            return
+        }
+        decorView.setViewTreeLifecycleOwner(this)
+        decorView.setViewTreeViewModelStoreOwner(this)
+        decorView.setViewTreeSavedStateRegistryOwner(this)
     }
 }
