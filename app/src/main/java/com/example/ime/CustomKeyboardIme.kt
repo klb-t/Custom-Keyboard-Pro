@@ -601,13 +601,27 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             if (route != null) putExtra(MainActivity.EXTRA_ROUTE, route)
         }
         try {
+            AppLogger.d("IME.openApp", "starting the settings app (route=$route)")
             startActivity(intent)
         } catch (e: Exception) {
-            AppLogger.e("IME", "Could not open the settings app", e)
+            AppLogger.e("IME.openApp", "could not open the settings app", e)
         }
     }
 
-    override fun requestMicrophonePermission() = openApp(MainActivity.ROUTE_PERMISSIONS)
+    /**
+     * Sends the user to the app to grant the microphone permission.
+     *
+     * An input method cannot ask for a runtime permission itself — there is no
+     * activity to attach the dialog to — so the settings app asks on its behalf. The
+     * keyboard hides first: it is a window sitting above the activity that is about
+     * to put a dialog up, and leaving it there means handing the user a permission
+     * prompt with a keyboard on top of it.
+     */
+    override fun requestMicrophonePermission() {
+        AppLogger.d("IME.mic", "hiding the keyboard and opening the app to ask for RECORD_AUDIO")
+        requestHideSelf(0)
+        openApp(MainActivity.ROUTE_PERMISSIONS)
+    }
 
     override fun hideKeyboard() {
         requestHideSelf(0)

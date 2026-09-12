@@ -80,19 +80,29 @@ class MainActivity : ComponentActivity() {
 
     private var micPermissionGranted by mutableStateOf(false)
 
+    /**
+     * Registered as a field, which is what makes it work at all: the result APIs
+     * refuse a registration made after the activity has started, and a field
+     * initialiser runs before `onCreate`. It also means a failure here happens before
+     * anything this class could log from — which is why the crash log is installed by
+     * the Application instead.
+     */
     private val requestMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        AppLogger.d("Settings.mic", "result: granted=$granted")
         micPermissionGranted = granted
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLogger.d("Settings", "onCreate start (route=${intent?.getStringExtra(EXTRA_ROUTE)})")
         AppLogger.init(applicationContext)
         SettingsStore.init(this)
         LayoutRepository.init(this)
         ProviderCatalog.init(this)
         registerDynamicOptions()
         enableEdgeToEdge()
+        AppLogger.d("Settings", "onCreate stores ready")
 
         setContent {
             val settings by SettingsStore.state.collectAsState()
@@ -123,7 +133,16 @@ class MainActivity : ComponentActivity() {
                             ROUTE_VOICE, ROUTE_PERMISSIONS -> VoiceSettingsScreen(
                                 settings = settings,
                                 micGranted = micPermissionGranted,
-                                onRequestMic = { requestMic.launch(Manifest.permission.RECORD_AUDIO) }
+                                onRequestMic = {
+                                    AppLogger.d("Settings.mic", "requesting RECORD_AUDIO")
+                                    runCatching { requestMic.launch(Manifest.permission.RECORD_AUDIO) }
+                                        .onFailure {
+                                            // Launching can throw when the activity is
+                                            // in a state the result API refuses; that
+                                            // must not take the whole app down with it.
+                                            AppLogger.e("Settings.mic", "could not launch the request", it)
+                                        }
+                                }
                             )
                             ROUTE_DICTIONARY -> DictionaryScreen()
                             ROUTE_ABOUT -> AboutScreen()
@@ -167,11 +186,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        AppLogger.d("Settings", "onNewIntent (route=${intent.getStringExtra(EXTRA_ROUTE)})")
         setIntent(intent)
     }
 
     override fun onResume() {
         super.onResume()
+        AppLogger.d("Settings", "onResume")
         micPermissionGranted = androidx.core.content.ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
