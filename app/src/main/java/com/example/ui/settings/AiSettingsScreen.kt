@@ -19,11 +19,9 @@ import com.example.core.ai.AiClient
 import com.example.core.ai.AiConfig
 import com.example.core.ai.AiTasks
 import com.example.core.config.Settings
+import com.example.core.config.SettingsStore
 import com.example.core.discovery.ModelDiscovery
 import com.example.core.discovery.ProviderCatalog
-import com.example.core.config.Settings
-import com.example.core.discovery.ModelDiscovery
-import com.example.core.discovery.ProviderCatalogStore
 import kotlinx.coroutines.launch
 
 /**
