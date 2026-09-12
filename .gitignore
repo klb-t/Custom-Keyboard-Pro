@@ -15,4 +15,6 @@
 .cxx
 local.properties
 .env
-debug.keystore
+# debug.keystore is intentionally committed, not ignored — see build.gradle.kts'
+# debugConfig signing config for why: a fixed debug key is what lets one APK
+# install over another instead of demanding an uninstall every time.
