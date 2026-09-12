@@ -82,13 +82,15 @@ fun SettingControl(
 
         SettingKind.FLOAT, SettingKind.INT, SettingKind.LONG -> {
             val number = (value as? Number)?.toFloat() ?: 0f
-            if (spec.min != null && spec.max != null) {
+            val min = spec.min
+            val max = spec.max
+            if (min != null && max != null) {
                 val whole = spec.kind != SettingKind.FLOAT
                 SliderRow(
                     label = label,
                     description = help,
-                    value = number.coerceIn(spec.min, spec.max),
-                    range = spec.min..spec.max,
+                    value = number.coerceIn(min, max),
+                    range = min..max,
                     format = { if (whole) it.roundToInt().toString() else "%.2f".format(it) },
                     onChange = { raw ->
                         SettingsStore.setByKey(spec.key, if (whole) raw.roundToInt() else raw)

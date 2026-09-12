@@ -18,9 +18,12 @@ import androidx.compose.ui.unit.dp
 import com.example.core.ai.AiClient
 import com.example.core.ai.AiConfig
 import com.example.core.ai.AiTasks
-import com.example.core.config.AiProviders
 import com.example.core.config.Settings
-import com.example.core.config.SettingsStore
+import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.ProviderCatalog
+import com.example.core.config.Settings
+import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.ProviderCatalogStore
 import kotlinx.coroutines.launch
 
 /**
@@ -35,6 +38,8 @@ fun AiSettingsScreen(settings: Settings) {
     val scope = rememberCoroutineScope()
     var testResult by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
+    var discovering by remember { mutableStateOf(false) }
+    var discoveryResult by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
 
@@ -64,35 +69,51 @@ fun AiSettingsScreen(settings: Settings) {
             )
         }
 
-        SettingsSection("Provider") {
+        SettingsSection(
+            title = "Provider",
+            subtitle = "The catalogue is a bundled data file, not a list in the code — " +
+                "so a provider that appears next year is an entry, not a release."
+        ) {
+            val providers = remember(settings.customProvidersJson) { ProviderCatalog.all(settings) }
             ChoiceRow(
                 label = "Provider",
-                description = "Anything that speaks the OpenAI chat API works, including " +
-                    "Groq, OpenRouter, Together, and a model running on your own machine " +
-                    "through Ollama, LM Studio, llama.cpp or vLLM.",
-                options = AiProviders.ALL,
-                selected = settings.aiProvider,
-                optionLabel = { AiProviders.label(it) },
-                onSelect = { provider ->
-                    SettingsStore.update {
-                        it.copy(
-                            aiProvider = provider,
-                            aiBaseUrl = if (it.aiBaseUrl.isBlank() ||
-                                it.aiBaseUrl == AiProviders.defaultBaseUrl(it.aiProvider)
-                            ) AiProviders.defaultBaseUrl(provider) else it.aiBaseUrl,
-                            aiModel = if (it.aiModel.isBlank() ||
-                                it.aiModel == AiProviders.defaultModel(it.aiProvider)
-                            ) AiProviders.defaultModel(provider) else it.aiModel
+                description = "Anything speaking the OpenAI chat API works, including a " +
+                    "model on your own machine through Ollama, LM Studio, llama.cpp or vLLM.",
+                options = providers,
+                selected = providers.firstOrNull { it.id == settings.aiProvider } ?: providers.first(),
+                optionLabel = { it.label },
+                onSelect = { spec ->
+                    SettingsStore.update { current ->
+                        val previous = ProviderCatalog.byId(current.aiProvider, current)
+                        // Only replace a URL or model the user did not choose themselves.
+                        current.copy(
+                            aiProvider = spec.id,
+                            aiBaseUrl = if (current.aiBaseUrl.isBlank() ||
+                                current.aiBaseUrl == previous?.baseUrl
+                            ) spec.baseUrl else current.aiBaseUrl,
+                            aiModel = if (current.aiModel.isBlank() ||
+                                current.aiModel == previous?.defaultModel
+                            ) spec.defaultModel else current.aiModel
                         )
                     }
                 }
             )
+            val spec = providers.firstOrNull { it.id == settings.aiProvider }
+            spec?.let {
+                InfoRow(
+                    buildString {
+                        append(if (it.local) "Runs on your own machine; nothing leaves your network. " else "")
+                        append(if (it.needsKey) "Needs an API key. " else "Usually needs no key. ")
+                        if (it.docsUrl.isNotBlank()) append("Keys: ${it.docsUrl}")
+                    }
+                )
+            }
             TextRow(
                 label = "Base URL",
                 description = "For a local server this is usually something like " +
                     "http://192.168.1.10:11434/v1 — the phone has to be able to reach it.",
                 value = settings.aiBaseUrl,
-                placeholder = AiProviders.defaultBaseUrl(settings.aiProvider),
+                placeholder = spec?.baseUrl.orEmpty(),
                 onChange = { v -> SettingsStore.update { it.copy(aiBaseUrl = v) } }
             )
             TextRow(
@@ -102,12 +123,57 @@ fun AiSettingsScreen(settings: Settings) {
                 secret = true,
                 onChange = { v -> SettingsStore.update { it.copy(aiApiKey = v) } }
             )
-            TextRow(
-                label = "Model",
-                value = settings.aiModel,
-                placeholder = AiProviders.defaultModel(settings.aiProvider),
-                onChange = { v -> SettingsStore.update { it.copy(aiModel = v) } }
+
+            val discovered = remember(settings.discoveredModelsJson, settings.aiProvider) {
+                ModelDiscovery.cachedModels(settings)
+            }
+            if (discovered.isEmpty()) {
+                TextRow(
+                    label = "Model",
+                    value = settings.aiModel,
+                    placeholder = spec?.defaultModel.orEmpty(),
+                    onChange = { v -> SettingsStore.update { it.copy(aiModel = v) } }
+                )
+            } else {
+                ChoiceRow(
+                    label = "Model",
+                    description = "${discovered.size} models this provider says it serves.",
+                    options = discovered,
+                    selected = settings.aiModel.ifBlank { discovered.first() },
+                    optionLabel = { it },
+                    onSelect = { m -> SettingsStore.update { it.copy(aiModel = m) } }
+                )
+                TextRow(
+                    label = "…or type one",
+                    value = settings.aiModel,
+                    onChange = { v -> SettingsStore.update { it.copy(aiModel = v) } }
+                )
+            }
+            ActionRow(
+                label = if (discovering) "Asking…" else "Ask the provider what models it has",
+                description = "Fills the list above. Cached, so it survives going offline.",
+                onClick = {
+                    if (!discovering && spec != null) {
+                        discovering = true
+                        discoveryResult = null
+                        scope.launch {
+                            ModelDiscovery.fetch(spec, settings.aiApiKey).fold(
+                                onSuccess = { models ->
+                                    ModelDiscovery.cache(spec.id, models)
+                                    discoveryResult = if (models.isEmpty()) {
+                                        "The provider answered, but listed no models."
+                                    } else {
+                                        "Found ${models.size}."
+                                    }
+                                },
+                                onFailure = { discoveryResult = "Could not ask: ${it.message}" }
+                            )
+                            discovering = false
+                        }
+                    }
+                }
             )
+            discoveryResult?.let { InfoRow(it) }
             ActionRow(
                 label = if (testing) "Testing…" else "Test the connection",
                 description = "Sends one short request and shows exactly what comes back.",

@@ -148,16 +148,11 @@ fun RequestPanelScreen(settings: Settings) {
         if (saved.isNotEmpty()) {
             SettingsSection(
                 title = "Your panels",
-                subtitle = "Kept panels, usable like any other screen."
+                subtitle = "Open them from the home screen, where they sit alongside " +
+                    "the hand-built ones."
             ) {
-                saved.forEachIndexed { index, panel ->
-                    if (index > 0) Divider()
-                    ActionRow(
-                        panel.title,
-                        panel.description ?: panel.request.take(80),
-                        trailing = "${panel.controls.size}",
-                        onClick = { }
-                    )
+                saved.forEach { panel ->
+                    InfoRow("${panel.title} — ${panel.controls.size} settings · ${panel.request.take(70)}")
                 }
             }
         }
