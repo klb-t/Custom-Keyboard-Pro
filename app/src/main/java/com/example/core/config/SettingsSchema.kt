@@ -304,6 +304,15 @@ object SettingsSchema {
         "freeOriginXDp" to Meta(group = GROUP_FREE, label = "Offset from the left", min = -400f, max = 400f),
         "freeOriginYDp" to Meta(group = GROUP_FREE, label = "Offset from the top", min = -800f, max = 800f),
         "freeKeysDraggable" to Meta(group = GROUP_FREE, label = "Drag individual keys"),
+        "freeArrangeMode" to Meta(
+            group = GROUP_FREE, label = "Arrange keys by dragging",
+            help = "While this is on a drag moves a key instead of typing with it. " +
+                "One extra tap, and never a misread between the two."
+        ),
+        "freeKeyPinsJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_FREE, label = "Where keys were dragged to",
+            multiline = true, expert = true
+        ),
         "freeShowGuides" to Meta(
             group = GROUP_FREE, label = "Show arranging guides",
             help = "Outlines the area each key claims, including the gaps that pass touches through."

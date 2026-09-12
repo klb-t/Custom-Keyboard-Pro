@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +38,10 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.foundation.Image
 import androidx.compose.ui.text.font.FontWeight
@@ -99,12 +103,37 @@ fun KeySurface(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    // Where this surface sits inside the input view, so the key rectangles reported
+    // to the service are in the same coordinates its insets are.
+    var surfaceOrigin by remember { mutableStateOf(Offset.Zero) }
+
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .onGloballyPositioned { surfaceOrigin = it.positionInRoot() }
+    ) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
 
         val placement = remember(layer, widthPx, heightPx) {
             KeyPlacement.place(layer, widthPx, heightPx)
+        }
+
+        // The service needs the drawn geometry to restrict touches to the keys
+        // themselves. Reporting what was actually placed — rather than recomputing it
+        // there — is what keeps the touchable region and the visible keys in step.
+        val host = LocalKeyboardHost.current
+        LaunchedEffect(placement, surfaceOrigin) {
+            host.reportKeyRects(
+                placement.filter { it.key.visible }.map { p ->
+                    android.graphics.Rect(
+                        (surfaceOrigin.x + p.left).toInt(),
+                        (surfaceOrigin.y + p.top).toInt(),
+                        (surfaceOrigin.x + p.right).toInt(),
+                        (surfaceOrigin.y + p.bottom).toInt()
+                    )
+                }
+            )
         }
 
         // Learned offsets are stored per key as a fraction of its size, so they are
@@ -439,15 +468,29 @@ private fun KeyView(
         else -> false
     }
 
+    // The three opacities are multiplied into the colours rather than applied as a
+    // layer alpha, because a layer alpha would fade a key and its label together and
+    // the whole point is being able to keep solid glyphs on a glass key.
     val background = when {
         isPressed -> theme.keyPressedBackground
         isActive -> theme.keyActiveBackground
         else -> theme.keyBackgroundFor(key.style)
-    }
-    val contentColor = if (isActive || isPressed) {
-        if (theme.isDark) Color.White else theme.keyText
-    } else {
-        theme.keyTextFor(key.style)
+    }.let { it.copy(alpha = it.alpha * settings.keyOpacity.coerceIn(0f, 1f)) }
+
+    val contentColor = (
+        if (isActive || isPressed) {
+            if (theme.isDark) Color.White else theme.keyText
+        } else {
+            theme.keyTextFor(key.style)
+        }
+        ).let { it.copy(alpha = it.alpha * settings.keyLabelOpacity.coerceIn(0f, 1f)) }
+
+    // A setting above zero overrides the theme's own width: an outline is what gives
+    // a transparent key an edge to aim at, so it has to be reachable without editing
+    // the theme.
+    val borderWidth = if (settings.keyBorderWidthDp > 0f) settings.keyBorderWidthDp else theme.borderWidthDp
+    val borderColor = theme.keyBorder.let {
+        it.copy(alpha = it.alpha * settings.keyBorderOpacity.coerceIn(0f, 1f))
     }
 
     val shape: Shape = when (key.shape) {
@@ -471,7 +514,7 @@ private fun KeyView(
             .size(widthDp, heightDp)
             .background(background, shape)
             .then(
-                if (theme.borderWidthDp > 0f) Modifier.border(theme.borderWidthDp.dp, theme.keyBorder, shape)
+                if (borderWidth > 0f) Modifier.border(borderWidth.dp, borderColor, shape)
                 else Modifier
             ),
         contentAlignment = Alignment.Center

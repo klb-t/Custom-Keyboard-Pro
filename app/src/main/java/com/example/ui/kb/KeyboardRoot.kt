@@ -37,7 +37,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.config.Settings
+import com.example.core.config.SettingsStore
 import com.example.core.layout.KeyAction
+import com.example.core.layout.FreeKeyPins
 import com.example.core.layout.LayerTransforms
 import com.example.core.layout.LayoutDef
 import com.example.core.layout.LayoutRepository
@@ -85,14 +87,25 @@ fun KeyboardRoot(
         settings.bottomPaddingDp
 
     val floating = settings.presentation == PresentationMode.FLOATING
+    // Free keys need the whole screen to be placed on, exactly as a floating panel
+    // does — the difference is that nothing is drawn behind them.
+    val free = settings.presentation == PresentationMode.FREE
 
-    LaunchedEffect(totalHeightDp, floating, screenHeightDp) {
-        val target = if (floating) screenHeightDp.toFloat() else totalHeightDp
+    LaunchedEffect(totalHeightDp, floating, free, screenHeightDp) {
+        val target = if (floating || free) screenHeightDp.toFloat() else totalHeightDp
         onHeightChanged(with(density) { target.dp.roundToPx() })
     }
 
-    if (floating) {
-        FloatingShell(settings = settings, theme = theme, contentHeightDp = totalHeightDp) {
+    if (free) {
+        FreeKeySurface(settings = settings, theme = theme)
+    } else if (floating) {
+        FloatingShell(
+            settings = settings,
+            theme = theme,
+            contentHeightDp = totalHeightDp,
+            avoidShiftPx = host.avoidance.shiftPx,
+            avoidFade = host.avoidance.fade
+        ) {
             KeyboardBody(
                 settings, theme, suggestions, aiBusy, panel,
                 keyboardHeightDp, stripHeight, indicatorHeight
@@ -114,8 +127,12 @@ fun KeyboardRoot(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(totalHeightDp.dp)
-                .background(theme.background)
-                .alpha(settings.keyboardOpacity.coerceIn(0.25f, 1f)),
+                .background(
+                    theme.background.copy(
+                        alpha = theme.background.alpha * settings.panelOpacity.coerceIn(0f, 1f)
+                    )
+                )
+                .alpha(settings.keyboardOpacity.coerceIn(0.05f, 1f)),
             contentAlignment = alignment
         ) {
             Box(Modifier.fillMaxHeight().width((screenWidthDp * widthFraction).dp)) {
@@ -245,19 +262,10 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
 
     val effectiveLayer = remember(
         rawLayer, shifted, settings.presentation, settings.splitGapFraction,
-        settings.flickInput, settings.backspaceSwipeDeletesWord
-    ) {
-        var result = if (shifted) LayerTransforms.uppercased(rawLayer) else rawLayer
-        result = LayerTransforms.applyPreferences(
-            layer = result,
-            allowFlick = settings.flickInput,
-            allowBackspaceWordSwipe = settings.backspaceSwipeDeletesWord
-        )
-        if (settings.presentation == PresentationMode.SPLIT) {
-            result = LayerTransforms.split(result, settings.splitGapFraction)
-        }
-        result
-    }
+        settings.flickInput, settings.backspaceSwipeDeletesWord,
+        settings.freeKeyScale, settings.freeSpreadX, settings.freeSpreadY,
+        settings.freeOriginXDp, settings.freeOriginYDp, settings.freeKeyPinsJson
+    ) { effectiveLayerOf(rawLayer, shifted, settings) }
 
     val background: ImageBitmap? = remember(layout.background?.imageFile) {
         LayoutRepository.loadAsset(layout.background?.imageFile)?.asImageBitmap()
@@ -389,6 +397,8 @@ private fun FloatingShell(
     settings: Settings,
     theme: KeyboardTheme,
     contentHeightDp: Float,
+    avoidShiftPx: Float = 0f,
+    avoidFade: Float = 1f,
     content: @Composable () -> Unit
 ) {
     val host = LocalKeyboardHost.current
@@ -408,13 +418,25 @@ private fun FloatingShell(
         val maxW = maxWidth.value
         val maxH = maxHeight.value
 
+        // The panel is nudged up out of the cursor's way without its stored position
+        // changing: where the user put it is a decision, and getting out of the way
+        // for a moment is not a reason to overwrite it.
+        val avoidShiftDp = with(density) { avoidShiftPx.toDp().value }
+        val placedY = (offsetY.coerceIn(0f, (maxH - height).coerceAtLeast(0f)) - avoidShiftDp)
+            .coerceAtLeast(0f)
+
         Box(
             modifier = Modifier
-                .offset(offsetX.coerceIn(0f, (maxW - width).coerceAtLeast(0f)).dp,
-                    offsetY.coerceIn(0f, (maxH - height).coerceAtLeast(0f)).dp)
+                .offset(offsetX.coerceIn(0f, (maxW - width).coerceAtLeast(0f)).dp, placedY.dp)
                 .width(width.dp)
                 .height(height.dp)
-                .background(theme.background, RoundedCornerShape(14.dp))
+                .alpha((settings.keyboardOpacity * avoidFade).coerceIn(0.05f, 1f))
+                .background(
+                    theme.background.copy(
+                        alpha = theme.background.alpha * settings.panelOpacity.coerceIn(0f, 1f)
+                    ),
+                    RoundedCornerShape(14.dp)
+                )
                 .border(1.dp, theme.keyBorder, RoundedCornerShape(14.dp))
         ) {
             Column(Modifier.fillMaxSize()) {
@@ -479,6 +501,151 @@ private fun FloatingShell(
             ) {
                 Text("◢", color = theme.keyHintText, fontSize = 12.sp)
             }
+        }
+    }
+}
+
+/**
+ * Every transform between a layout's stored layer and the one actually drawn.
+ *
+ * Shared rather than inlined because the arranging overlay has to hit-test exactly
+ * the geometry the renderer drew — computing it twice from the same function is the
+ * only way that stays true when either end changes.
+ */
+private fun effectiveLayerOf(
+    rawLayer: com.example.core.layout.LayerDef,
+    shifted: Boolean,
+    settings: Settings
+): com.example.core.layout.LayerDef {
+    var result = if (shifted) LayerTransforms.uppercased(rawLayer) else rawLayer
+    result = LayerTransforms.applyPreferences(
+        layer = result,
+        allowFlick = settings.flickInput,
+        allowBackspaceWordSwipe = settings.backspaceSwipeDeletesWord
+    )
+    if (settings.presentation == PresentationMode.SPLIT) {
+        result = LayerTransforms.split(result, settings.splitGapFraction)
+    }
+    if (settings.presentation == PresentationMode.FREE) {
+        // Free placement is a transform on the layer, not a second renderer:
+        // placement, hit testing, the touch model and popups all already understand
+        // keys that carry their own bounds.
+        result = LayerTransforms.scatter(
+            layer = result,
+            scale = settings.freeKeyScale,
+            spreadX = settings.freeSpreadX,
+            spreadY = settings.freeSpreadY,
+            originX = settings.freeOriginXDp / 400f,
+            originY = settings.freeOriginYDp / 800f,
+            pinned = FreeKeyPins.parse(settings.freeKeyPinsJson)
+        )
+    }
+    return result
+}
+
+/**
+ * Keys with nothing behind them.
+ *
+ * The surface fills the screen and paints no background at all, so what shows between
+ * the keys is the app underneath. Which touches that app actually receives is a
+ * separate question, answered by the insets policy rather than by this: see
+ * [com.example.core.layout.InsetsMode].
+ */
+@Composable
+private fun FreeKeySurface(settings: Settings, theme: KeyboardTheme) {
+    val host = LocalKeyboardHost.current
+    val layout = host.layout
+    val density = LocalDensity.current
+
+    // Cursor avoidance applies here rather than in the service because both of its
+    // visible effects — moving and fading — are drawing, not windowing.
+    val shiftDp = with(density) { host.avoidance.shiftPx.toDp() }
+    val opacity = (settings.keyboardOpacity * host.avoidance.fade).coerceIn(0.05f, 1f)
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .offset(y = -shiftDp)
+            .alpha(opacity)
+    ) {
+        KeyArea(layout = layout, settings = settings, theme = theme)
+
+        if (settings.freeArrangeMode) {
+            ArrangeOverlay(settings = settings, theme = theme)
+        }
+    }
+}
+
+/**
+ * While arranging, a drag moves a key instead of typing with it.
+ *
+ * Implemented as a layer above the keys rather than as a branch inside the key
+ * gesture loop, which keeps the two apart in the only way that matters: while this is
+ * up, no touch can reach the typing path at all, so there is no reading of a gesture
+ * that could go either way.
+ */
+@Composable
+private fun ArrangeOverlay(settings: Settings, theme: KeyboardTheme) {
+    val host = LocalKeyboardHost.current
+    val layout = host.layout
+    val layerName = host.state.renderLayer(layout)
+    val rawLayer = layout.layer(layerName) ?: layout.base
+    val layer = remember(rawLayer, settings) { effectiveLayerOf(rawLayer, false, settings) }
+
+    var dragging by remember { mutableStateOf<String?>(null) }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
+        val heightPx = with(LocalDensity.current) { maxHeight.toPx() }
+        val placed = remember(layer, widthPx, heightPx) {
+            com.example.core.layout.KeyPlacement.place(layer, widthPx, heightPx)
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(placed, widthPx, heightPx) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            dragging = com.example.core.layout.KeyPlacement
+                                .hitTest(placed, offset.x, offset.y)?.key?.id
+                        },
+                        onDragEnd = { dragging = null },
+                        onDragCancel = { dragging = null }
+                    ) { change, delta ->
+                        change.consume()
+                        val id = dragging ?: return@detectDragGestures
+                        val current = placed.firstOrNull { it.key.id == id } ?: return@detectDragGestures
+                        val natural = com.example.core.layout.NormRect(
+                            current.left / widthPx, current.top / heightPx,
+                            current.right / widthPx, current.bottom / heightPx
+                        )
+                        SettingsStore.update { s ->
+                            val pins = FreeKeyPins.moved(
+                                pins = FreeKeyPins.parse(s.freeKeyPinsJson),
+                                id = id,
+                                from = natural,
+                                dx = delta.x / widthPx,
+                                dy = delta.y / heightPx
+                            )
+                            s.copy(freeKeyPinsJson = FreeKeyPins.write(pins))
+                        }
+                    }
+                }
+        )
+
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(8.dp)
+                .background(theme.popupBackground, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Text(
+                "Arranging — drag keys. Typing is off until you turn this off.",
+                color = theme.popupText,
+                fontSize = 12.sp
+            )
         }
     }
 }

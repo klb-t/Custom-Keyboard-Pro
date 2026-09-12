@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.core.config.Settings
+import com.example.core.config.SettingsSchema
 import com.example.core.config.SettingsStore
 import com.example.core.layout.PresentationMode
 import com.example.ui.kb.BuiltinThemes
@@ -68,14 +69,16 @@ fun AppearanceScreen(settings: Settings) {
         SettingsSection("Shape") {
             ChoiceRow(
                 label = "Presentation",
-                description = "Full width, shifted to one side, split down the middle, or " +
-                    "a floating panel you can drag anywhere.",
+                description = "Full width, shifted to one side, split down the middle, " +
+                    "a floating panel you can drag anywhere, or free keys with no panel " +
+                    "behind them at all.",
                 options = listOf(
                     PresentationMode.NORMAL,
                     PresentationMode.ONE_HANDED_LEFT,
                     PresentationMode.ONE_HANDED_RIGHT,
                     PresentationMode.SPLIT,
-                    PresentationMode.FLOATING
+                    PresentationMode.FLOATING,
+                    PresentationMode.FREE
                 ),
                 selected = settings.presentation,
                 optionLabel = { mode ->
@@ -84,7 +87,8 @@ fun AppearanceScreen(settings: Settings) {
                         PresentationMode.ONE_HANDED_LEFT -> "One-handed, left"
                         PresentationMode.ONE_HANDED_RIGHT -> "One-handed, right"
                         PresentationMode.SPLIT -> "Split"
-                        PresentationMode.FLOATING -> "Floating"
+                        PresentationMode.FLOATING -> "Floating panel"
+                        PresentationMode.FREE -> "Free keys, no panel"
                         PresentationMode.CYCLE -> "Cycle"
                     }
                 },
@@ -257,6 +261,54 @@ fun AppearanceScreen(settings: Settings) {
                 checked = settings.indicatorStripVisible,
                 onChange = { on -> SettingsStore.update { it.copy(indicatorStripVisible = on) } }
             )
+        }
+
+        // These two groups are rendered from the schema rather than written out row by
+        // row: they are new, they will grow, and every control the schema knows how to
+        // draw is a control nobody has to hand-write twice.
+        SettingsSection(
+            title = "See-through",
+            subtitle = "Three separate opacities. The panel behind the keys, the key " +
+                "faces themselves, and the labels on them — which is what lets you have " +
+                "glass keys with solid letters."
+        ) {
+            listOf("keyboardOpacity", "panelOpacity", "keyOpacity", "keyLabelOpacity",
+                "keyBorderWidthDp", "keyBorderOpacity")
+                .mapNotNull { SettingsSchema.spec(it) }
+                .forEachIndexed { index, spec ->
+                    if (index > 0) Divider()
+                    SettingControl(spec, settings)
+                }
+            Divider()
+            InfoRow(
+                "Every individual colour has its own opacity too — that is the theme " +
+                    "editor, on the home screen."
+            )
+        }
+
+        if (settings.presentation == PresentationMode.FREE || settings.expertMode) {
+            SettingsSection(
+                title = "Free-floating keys",
+                subtitle = "Keys placed individually with nothing drawn behind them. " +
+                    "Turn the panel opacity down to 0 to see the app through the gaps."
+            ) {
+                SettingsSchema.inGroup(SettingsSchema.GROUP_FREE).forEachIndexed { index, spec ->
+                    if (index > 0) Divider()
+                    SettingControl(spec, settings)
+                }
+            }
+        }
+
+        SettingsSection(
+            title = "Covering the text field",
+            subtitle = "What the keyboard asks the app to keep clear for it. A full-width " +
+                "keyboard wants the app pushed up; transparent keys over a photo probably " +
+                "do not. Neither is more correct, so both are here."
+        ) {
+            SettingsSchema.inGroup(SettingsSchema.GROUP_COVERAGE).forEachIndexed { index, spec ->
+                if (index > 0) Divider()
+                SettingControl(spec, settings)
+            }
         }
 
         if (settings.expertMode) {

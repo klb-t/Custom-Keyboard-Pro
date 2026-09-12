@@ -78,6 +78,17 @@ data class Settings(
     val freeKeysDraggable: Boolean = true,
     /** Faint outlines showing where the untouchable gaps are, while arranging. */
     val freeShowGuides: Boolean = false,
+    /**
+     * While on, a drag moves a key instead of typing with it.
+     *
+     * A mode rather than a gesture, on purpose: sharing one gesture between "type
+     * this" and "move this" means every misread drag either loses a keystroke or
+     * moves a key you did not want moved, and there is no way to tell which the user
+     * meant. A mode is one extra tap and never wrong.
+     */
+    val freeArrangeMode: Boolean = false,
+    /** Where the user dragged keys to: {"keyId": [left, top, right, bottom]}. */
+    val freeKeyPinsJson: String = "",
 
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,

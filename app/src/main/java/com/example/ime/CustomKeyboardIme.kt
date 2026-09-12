@@ -39,6 +39,8 @@ import com.example.core.layout.LayoutJson
 import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
 import com.example.core.layout.PanelId
+import com.example.core.layout.CursorAvoidStrategy
+import com.example.core.layout.InsetsMode
 import com.example.core.layout.PresentationMode
 import com.example.core.layout.SwipeDirection
 import com.example.core.layout.SwitchTarget
@@ -280,6 +282,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             suggestions.clear()
             previousWord = ""
 
+            // Only ask for cursor reports when something will act on them: monitoring
+            // costs the app a callback per scrolled frame.
+            if (SettingsStore.current.avoidCoveringCursor) {
+                currentInputConnection?.requestCursorUpdates(
+                    android.view.inputmethod.InputConnection.CURSOR_UPDATE_MONITOR
+                )
+            } else {
+                avoidance.clear()
+            }
+
             val sensitive = editor.isSensitive
             state.setFlag(IndicatorKeys.PASSWORD_FIELD, editor.isPasswordField)
             state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
@@ -330,13 +342,85 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      */
     override fun onEvaluateFullscreenMode(): Boolean = false
 
+    /**
+     * How much of the screen the keyboard asks the app to keep clear.
+     *
+     * There is no correct answer here, which is exactly why it is a setting: a
+     * full-width keyboard wants the app pushed above it, free transparent keys over a
+     * photo want the app left alone, and a floating panel wants only its own
+     * rectangle. All four policies are honoured here, and the region for KEYS_ONLY
+     * comes from the rectangles the UI actually drew rather than from a second guess
+     * at the geometry.
+     */
     override fun onComputeInsets(outInsets: Insets?) {
         super.onComputeInsets(outInsets)
         val insets = outInsets ?: return
-        val view = composeView
+        val view = composeView ?: run {
+            insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            return
+        }
         val settings = SettingsStore.current
 
-        if (settings.presentation != PresentationMode.FLOATING || view == null) {
+        // Cursor avoidance can override the policy for as long as it applies: the
+        // point of RESERVE_SPACE is precisely to claim space the policy would not.
+        val reserving = settings.avoidCoveringCursor &&
+            settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE &&
+            avoidance.shiftPx > 0f
+
+        when {
+            reserving -> {
+                insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            }
+
+            settings.insetsMode == InsetsMode.NONE -> {
+                // Nothing is reserved and only the keys take touches: the app keeps
+                // its full height and may well be covered, which is what was asked for.
+                applyKeyRegion(insets, view, fallbackToVisible = false)
+                insets.contentTopInsets = view.height
+                insets.visibleTopInsets = view.height
+            }
+
+            settings.insetsMode == InsetsMode.KEYS_ONLY -> {
+                applyKeyRegion(insets, view, fallbackToVisible = true)
+                insets.contentTopInsets = view.height
+                insets.visibleTopInsets = view.height
+            }
+
+            settings.insetsMode == InsetsMode.PANEL_ONLY ||
+                settings.presentation == PresentationMode.FLOATING -> {
+                applyPanelRegion(insets, view, settings)
+            }
+
+            else -> insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+        }
+    }
+
+    /**
+     * Restricts touches to the keys themselves, so the gaps between free-floating keys
+     * belong to the app underneath.
+     *
+     * [fallbackToVisible] decides what happens before the first frame has reported any
+     * keys: KEYS_ONLY falls back to the whole view, because a keyboard that swallows
+     * nothing is a keyboard that cannot be typed on, while NONE genuinely means none.
+     */
+    private fun applyKeyRegion(insets: Insets, view: View, fallbackToVisible: Boolean) {
+        val rects = keyRects
+        if (rects.isEmpty()) {
+            insets.touchableInsets =
+                if (fallbackToVisible) Insets.TOUCHABLE_INSETS_VISIBLE else Insets.TOUCHABLE_INSETS_REGION
+            if (!fallbackToVisible) insets.touchableRegion.setEmpty()
+            return
+        }
+        insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+        insets.touchableRegion.setEmpty()
+        rects.forEach { insets.touchableRegion.union(it) }
+    }
+
+    /** The floating panel's own rectangle, and nothing around it. */
+    private fun applyPanelRegion(insets: Insets, view: View, settings: Settings) {
+        if (settings.presentation != PresentationMode.FLOATING) {
+            // PANEL_ONLY on a docked keyboard means the keyboard's own strip of the
+            // screen, which is what the view already is.
             insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
             return
         }
@@ -362,6 +446,60 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // The app keeps its full height: a floating keyboard does not push it up.
         insets.contentTopInsets = view.height
         insets.visibleTopInsets = view.height
+    }
+
+    /**
+     * Where the text cursor is, when the app is willing to say.
+     *
+     * Only requested when the user asked for cursor avoidance, because monitoring
+     * costs the app a callback per frame of scrolling and buys nothing unless
+     * something acts on it.
+     */
+    override fun onUpdateCursorAnchorInfo(info: android.view.inputmethod.CursorAnchorInfo?) {
+        super.onUpdateCursorAnchorInfo(info)
+        val settings = SettingsStore.current
+        if (!settings.avoidCoveringCursor || info == null) {
+            avoidance.clear()
+            return
+        }
+
+        val view = composeView ?: return
+        val bottom = info.getInsertionMarkerBottom()
+        if (bottom.isNaN() || bottom <= 0f) {
+            avoidance.clear()
+            return
+        }
+
+        // The insertion marker is in screen coordinates; the keyboard's top edge is
+        // the screen height minus however much of it the keyboard occupies.
+        val screenHeight = resources.displayMetrics.heightPixels
+        val keyboardTop = (screenHeight - view.height).toFloat()
+        val margin = settings.cursorAvoidMarginDp * resources.displayMetrics.density
+        val overlap = bottom + margin - keyboardTop
+
+        if (overlap <= 0f) {
+            avoidance.clear()
+            return
+        }
+
+        when (settings.cursorAvoidStrategy) {
+            CursorAvoidStrategy.FADE -> {
+                avoidance.fade = settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f)
+                avoidance.shiftPx = 0f
+            }
+            CursorAvoidStrategy.MOVE_PANEL -> {
+                // Only a keyboard that can be somewhere else can move out of the way.
+                val movable = settings.presentation == PresentationMode.FLOATING ||
+                    settings.presentation == PresentationMode.FREE
+                avoidance.shiftPx = if (movable) overlap else 0f
+                avoidance.fade = if (movable) 1f else settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f)
+            }
+            CursorAvoidStrategy.RESERVE_SPACE -> {
+                avoidance.shiftPx = overlap
+                avoidance.fade = 1f
+                composeView?.requestLayout()
+            }
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -480,6 +618,29 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.showInputMethodPicker()
         } catch (e: Exception) {
             AppLogger.e("IME", "Could not open the input method picker", e)
+        }
+    }
+
+    override val avoidance = com.example.ui.kb.AvoidanceState()
+
+    /**
+     * The last key rectangles the UI drew, in input-view pixels.
+     *
+     * Only read when the insets policy is KEYS_ONLY. Kept as a plain field rather than
+     * observable state because nothing recomposes on it — the framework asks for
+     * insets on its own schedule, and this is simply the freshest answer available
+     * when it does.
+     */
+    @Volatile
+    private var keyRects: List<Rect> = emptyList()
+
+    override fun reportKeyRects(rects: List<Rect>) {
+        val changed = rects.size != keyRects.size || rects != keyRects
+        keyRects = rects
+        // The framework recomputes insets on layout, not on a whim, so a keyboard
+        // whose keys moved without a relayout would keep the stale region.
+        if (changed && SettingsStore.current.insetsMode == InsetsMode.KEYS_ONLY) {
+            composeView?.requestLayout()
         }
     }
 

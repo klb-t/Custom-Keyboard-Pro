@@ -134,6 +134,8 @@ object SettingsStore {
         put("freeOriginYDp", s.freeOriginYDp.toDouble())
         put("freeKeysDraggable", s.freeKeysDraggable)
         put("freeShowGuides", s.freeShowGuides)
+        put("freeArrangeMode", s.freeArrangeMode)
+        put("freeKeyPinsJson", s.freeKeyPinsJson)
 
         put("insetsMode", s.insetsMode.name)
         put("avoidCoveringCursor", s.avoidCoveringCursor)
@@ -263,6 +265,8 @@ object SettingsStore {
             freeOriginYDp = o.optDouble("freeOriginYDp", d.freeOriginYDp.toDouble()).toFloat(),
             freeKeysDraggable = o.optBoolean("freeKeysDraggable", d.freeKeysDraggable),
             freeShowGuides = o.optBoolean("freeShowGuides", d.freeShowGuides),
+            freeArrangeMode = o.optBoolean("freeArrangeMode", d.freeArrangeMode),
+            freeKeyPinsJson = o.optString("freeKeyPinsJson", d.freeKeyPinsJson),
 
             insetsMode = enumOf(o.optString("insetsMode", d.insetsMode.name), d.insetsMode),
             avoidCoveringCursor = o.optBoolean("avoidCoveringCursor", d.avoidCoveringCursor),

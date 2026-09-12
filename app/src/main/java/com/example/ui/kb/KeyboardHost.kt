@@ -1,5 +1,7 @@
 package com.example.ui.kb
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.example.core.asr.VoiceController
 import com.example.core.data.KeyboardRepository
@@ -59,6 +61,40 @@ interface KeyboardHost {
 
     /** Text the AI panel should work on: the selection, or the surrounding text. */
     fun textForAi(): String
+
+    /**
+     * Tells the service where the keys ended up, in input-view pixels.
+     *
+     * Needed because the insets the service reports can be finer than "the whole
+     * view": with KEYS_ONLY the untouched gaps between free-floating keys belong to
+     * the app underneath, and only the UI knows where those gaps are. Reporting the
+     * drawn geometry rather than recomputing it service-side keeps the touchable
+     * region and the visible keys from ever disagreeing.
+     */
+    fun reportKeyRects(rects: List<android.graphics.Rect>)
+
+    /** How the keyboard is currently getting out of the cursor's way, if at all. */
+    val avoidance: AvoidanceState
+}
+
+/**
+ * Runtime state for cursor avoidance — deliberately not a setting.
+ *
+ * The *policy* is a setting; where the cursor happens to be this second is not, and
+ * writing it to disk on every keystroke would be both wasteful and meaningless on the
+ * next launch.
+ */
+class AvoidanceState {
+    /** Upward shift, in pixels, applied to the keyboard to clear the cursor. */
+    var shiftPx by androidx.compose.runtime.mutableStateOf(0f)
+
+    /** Multiplier on the keyboard's opacity while it would otherwise cover the cursor. */
+    var fade by androidx.compose.runtime.mutableStateOf(1f)
+
+    fun clear() {
+        shiftPx = 0f
+        fade = 1f
+    }
 }
 
 val LocalKeyboardHost = staticCompositionLocalOf<KeyboardHost> {

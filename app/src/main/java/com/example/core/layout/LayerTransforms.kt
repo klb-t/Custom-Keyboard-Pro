@@ -121,4 +121,75 @@ object LayerTransforms {
             freeKeys = layer.freeKeys.map(::transform)
         )
     }
+
+    /**
+     * Turns a row-based layer into individually placed keys, with no panel implied.
+     *
+     * Free presentation is a layer transform rather than a second renderer for the
+     * same reason split is: placement, hit testing, the probabilistic touch model and
+     * long-press popups all already understand a layer whose keys carry explicit
+     * bounds, so a layout written years ago for rows can be thrown into free mode and
+     * behave correctly without any of them learning a new case.
+     *
+     * [scale] resizes each key about its own centre; [spreadX]/[spreadY] push the keys
+     * apart about the middle of the layer, which is what opens the gaps that a
+     * transparent keyboard shows the app through; the origins shift the whole
+     * arrangement. Keys already placed absolutely are transformed the same way, so a
+     * bitmap-traced layout spreads out like any other.
+     *
+     * [pinned] overrides any of that for keys the user has dragged somewhere
+     * themselves — an arrangement the user made by hand outranks one computed for
+     * them.
+     */
+    fun scatter(
+        layer: LayerDef,
+        scale: Float = 1f,
+        spreadX: Float = 1f,
+        spreadY: Float = 1f,
+        originX: Float = 0f,
+        originY: Float = 0f,
+        pinned: Map<String, NormRect> = emptyMap()
+    ): LayerDef {
+        val placed = mutableListOf<KeyDef>()
+
+        fun transform(key: KeyDef, natural: NormRect): KeyDef {
+            pinned[key.id]?.let { return key.copy(bounds = it) }
+
+            val halfW = natural.width * scale / 2f
+            val halfH = natural.height * scale / 2f
+            val cx = 0.5f + (natural.centerX - 0.5f) * spreadX + originX
+            val cy = 0.5f + (natural.centerY - 0.5f) * spreadY + originY
+            return key.copy(bounds = NormRect(cx - halfW, cy - halfH, cx + halfW, cy + halfH))
+        }
+
+        val totalRowWeight = layer.rows.sumOf { it.heightWeight.toDouble() }.toFloat()
+        if (totalRowWeight > 0f) {
+            var y = 0f
+            layer.rows.forEach { row ->
+                val rowHeight = row.heightWeight / totalRowWeight
+                val totalKeyWeight = row.padStart + row.padEnd +
+                    row.keys.sumOf { it.widthWeight.toDouble() }.toFloat()
+                if (totalKeyWeight > 0f) {
+                    var x = row.padStart / totalKeyWeight
+                    row.keys.forEach { key ->
+                        val keyWidth = key.widthWeight / totalKeyWeight
+                        // A spacer exists to hold a gap open in a row; with no row left
+                        // to hold open it is just an invisible key eating touches.
+                        if (key.visible || key.bindings.isNotEmpty()) {
+                            placed += transform(key, NormRect(x, y, x + keyWidth, y + rowHeight))
+                        }
+                        x += keyWidth
+                    }
+                }
+                y += rowHeight
+            }
+        }
+
+        layer.freeKeys.forEach { key ->
+            val natural = key.bounds ?: return@forEach
+            placed += transform(key, natural)
+        }
+
+        return layer.copy(rows = emptyList(), freeKeys = placed)
+    }
 }
