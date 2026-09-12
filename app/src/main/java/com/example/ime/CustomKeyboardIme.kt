@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -194,7 +195,18 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         AppLogger.d(tag, "start")
         val view = try {
             ComposeView(this).also {
-                it.layoutParams = ViewGroup.LayoutParams(
+                // Not plain ViewGroup.LayoutParams: the parent the framework adds this
+                // view into (inside the IME window's own decor) is a FrameLayout, and
+                // FrameLayout.onMeasure casts every child's layoutParams to
+                // ViewGroup.MarginLayoutParams unconditionally
+                // (measureChildWithMargins) — a bare ViewGroup.LayoutParams doesn't
+                // extend that, so the very first measure pass threw a
+                // ClassCastException. FrameLayout.LayoutParams does extend it, and
+                // works as a layoutParams type for any ViewGroup parent this ends up
+                // under (only the MarginLayoutParams-level fields are ever read here),
+                // so it is the safe general choice, not just the one that matches this
+                // specific parent.
+                it.layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
@@ -243,7 +255,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     private fun applyInputViewHeight(view: View, heightPx: Int) {
         if (heightPx <= 0 || requestedHeightPx.value == heightPx) return
         requestedHeightPx.value = heightPx
-        view.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, heightPx)
+        view.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, heightPx)
         view.requestLayout()
     }
 
