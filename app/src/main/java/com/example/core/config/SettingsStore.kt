@@ -119,6 +119,7 @@ object SettingsStore {
         put("floatingY", s.floatingY.toDouble())
         put("floatingWidthDp", s.floatingWidthDp.toDouble())
         put("floatingHeightDp", s.floatingHeightDp.toDouble())
+        put("floatingSafeBottomDp", s.floatingSafeBottomDp.toDouble())
         put("separateLandscapeSize", s.separateLandscapeSize)
         put("keyboardOpacity", s.keyboardOpacity.toDouble())
         put("panelOpacity", s.panelOpacity.toDouble())
@@ -163,6 +164,9 @@ object SettingsStore {
         put("longPressPopup", s.longPressPopup)
         put("flickInput", s.flickInput)
         put("shiftOneShot", s.shiftOneShot)
+        put("symbolBoardColumns", s.symbolBoardColumns)
+        put("popupTabMemoryJson", s.popupTabMemoryJson)
+        put("popupPinnedTabsJson", s.popupPinnedTabsJson)
 
         put("hapticEnabled", s.hapticEnabled)
         put("hapticMs", s.hapticMs)
@@ -250,6 +254,7 @@ object SettingsStore {
             floatingY = o.optDouble("floatingY", d.floatingY.toDouble()).toFloat(),
             floatingWidthDp = o.optDouble("floatingWidthDp", d.floatingWidthDp.toDouble()).toFloat(),
             floatingHeightDp = o.optDouble("floatingHeightDp", d.floatingHeightDp.toDouble()).toFloat(),
+            floatingSafeBottomDp = o.optDouble("floatingSafeBottomDp", d.floatingSafeBottomDp.toDouble()).toFloat(),
             separateLandscapeSize = o.optBoolean("separateLandscapeSize", d.separateLandscapeSize),
             keyboardOpacity = o.optDouble("keyboardOpacity", d.keyboardOpacity.toDouble()).toFloat(),
             panelOpacity = o.optDouble("panelOpacity", d.panelOpacity.toDouble()).toFloat(),
@@ -296,6 +301,9 @@ object SettingsStore {
             longPressPopup = o.optBoolean("longPressPopup", d.longPressPopup),
             flickInput = o.optBoolean("flickInput", d.flickInput),
             shiftOneShot = o.optBoolean("shiftOneShot", d.shiftOneShot),
+            symbolBoardColumns = o.optInt("symbolBoardColumns", d.symbolBoardColumns),
+            popupTabMemoryJson = o.optString("popupTabMemoryJson", d.popupTabMemoryJson),
+            popupPinnedTabsJson = o.optString("popupPinnedTabsJson", d.popupPinnedTabsJson),
 
             hapticEnabled = o.optBoolean("hapticEnabled", d.hapticEnabled),
             hapticMs = o.optInt("hapticMs", d.hapticMs),

@@ -416,7 +416,10 @@ private fun FloatingShell(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val maxW = maxWidth.value
-        val maxH = maxHeight.value
+        // The last stretch of the input view is underneath the system navigation bar,
+        // which takes the touches. A panel allowed down there looks present and is
+        // unreachable, so the usable height stops short of it.
+        val maxH = (maxHeight.value - settings.floatingSafeBottomDp).coerceAtLeast(120f)
 
         // The panel is nudged up out of the cursor's way without its stored position
         // changing: where the user put it is a decision, and getting out of the way

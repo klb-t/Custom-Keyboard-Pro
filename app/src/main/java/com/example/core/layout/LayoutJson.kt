@@ -299,6 +299,7 @@ object LayoutJson {
             style = o.optStringOrNull("style"),
             bindings = bindings,
             popup = popup,
+            popupGroups = readPopupGroups(o),
             repeatable = o.optBoolean("repeat", false),
             indicators = indicators,
             shape = enumOf(o.optString("shape", "rounded"), KeyShape.ROUNDED),
@@ -356,6 +357,18 @@ object LayoutJson {
         if (chords.length() > 0) o.put("chords", chords)
 
         if (key.popup.isNotEmpty()) o.put("popup", JSONArray(key.popup))
+        if (key.popupGroups.isNotEmpty()) {
+            o.put("popupGroups", JSONArray().apply {
+                key.popupGroups.forEach { group ->
+                    put(JSONObject().apply {
+                        put("id", group.id)
+                        put("label", group.label)
+                        group.title?.let { put("title", it) }
+                        put("items", JSONArray(group.items))
+                    })
+                }
+            })
+        }
         if (key.indicators.isNotEmpty()) {
             o.put("indicators", JSONArray().also { arr -> key.indicators.forEach { arr.put(writeIndicator(it)) } })
         }
@@ -512,4 +525,46 @@ internal inline fun <reified T : Enum<T>> enumOf(raw: String?, fallback: T): T {
     if (raw.isNullOrBlank()) return fallback
     val normalised = raw.trim().replace('-', '_').replace(' ', '_')
     return enumValues<T>().firstOrNull { it.name.equals(normalised, ignoreCase = true) } ?: fallback
+}
+
+/**
+ * Tabs of symbols on a key, read tolerantly.
+ *
+ * Accepts the full form (objects with id/label/items) and the shorthand a person or a
+ * model is likely to type instead: an object of `{"label": [items]}`, where the label
+ * doubles as the id. Anything unreadable is skipped rather than failing the layout,
+ * on the same principle as the rest of this file — a layout with one bad group should
+ * lose that group, not stop being a keyboard.
+ */
+private fun readPopupGroups(o: JSONObject): List<PopupGroup> {
+    val out = mutableListOf<PopupGroup>()
+
+    o.optJSONArray("popupGroups")?.let { arr ->
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            val items = item.optJSONArray("items")?.let { list ->
+                (0 until list.length()).map { list.optString(it) }.filter { it.isNotEmpty() }
+            }.orEmpty()
+            if (items.isEmpty()) continue
+            val label = item.optString("label").ifBlank { items.first() }
+            out += PopupGroup(
+                id = item.optString("id").ifBlank { label },
+                label = label,
+                items = items,
+                title = item.optString("title").ifBlank { null }
+            )
+        }
+    }
+
+    if (out.isEmpty()) {
+        o.optJSONObject("popupGroups")?.let { obj ->
+            obj.keys().forEach { label ->
+                val list = obj.optJSONArray(label) ?: return@forEach
+                val items = (0 until list.length()).map { list.optString(it) }.filter { it.isNotEmpty() }
+                if (items.isNotEmpty()) out += PopupGroup(id = label, label = label, items = items)
+            }
+        }
+    }
+
+    return out
 }

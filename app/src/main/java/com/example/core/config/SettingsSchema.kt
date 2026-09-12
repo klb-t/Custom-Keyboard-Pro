@@ -295,6 +295,11 @@ object SettingsSchema {
         "keyBorderOpacity" to Meta(group = GROUP_APPEARANCE, label = "Key outline opacity", min = 0f, max = 1f),
         "floatingX" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — x", min = 0f, max = 1200f, expert = true),
         "floatingY" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — y", min = 0f, max = 2400f, expert = true),
+        "floatingSafeBottomDp" to Meta(
+            group = GROUP_APPEARANCE, label = "Keep clear of the navigation bar", min = 0f, max = 160f,
+            help = "A panel dragged under the system bar cannot be grabbed back. This is " +
+                "how much of the bottom it is kept out of."
+        ),
         "floatingWidthDp" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — width", min = 180f, max = 720f),
         "floatingHeightDp" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — height", min = 0f, max = 720f),
 
@@ -354,6 +359,20 @@ object SettingsSchema {
         "backspaceSwipeDeletesWord" to Meta(group = GROUP_TYPING, label = "Swipe backspace deletes a word"),
         "keyPreviewPopup" to Meta(group = GROUP_TYPING, label = "Key preview popup"),
         "longPressPopup" to Meta(group = GROUP_TYPING, label = "Long-press popup"),
+        "symbolBoardColumns" to Meta(
+            group = GROUP_TYPING, label = "Symbols per row on the long-press board",
+            min = 4f, max = 16f,
+            help = "Keys carrying a whole board of symbols rather than a single row."
+        ),
+        "popupTabMemoryJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_TYPING, label = "Remembered board tabs",
+            multiline = true, expert = true
+        ),
+        "popupPinnedTabsJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_TYPING, label = "Tabs pinned open",
+            multiline = true, expert = true,
+            help = "Shown alongside whichever tab is selected — maths and Polish at once."
+        ),
         "flickInput" to Meta(group = GROUP_TYPING, label = "Flick for the printed symbol"),
         "shiftOneShot" to Meta(group = GROUP_TYPING, label = "Shift applies to one character"),
 

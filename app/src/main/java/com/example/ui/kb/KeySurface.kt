@@ -146,6 +146,10 @@ fun KeySurface(
         val taps = remember { TapTracker() }
         var preview by remember { mutableStateOf<PlacedKey?>(null) }
         var popup by remember { mutableStateOf<PopupState?>(null) }
+        // A key carrying whole tabs of symbols opens a board that stays open, rather
+        // than a strip you have to keep the finger on. Separate state because the two
+        // are separate interactions, not two sizes of one.
+        var board by remember { mutableStateOf<PlacedKey?>(null) }
 
         val gapPx = with(density) { settings.keyGapDp.dp.toPx() }
         val cornerPx = with(density) { settings.keyCornerDp.dp.toPx() }
@@ -213,12 +217,20 @@ fun KeySurface(
                         }
 
                         val longPressAction = key.actionFor(KeyTrigger.LongPress)
+                        val hasBoard = settings.longPressPopup && key.popupGroups.isNotEmpty()
                         val hasPopup = settings.longPressPopup && key.popup.isNotEmpty()
-                        if (!hasPopup && longPressAction == null) return
+                        if (!hasBoard && !hasPopup && longPressAction == null) return
 
                         touch.longPressJob = scope.launch {
                             delay(settings.longPressMs)
-                            if (hasPopup) {
+                            if (hasBoard) {
+                                // The board outlives the gesture, so the touch is
+                                // finished here rather than left half-open waiting for
+                                // a finger that has already done its job.
+                                board = touch.placed
+                                touch.consumed = true
+                                onKeyDown(key)
+                            } else if (hasPopup) {
                                 popup = PopupState(touch.placed, key.popup, 0)
                                 touch.popupOpen = true
                                 onKeyDown(key)
@@ -402,6 +414,25 @@ fun KeySurface(
             if (popup == null) {
                 KeyPreview(placed = placed, theme = theme, density = density)
             }
+        }
+
+        board?.let { anchor ->
+            val groups = anchor.key.popupGroups
+            SymbolBoard(
+                groups = groups,
+                selectedGroupId = BoardMemory.selectedGroup(settings, anchor.key.id, groups),
+                pinnedGroupIds = BoardMemory.pinnedGroups(settings),
+                theme = theme,
+                columns = settings.symbolBoardColumns,
+                onSelectGroup = { BoardMemory.rememberGroup(anchor.key.id, it) },
+                onTogglePin = { BoardMemory.togglePin(it) },
+                onPick = { symbol ->
+                    onAction(anchor.key, KeyAction.Text(symbol))
+                    // Kept open: picking one symbol from a scientific board is very
+                    // often picking three.
+                },
+                onClose = { board = null }
+            )
         }
 
         popup?.let { current ->

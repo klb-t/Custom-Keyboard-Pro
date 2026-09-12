@@ -284,6 +284,23 @@ data class IndicatorDef(
 enum class KeyShape { RECT, ROUNDED, CIRCLE, PILL }
 
 /** Normalised rectangle, 0..1 in both axes, relative to the key surface. */
+/**
+ * One tab of a long-press board.
+ *
+ * Grouping is the difference between a key that offers sixty symbols and a key that
+ * offers sixty symbols usefully: lowercase accents, uppercase accents, Greek, maths,
+ * set theory and arrows are separate questions, and a scientist writing an equation
+ * with Polish text in it wants two of them at once rather than a toggle between them.
+ */
+data class PopupGroup(
+    val id: String,
+    /** What the tab shows. Conventionally one representative character. */
+    val label: String,
+    val items: List<String> = emptyList(),
+    /** Longer description, shown when there is room for it. */
+    val title: String? = null
+)
+
 data class NormRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
     val width: Float get() = right - left
     val height: Float get() = bottom - top
@@ -306,6 +323,16 @@ data class KeyDef(
     val bindings: List<Binding> = emptyList(),
     /** Long-press mini-keyboard. Plain strings are committed as text. */
     val popup: List<String> = emptyList(),
+    /**
+     * A long-press board with tabs, for keys carrying more than a row's worth.
+     *
+     * Separate from [popup] rather than replacing it because the two want different
+     * interactions: a handful of accents is best picked by sliding the finger without
+     * letting go, while sixty mathematical symbols need a board that stays open and is
+     * tapped. Keeping both means the quick case stays quick and the deep case stops
+     * being a drag across sixty targets.
+     */
+    val popupGroups: List<PopupGroup> = emptyList(),
     /** Auto-repeat while held (backspace, arrows). */
     val repeatable: Boolean = false,
     val indicators: List<IndicatorDef> = emptyList(),

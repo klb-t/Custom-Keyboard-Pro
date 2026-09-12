@@ -39,6 +39,17 @@ data class Settings(
     val floatingY: Float = 120f,
     val floatingWidthDp: Float = 320f,
     val floatingHeightDp: Float = 240f,
+    /**
+     * Bottom strip kept clear of the floating panel.
+     *
+     * The input view runs to the bottom of the screen, but the system's own
+     * navigation bar is drawn over the last stretch of it, and a panel dragged under
+     * that bar cannot be grabbed again — the handle is there, the touches are not.
+     * Clamping the panel above it is what keeps the panel recoverable, and it is a
+     * number rather than a constant because gesture bars, three-button bars and
+     * tablets all disagree about how much room they take.
+     */
+    val floatingSafeBottomDp: Float = 56f,
     val separateLandscapeSize: Boolean = true,
 
     /**
@@ -107,7 +118,7 @@ data class Settings(
 
     // --- layouts ----------------------------------------------------------
     /** Ordered; the layout-switch key cycles through exactly this list. */
-    val enabledLayoutIds: List<String> = listOf("qwerty_pl", "symbols", "numpad", "navigation", "hacker"),
+    val enabledLayoutIds: List<String> = listOf("qwerty_pl", "science", "symbols", "numpad", "navigation", "hacker"),
     val activeLayoutId: String = "qwerty_pl",
     /**
      * Remember which layout was last used in each app and return to it.
@@ -140,6 +151,14 @@ data class Settings(
     val flickInput: Boolean = true,
     /** Shift returns to lowercase after one character rather than staying on. */
     val shiftOneShot: Boolean = true,
+
+    // --- the long-press symbol board --------------------------------------
+    /** How many symbols per row on a tabbed long-press board. */
+    val symbolBoardColumns: Int = 10,
+    /** Which tab each key's board was left on: {"keyId": "groupId"}. */
+    val popupTabMemoryJson: String = "",
+    /** Tabs shown alongside the selected one, whatever key opened the board. */
+    val popupPinnedTabsJson: String = "",
 
     // --- feedback ---------------------------------------------------------
     val hapticEnabled: Boolean = true,
