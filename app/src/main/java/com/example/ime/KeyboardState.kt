@@ -132,6 +132,16 @@ class KeyboardState(
     private var layerReturnsTo: String? = null
     private var layerOneShot = false
 
+    /**
+     * True when the current layer survives the next keystroke.
+     *
+     * The key face needs this for the same reason it needs the modifier lock state:
+     * "this layer until you say otherwise" and "this layer for one character" are
+     * different situations, and a keyboard that draws them identically leaves the
+     * user to find out by typing.
+     */
+    val layerSticky: Boolean get() = !layerOneShot
+
     fun switchLayer(name: String, mode: LayerMode) {
         when (mode) {
             LayerMode.TOGGLE -> {

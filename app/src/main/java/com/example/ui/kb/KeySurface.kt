@@ -499,12 +499,28 @@ private fun KeyView(
         else -> false
     }
 
+    /*
+     * Staying on and applying once are different states, so they cannot look alike.
+     *
+     * Shift tapped once applies to the next character and then stops; tapped again it
+     * locks until turned off. Drawing both as the same solid highlight leaves no way
+     * to tell, from the keyboard, which one you are in — and the answer changes what
+     * the next keystroke does. Locked is solid; a one-shot is the same colour left
+     * translucent, which reads as temporary without needing a legend.
+     */
+    val isLocked = when (val action = key.tapAction) {
+        is KeyAction.Modifier -> state.isLocked(action.kind)
+        is KeyAction.Layer -> state.layer == action.layer && state.layerSticky
+        else -> false
+    }
+
     // The three opacities are multiplied into the colours rather than applied as a
     // layer alpha, because a layer alpha would fade a key and its label together and
     // the whole point is being able to keep solid glyphs on a glass key.
     val background = when {
         isPressed -> theme.keyPressedBackground
-        isActive -> theme.keyActiveBackground
+        isLocked -> theme.keyActiveBackground
+        isActive -> theme.keyActiveBackground.copy(alpha = theme.keyActiveBackground.alpha * 0.5f)
         else -> theme.keyBackgroundFor(key.style)
     }.let { it.copy(alpha = it.alpha * settings.keyOpacity.coerceIn(0f, 1f)) }
 

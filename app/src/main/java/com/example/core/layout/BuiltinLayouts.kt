@@ -94,7 +94,10 @@ object BuiltinLayouts {
         action = KeyAction.Modifier(ModifierKind.SHIFT, ModifierMode.ONE_SHOT),
         width = width, style = "modifier",
         longPress = KeyAction.Modifier(ModifierKind.SHIFT, ModifierMode.LOCK),
-        indicators = listOf(modIndicator(ModifierKind.SHIFT), lockIndicator(IndicatorKeys.CAPS_LOCK))
+        // Only the lock lamp. The bar that used to sit here said "shift is on", which
+        // the key's own highlight already says — two marks for one fact, while the
+        // lamp beside them meant something else entirely.
+        indicators = listOf(lockIndicator(IndicatorKeys.CAPS_LOCK))
     )
 
     private fun spaceKey(width: Float = 4f) = fn(
