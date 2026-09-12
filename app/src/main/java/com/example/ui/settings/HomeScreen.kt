@@ -19,7 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.ui.platform.LocalContext
 import com.example.MainActivity
+import com.example.core.layout.LayoutRepository
 import com.example.core.config.Settings
 import com.example.core.config.SettingsSchema
 import com.example.core.config.SettingsStore
@@ -44,19 +48,55 @@ fun HomeScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
 
+        // What state is this actually in? Two naked buttons could not say, and the
+        // answer decides which of them is worth pressing.
+        val context = LocalContext.current
+        val imm = remember { context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager }
+        val enabled = remember(imm) {
+            imm?.enabledInputMethodList.orEmpty().any { it.packageName == context.packageName }
+        }
+        val selected = remember(imm, enabled) {
+            runCatching {
+                android.provider.Settings.Secure.getString(
+                    context.contentResolver,
+                    android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
+                )?.startsWith(context.packageName) == true
+            }.getOrDefault(false)
+        }
+
         SettingsSection(
-            title = "Get started",
-            subtitle = "Two steps. Everything after this is optional."
+            title = if (enabled && selected) "Ready" else "Get started",
+            subtitle = when {
+                !enabled -> "Not switched on in the system yet. That is step one."
+                !selected -> "Switched on, but another keyboard is still the active one."
+                else -> "Switched on and in use. Everything below is optional."
+            }
         ) {
+            StatusRow("Enabled in system settings", enabled)
+            StatusRow("Currently the active keyboard", selected)
+            Divider()
+            StatusRow(
+                "Layout: ${LayoutRepository.byId(settings.activeLayoutId)?.name ?: settings.activeLayoutId}",
+                true
+            )
+            StatusRow(
+                if (settings.aiEnabled) "AI on · ${settings.aiModel.ifBlank { "no model set" }}" else "AI off",
+                settings.aiEnabled
+            )
+
             Column(Modifier.padding(16.dp)) {
-                Button(onClick = onEnableKeyboard, modifier = Modifier.fillMaxWidth()) {
-                    Text("1 · Turn the keyboard on in system settings")
+                if (!enabled) {
+                    Button(onClick = onEnableKeyboard, modifier = Modifier.fillMaxWidth()) {
+                        Text("Turn the keyboard on in system settings")
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onChooseKeyboard, modifier = Modifier.fillMaxWidth()) {
-                    Text("2 · Switch to it")
+                if (!selected) {
+                    Button(onClick = onChooseKeyboard, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (enabled) "Switch to it" else "…then switch to it")
+                    }
+                    Spacer(Modifier.height(16.dp))
                 }
-                Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
                     value = testText,
                     onValueChange = { testText = it },
@@ -67,13 +107,19 @@ fun HomeScreen(
             }
         }
 
-        SettingsSection("Settings") {
+        SettingsSection(
+            title = "How it looks",
+            subtitle = "Tap to change size, transparency, colours."
+        ) {
+            KeyboardPreview(settings, heightDp = 130)
             ActionRow(
                 "Size, shape & theme",
-                "Height, one-handed and split modes, colours, haptics",
+                "Height, one-handed and split modes, see-through keys, haptics",
                 onClick = { onNavigate(MainActivity.ROUTE_APPEARANCE) }
             )
-            Divider()
+        }
+
+        SettingsSection("Settings") {
             ActionRow(
                 "Typing",
                 "Capitalisation, punctuation, gestures, suggestions, clipboard",

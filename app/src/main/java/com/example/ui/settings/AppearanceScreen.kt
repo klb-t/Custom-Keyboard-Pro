@@ -66,6 +66,15 @@ fun AppearanceScreen(settings: Settings) {
             InfoRow("A theme is just a set of colours. Export or import one under About & help.")
         }
 
+        SettingsSection(
+            title = "Live preview",
+            subtitle = "The keyboard as these settings draw it, over a checkerboard so " +
+                "transparency reads as transparency."
+        ) {
+            KeyboardPreview(settings)
+            PreviewCaption(settings)
+        }
+
         SettingsSection("Shape") {
             ChoiceRow(
                 label = "Presentation",

@@ -216,6 +216,33 @@ fun ActionRow(
     }
 }
 
+/**
+ * A fact about the current state, with a mark for whether it is the good one.
+ *
+ * Not a control: pressing it does nothing, because the thing it reports is changed
+ * somewhere else. It earns its place by answering the question a row of buttons
+ * cannot — which button is worth pressing right now.
+ */
+@Composable
+fun StatusRow(label: String, ok: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            if (ok) "●" else "○",
+            color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
 @Composable
 fun Divider() = HorizontalDivider(
     modifier = Modifier.padding(horizontal = 16.dp),

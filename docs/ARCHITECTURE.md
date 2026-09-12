@@ -79,3 +79,43 @@ gradle :app:testDebugUnitTest
 
 A release build signs only when a keystore is actually present; without one it
 produces an unsigned APK rather than failing.
+
+## Settings are data too
+
+`Settings` is still a Kotlin data class, but nothing reads it field by field any more.
+
+`SettingsSchema` derives the complete list of settings **from the persistence codec** —
+`SettingsStore.toJson(Settings())` is the authoritative statement of what exists and
+what type it is. A field added there gets a key, a type, a control and a search entry
+by existing. A small hand-written table adds only what JSON cannot know: a readable
+label, a slider range, which strings are really enums, which are secret.
+
+`SettingsStore.setByKey` / `getByKey` are the door that lets code written before a
+setting existed still change it. Three things go through that door:
+
+- **AllSettingsScreen** renders the whole schema with a search box — "nothing is
+  hidden", structurally rather than by discipline.
+- **SettingControl** renders one setting from its description, so every screen has one
+  implementation of each kind of control.
+- **PanelGenerator** hands a model the whole schema and asks which settings answer a
+  request in prose. The model arranges; it never invents. A control naming a key this
+  build does not have is dropped before rendering and reported by name — a panel that
+  looks real and does nothing would be worse than no panel.
+
+## Discovery
+
+`core/discovery` holds the shape of "ask somewhere, get a list, merge it with what you
+had, keep it when the network is gone", and mentions neither models nor HTTP.
+`ProviderCatalog` reads providers from a bundled `providers.json`, so adding a provider
+is an entry in a file. `AiConfig` resolves its *wire format* from that catalogue rather
+than from a `when` over three ids — the three request shapes are the invariant, the
+list of providers is not.
+
+## Diagnostics
+
+The crash handler is installed by the `Application`, not by whichever component starts
+first. That matters more than it sounds: an Activity's field initialisers run before
+its `onCreate`, so a handler installed in `onCreate` cannot see them — which is exactly
+where a bug hid once, producing a report of a crash alongside a log containing no
+crash and no process restart, both true and both useless.
+
