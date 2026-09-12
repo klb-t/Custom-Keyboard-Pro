@@ -29,11 +29,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.core.config.SettingsStore
 import com.example.core.layout.LayoutRepository
+import com.example.core.config.SettingsSchema
+import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.ProviderCatalog
+import com.example.core.panels.PanelGenerator
 import com.example.ui.settings.AboutScreen
 import com.example.ui.settings.AiSettingsScreen
+import com.example.ui.settings.AllSettingsScreen
 import com.example.ui.settings.AppearanceScreen
 import com.example.ui.settings.DiagnosticsScreen
 import com.example.ui.settings.DictionaryScreen
+import com.example.ui.settings.GeneratedPanelScreen
+import com.example.ui.settings.RequestPanelScreen
+import com.example.ui.settings.ThemeEditorScreen
+import com.example.ui.kb.ThemeStore
 import com.example.ui.settings.HomeScreen
 import com.example.ui.settings.LayoutStudioScreen
 import com.example.ui.settings.TypingSettingsScreen
@@ -62,6 +71,11 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_ABOUT = "about"
         const val ROUTE_DIAGNOSTICS = "diagnostics"
         const val ROUTE_PERMISSIONS = "permissions"
+        const val ROUTE_ALL_SETTINGS = "all"
+        const val ROUTE_REQUEST_PANEL = "request"
+        const val ROUTE_THEME_EDITOR = "theme"
+        /** A panel the user asked for: "panel:<id>". */
+        const val ROUTE_PANEL_PREFIX = "panel:"
     }
 
     private var micPermissionGranted by mutableStateOf(false)
@@ -76,6 +90,8 @@ class MainActivity : ComponentActivity() {
         AppLogger.init(applicationContext)
         SettingsStore.init(this)
         LayoutRepository.init(this)
+        ProviderCatalog.init(this)
+        registerDynamicOptions()
         enableEdgeToEdge()
 
         setContent {
@@ -112,12 +128,36 @@ class MainActivity : ComponentActivity() {
                             ROUTE_DICTIONARY -> DictionaryScreen()
                             ROUTE_ABOUT -> AboutScreen()
                             ROUTE_DIAGNOSTICS -> DiagnosticsScreen()
-                            else -> HomeScreen(
-                                settings = settings,
-                                onNavigate = { route = it },
-                                onEnableKeyboard = { openImeSettings() },
-                                onChooseKeyboard = { showImePicker() }
-                            )
+                            ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings)
+                            ROUTE_REQUEST_PANEL -> RequestPanelScreen(settings)
+                            ROUTE_THEME_EDITOR -> ThemeEditorScreen(settings)
+                            else -> {
+                                // A generated panel's route carries its id, so routes do
+                                // not have to be known at compile time — which is the
+                                // whole point of a panel that did not exist then either.
+                                val panel = if (route.startsWith(ROUTE_PANEL_PREFIX)) {
+                                    PanelGenerator.saved(settings)
+                                        .firstOrNull { it.id == route.removePrefix(ROUTE_PANEL_PREFIX) }
+                                } else null
+
+                                if (panel != null) {
+                                    GeneratedPanelScreen(
+                                        panel = panel,
+                                        settings = settings,
+                                        onDelete = {
+                                            PanelGenerator.delete(panel.id)
+                                            route = ROUTE_HOME
+                                        }
+                                    )
+                                } else {
+                                    HomeScreen(
+                                        settings = settings,
+                                        onNavigate = { route = it },
+                                        onEnableKeyboard = { openImeSettings() },
+                                        onChooseKeyboard = { showImePicker() }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -137,6 +177,24 @@ class MainActivity : ComponentActivity() {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         // A layout may have been added or edited by another part of the app.
         LayoutRepository.reload()
+    }
+
+    /**
+     * Teaches the schema the option lists only the running app knows.
+     *
+     * The schema is derived from the settings codec, which can say "themeId is a
+     * string" but not which themes exist right now — that depends on the built-in
+     * list plus whatever the user has made. Registering the lookups here keeps the
+     * core free of any dependency on the UI layer while still letting a generated
+     * panel offer a real list of choices rather than a free-text box.
+     */
+    private fun registerDynamicOptions() {
+        SettingsSchema.dynamicOptions["themeId"] = { ThemeStore.allThemes().map { it.id } }
+        SettingsSchema.dynamicOptions["activeLayoutId"] = { LayoutRepository.all().map { it.id } }
+        SettingsSchema.dynamicOptions["aiModel"] = {
+            ModelDiscovery.cachedModels(SettingsStore.current)
+        }
+        SettingsSchema.dynamicOptions["aiProvider"] = { ProviderCatalog.allIds(SettingsStore.current) }
     }
 
     private fun openImeSettings() {
@@ -166,5 +224,8 @@ private fun titleFor(route: String): String = when (route) {
     MainActivity.ROUTE_DICTIONARY -> "Dictionary & shortcuts"
     MainActivity.ROUTE_ABOUT -> "About & help"
     MainActivity.ROUTE_DIAGNOSTICS -> "Diagnostics"
-    else -> "Custom Keyboard Pro"
+    MainActivity.ROUTE_ALL_SETTINGS -> "Every setting"
+    MainActivity.ROUTE_REQUEST_PANEL -> "Ask for a panel"
+    MainActivity.ROUTE_THEME_EDITOR -> "Theme editor"
+    else -> if (route.startsWith(MainActivity.ROUTE_PANEL_PREFIX)) "Your panel" else "Custom Keyboard Pro"
 }

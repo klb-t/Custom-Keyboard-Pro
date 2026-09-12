@@ -1,5 +1,7 @@
 package com.example.core.config
 
+import com.example.core.layout.CursorAvoidStrategy
+import com.example.core.layout.InsetsMode
 import com.example.core.layout.PresentationMode
 
 /**
@@ -38,7 +40,59 @@ data class Settings(
     val floatingWidthDp: Float = 320f,
     val floatingHeightDp: Float = 240f,
     val separateLandscapeSize: Boolean = true,
+
+    /**
+     * Three opacities, not one, because they are three different questions.
+     *
+     * [keyboardOpacity] fades the whole thing at once. [panelOpacity] fades only what
+     * is drawn *behind* the keys, so the keys stay solid over whatever is underneath.
+     * [keyOpacity] fades only the key faces, so the panel stays and the keys become
+     * glass. A floating panel of solid keys on an invisible background is
+     * panelOpacity=0, keyOpacity=1 — which is the "floating transparent keys" idea,
+     * and it is reachable without leaving the normal presentation at all.
+     */
     val keyboardOpacity: Float = 1.0f,
+    val panelOpacity: Float = 1.0f,
+    val keyOpacity: Float = 1.0f,
+
+    /** Outline drawn around each key. Useful once the key faces go transparent. */
+    val keyBorderWidthDp: Float = 0f,
+    val keyBorderOpacity: Float = 0.6f,
+    /** Fades only the glyphs, independently of the key face they sit on. */
+    val keyLabelOpacity: Float = 1.0f,
+
+    // --- free-floating keys (PresentationMode.FREE) -----------------------
+    /**
+     * Keys with no panel behind them at all, placed individually over the app.
+     *
+     * A layout can pin any key anywhere with [com.example.core.layout.KeyDef.bounds];
+     * for a layout that does not, these spread the ordinary row grid out over the
+     * screen so an existing layout can be thrown into free mode and still work.
+     */
+    val freeKeyScale: Float = 1.0f,
+    val freeSpreadX: Float = 1.0f,
+    val freeSpreadY: Float = 1.0f,
+    val freeOriginXDp: Float = 0f,
+    val freeOriginYDp: Float = 0f,
+    /** Drag an individual key to move it, and remember where it was put. */
+    val freeKeysDraggable: Boolean = true,
+    /** Faint outlines showing where the untouchable gaps are, while arranging. */
+    val freeShowGuides: Boolean = false,
+
+    // --- what the keyboard asks the app to keep clear ----------------------
+    val insetsMode: InsetsMode = InsetsMode.FULL,
+    /**
+     * Watch where the text cursor actually is and get out of its way.
+     *
+     * Off by default: it needs the app to report the cursor position
+     * (`requestCursorUpdates`), most do, some do not, and a keyboard that
+     * occasionally jumps for no visible reason is worse than one that never jumps.
+     */
+    val avoidCoveringCursor: Boolean = false,
+    val cursorAvoidMarginDp: Float = 12f,
+    val cursorAvoidStrategy: CursorAvoidStrategy = CursorAvoidStrategy.MOVE_PANEL,
+    /** How far the keyboard fades when [cursorAvoidStrategy] is FADE. */
+    val cursorAvoidFadeTo: Float = 0.25f,
 
     // --- layouts ----------------------------------------------------------
     /** Ordered; the layout-switch key cycles through exactly this list. */
@@ -157,7 +211,25 @@ data class Settings(
     val gestureSwipeUp: String = "",
     val gestureSwipeDown: String = "{\"type\":\"hide\"}",
     val gestureSwipeLeft: String = "",
-    val gestureSwipeRight: String = ""
+    val gestureSwipeRight: String = "",
+
+    // --- things the app itself does not interpret, only stores ------------
+    /**
+     * The four fields below hold data the user or a model authored, in the same
+     * notation the app already reads elsewhere. They are settings only in the sense
+     * that they persist with the rest; what gives them meaning is the code that
+     * already parses themes, panels and provider descriptions.
+     *
+     * This is the point of keeping decisions as data: a new theme, a new settings
+     * panel or a new model provider is a string in here, not a new Kotlin file.
+     */
+    val customThemesJson: String = "",
+    /** Settings panels generated on request. See com.example.core.panels.PanelSpec. */
+    val generatedPanelsJson: String = "",
+    /** Providers the user added, merged over the bundled catalogue. */
+    val customProvidersJson: String = "",
+    /** Model ids last discovered from a provider, so the picker is not empty offline. */
+    val discoveredModelsJson: String = ""
 ) {
     /** Height fraction for the current orientation. */
     fun heightFor(landscape: Boolean): Float =

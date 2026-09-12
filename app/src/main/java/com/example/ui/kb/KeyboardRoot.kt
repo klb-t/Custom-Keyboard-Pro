@@ -63,7 +63,7 @@ fun KeyboardRoot(
     val host = LocalKeyboardHost.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val theme = remember(settings.themeId) { BuiltinThemes.byId(settings.themeId) }
+    val theme = remember(settings.themeId, settings.customThemesJson) { ThemeStore.resolve(settings) }
 
     val landscape = configuration.screenWidthDp > configuration.screenHeightDp
     val screenHeightDp = configuration.screenHeightDp

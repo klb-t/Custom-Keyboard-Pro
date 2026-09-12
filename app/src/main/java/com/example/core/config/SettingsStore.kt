@@ -47,6 +47,24 @@ object SettingsStore {
 
     fun resetToDefaults() = update { Settings() }
 
+    /**
+     * Change one setting by its name.
+     *
+     * This is the door that lets something which was never written for a particular
+     * setting still change it — a generated panel, a search result, an imported
+     * profile. An unrecognised name or an unusable value is a no-op rather than an
+     * error, because the callers are open-ended by design.
+     */
+    fun setByKey(key: String, value: Any?) = update { SettingsSchema.withValue(it, key, value) }
+
+    fun getByKey(key: String, settings: Settings = current): Any? =
+        SettingsSchema.valueOf(settings, key)
+
+    /** Restore one setting to what it ships as, without touching the rest. */
+    fun resetKey(key: String) = update {
+        SettingsSchema.withValue(it, key, SettingsSchema.spec(key)?.default)
+    }
+
     // -----------------------------------------------------------------------
     // Persistence
     // -----------------------------------------------------------------------
@@ -103,6 +121,25 @@ object SettingsStore {
         put("floatingHeightDp", s.floatingHeightDp.toDouble())
         put("separateLandscapeSize", s.separateLandscapeSize)
         put("keyboardOpacity", s.keyboardOpacity.toDouble())
+        put("panelOpacity", s.panelOpacity.toDouble())
+        put("keyOpacity", s.keyOpacity.toDouble())
+        put("keyBorderWidthDp", s.keyBorderWidthDp.toDouble())
+        put("keyBorderOpacity", s.keyBorderOpacity.toDouble())
+        put("keyLabelOpacity", s.keyLabelOpacity.toDouble())
+
+        put("freeKeyScale", s.freeKeyScale.toDouble())
+        put("freeSpreadX", s.freeSpreadX.toDouble())
+        put("freeSpreadY", s.freeSpreadY.toDouble())
+        put("freeOriginXDp", s.freeOriginXDp.toDouble())
+        put("freeOriginYDp", s.freeOriginYDp.toDouble())
+        put("freeKeysDraggable", s.freeKeysDraggable)
+        put("freeShowGuides", s.freeShowGuides)
+
+        put("insetsMode", s.insetsMode.name)
+        put("avoidCoveringCursor", s.avoidCoveringCursor)
+        put("cursorAvoidMarginDp", s.cursorAvoidMarginDp.toDouble())
+        put("cursorAvoidStrategy", s.cursorAvoidStrategy.name)
+        put("cursorAvoidFadeTo", s.cursorAvoidFadeTo.toDouble())
 
         put("enabledLayoutIds", JSONArray(s.enabledLayoutIds))
         put("activeLayoutId", s.activeLayoutId)
@@ -185,6 +222,11 @@ object SettingsStore {
         put("gestureSwipeDown", s.gestureSwipeDown)
         put("gestureSwipeLeft", s.gestureSwipeLeft)
         put("gestureSwipeRight", s.gestureSwipeRight)
+
+        put("customThemesJson", s.customThemesJson)
+        put("generatedPanelsJson", s.generatedPanelsJson)
+        put("customProvidersJson", s.customProvidersJson)
+        put("discoveredModelsJson", s.discoveredModelsJson)
     }
 
     internal fun fromJson(o: JSONObject): Settings {
@@ -208,6 +250,25 @@ object SettingsStore {
             floatingHeightDp = o.optDouble("floatingHeightDp", d.floatingHeightDp.toDouble()).toFloat(),
             separateLandscapeSize = o.optBoolean("separateLandscapeSize", d.separateLandscapeSize),
             keyboardOpacity = o.optDouble("keyboardOpacity", d.keyboardOpacity.toDouble()).toFloat(),
+            panelOpacity = o.optDouble("panelOpacity", d.panelOpacity.toDouble()).toFloat(),
+            keyOpacity = o.optDouble("keyOpacity", d.keyOpacity.toDouble()).toFloat(),
+            keyBorderWidthDp = o.optDouble("keyBorderWidthDp", d.keyBorderWidthDp.toDouble()).toFloat(),
+            keyBorderOpacity = o.optDouble("keyBorderOpacity", d.keyBorderOpacity.toDouble()).toFloat(),
+            keyLabelOpacity = o.optDouble("keyLabelOpacity", d.keyLabelOpacity.toDouble()).toFloat(),
+
+            freeKeyScale = o.optDouble("freeKeyScale", d.freeKeyScale.toDouble()).toFloat(),
+            freeSpreadX = o.optDouble("freeSpreadX", d.freeSpreadX.toDouble()).toFloat(),
+            freeSpreadY = o.optDouble("freeSpreadY", d.freeSpreadY.toDouble()).toFloat(),
+            freeOriginXDp = o.optDouble("freeOriginXDp", d.freeOriginXDp.toDouble()).toFloat(),
+            freeOriginYDp = o.optDouble("freeOriginYDp", d.freeOriginYDp.toDouble()).toFloat(),
+            freeKeysDraggable = o.optBoolean("freeKeysDraggable", d.freeKeysDraggable),
+            freeShowGuides = o.optBoolean("freeShowGuides", d.freeShowGuides),
+
+            insetsMode = enumOf(o.optString("insetsMode", d.insetsMode.name), d.insetsMode),
+            avoidCoveringCursor = o.optBoolean("avoidCoveringCursor", d.avoidCoveringCursor),
+            cursorAvoidMarginDp = o.optDouble("cursorAvoidMarginDp", d.cursorAvoidMarginDp.toDouble()).toFloat(),
+            cursorAvoidStrategy = enumOf(o.optString("cursorAvoidStrategy", d.cursorAvoidStrategy.name), d.cursorAvoidStrategy),
+            cursorAvoidFadeTo = o.optDouble("cursorAvoidFadeTo", d.cursorAvoidFadeTo.toDouble()).toFloat(),
 
             enabledLayoutIds = o.optJSONArray("enabledLayoutIds")?.let { arr ->
                 (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }
@@ -291,7 +352,12 @@ object SettingsStore {
             gestureSwipeUp = o.optString("gestureSwipeUp", d.gestureSwipeUp),
             gestureSwipeDown = o.optString("gestureSwipeDown", d.gestureSwipeDown),
             gestureSwipeLeft = o.optString("gestureSwipeLeft", d.gestureSwipeLeft),
-            gestureSwipeRight = o.optString("gestureSwipeRight", d.gestureSwipeRight)
+            gestureSwipeRight = o.optString("gestureSwipeRight", d.gestureSwipeRight),
+
+            customThemesJson = o.optString("customThemesJson", d.customThemesJson),
+            generatedPanelsJson = o.optString("generatedPanelsJson", d.generatedPanelsJson),
+            customProvidersJson = o.optString("customProvidersJson", d.customProvidersJson),
+            discoveredModelsJson = o.optString("discoveredModelsJson", d.discoveredModelsJson)
         )
     }
 }

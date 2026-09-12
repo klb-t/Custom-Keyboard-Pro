@@ -27,6 +27,7 @@ import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.data.ClipboardEntity
 import com.example.core.data.KeyboardRepository
+import com.example.core.discovery.ProviderCatalog
 import com.example.core.hitmap.TouchLearner
 import com.example.core.layout.ClipboardOp
 import com.example.core.layout.IndicatorKeys
@@ -141,6 +142,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             SettingsStore.init(this)
             AppLogger.d(tag, "> SettingsStore.init ok")
             LayoutRepository.init(this)
+            ProviderCatalog.init(this)
             AppLogger.d(tag, "> LayoutRepository.init ok (${LayoutRepository.all().size} layouts)")
             val activeLayout = layout
             AppLogger.d(tag, "> active layout resolved: id=${activeLayout.id}")

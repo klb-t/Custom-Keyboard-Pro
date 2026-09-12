@@ -179,7 +179,52 @@ sealed interface KeyAction {
     data class Presentation(val mode: PresentationMode) : KeyAction
 }
 
-enum class PresentationMode { NORMAL, ONE_HANDED_LEFT, ONE_HANDED_RIGHT, SPLIT, FLOATING, CYCLE }
+/**
+ * How the keyboard occupies the screen.
+ *
+ * [FREE] is the one that is not a panel at all: the keys are placed individually over
+ * a fully transparent surface, with nothing drawn behind them. A floating *panel* is
+ * still a rectangle you drag around; free keys have no rectangle, so what the user
+ * sees between them is the app underneath. That difference is why it needs its own
+ * mode rather than a flag on [FLOATING] — the panel chrome, the drag handle, the
+ * resize corner and the single background all stop existing.
+ */
+enum class PresentationMode { NORMAL, ONE_HANDED_LEFT, ONE_HANDED_RIGHT, SPLIT, FLOATING, FREE, CYCLE }
+
+/**
+ * How much of the screen the keyboard asks the app to keep clear for it.
+ *
+ * This is the "don't cover the field I am typing into" contract, and it is a policy
+ * rather than a fact, which is why it is a setting and not a rule: a full-width
+ * keyboard wants the app pushed all the way up, while free transparent keys floating
+ * over a photo probably want the app left exactly where it is. Neither is more
+ * correct, so both are offered.
+ */
+enum class InsetsMode {
+    /** The whole input view is reserved. The classic behaviour. */
+    FULL,
+
+    /** Only the panel's own rectangle. The rest of the screen belongs to the app. */
+    PANEL_ONLY,
+
+    /** Only the individual key rectangles, so the gaps between keys stay the app's. */
+    KEYS_ONLY,
+
+    /** Nothing is reserved: the keyboard floats over the app and may cover the field. */
+    NONE
+}
+
+/** What to do when the keyboard would cover the text cursor. */
+enum class CursorAvoidStrategy {
+    /** Slide the keyboard out of the way, keeping its size. */
+    MOVE_PANEL,
+
+    /** Keep the keyboard still and reserve space so the app scrolls the field clear. */
+    RESERVE_SPACE,
+
+    /** Fade the keyboard so the field stays readable through it. */
+    FADE
+}
 
 data class Binding(val trigger: KeyTrigger, val action: KeyAction)
 

@@ -24,6 +24,7 @@ import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.layout.PresentationMode
 import com.example.ui.kb.BuiltinThemes
+import com.example.ui.kb.ThemeStore
 
 @Composable
 fun AppearanceScreen(settings: Settings) {
@@ -33,7 +34,7 @@ fun AppearanceScreen(settings: Settings) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
-                BuiltinThemes.ALL.forEach { theme ->
+                ThemeStore.allThemes(settings).forEach { theme ->
                     Column(
                         modifier = Modifier
                             .padding(4.dp)

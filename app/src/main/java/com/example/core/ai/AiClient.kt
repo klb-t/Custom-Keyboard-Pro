@@ -2,6 +2,8 @@ package com.example.core.ai
 
 import com.example.core.config.AiProviders
 import com.example.core.config.Settings
+import com.example.core.discovery.AiWire
+import com.example.core.discovery.ProviderCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,23 +24,51 @@ data class AiConfig(
     val apiKey: String,
     val model: String,
     val temperature: Float = 0.3f,
-    val maxTokens: Int = 256
+    val maxTokens: Int = 256,
+    /**
+     * Which of the three request shapes to speak. Resolved from the provider
+     * catalogue rather than from the provider id, so a provider added as data gets a
+     * working client without a code change — the wire formats are the invariant here,
+     * the list of providers is not.
+     */
+    val wire: String = AiWire.OPENAI,
+    /** Local servers legitimately have no key; requiring one would lock them out. */
+    val requiresKey: Boolean = true
 ) {
     val isUsable: Boolean
-        get() = apiKey.isNotBlank() && model.isNotBlank() && effectiveBaseUrl.isNotBlank()
+        get() = (apiKey.isNotBlank() || !requiresKey) &&
+            model.isNotBlank() &&
+            effectiveBaseUrl.isNotBlank()
 
     val effectiveBaseUrl: String
-        get() = baseUrl.ifBlank { AiProviders.defaultBaseUrl(provider) }.trimEnd('/')
+        get() = baseUrl
+            .ifBlank { ProviderCatalog.byId(provider)?.baseUrl.orEmpty() }
+            .ifBlank { AiProviders.defaultBaseUrl(provider) }
+            .trimEnd('/')
 
     companion object {
-        fun from(s: Settings, maxTokens: Int = s.aiMaxTokens): AiConfig = AiConfig(
-            provider = s.aiProvider,
-            baseUrl = s.aiBaseUrl,
-            apiKey = s.aiApiKey,
-            model = s.aiModel.ifBlank { AiProviders.defaultModel(s.aiProvider) },
-            temperature = s.aiTemperature,
-            maxTokens = maxTokens
-        )
+        fun from(s: Settings, maxTokens: Int = s.aiMaxTokens): AiConfig {
+            val spec = ProviderCatalog.byId(s.aiProvider, s)
+            return AiConfig(
+                provider = s.aiProvider,
+                baseUrl = s.aiBaseUrl,
+                apiKey = s.aiApiKey,
+                model = s.aiModel
+                    .ifBlank { spec?.defaultModel.orEmpty() }
+                    .ifBlank { AiProviders.defaultModel(s.aiProvider) },
+                temperature = s.aiTemperature,
+                maxTokens = maxTokens,
+                wire = spec?.wire ?: legacyWire(s.aiProvider),
+                requiresKey = spec?.needsKey ?: true
+            )
+        }
+
+        /** For settings written before the catalogue existed. */
+        private fun legacyWire(provider: String): String = when (provider) {
+            AiProviders.ANTHROPIC -> AiWire.ANTHROPIC
+            AiProviders.GEMINI -> AiWire.GEMINI
+            else -> AiWire.OPENAI
+        }
     }
 }
 
@@ -90,9 +120,9 @@ object AiClient {
             if (!config.isUsable) {
                 throw AiException("The AI provider is not configured. Add a key and a model in settings.")
             }
-            val (url, body, headers) = when (config.provider) {
-                AiProviders.ANTHROPIC -> anthropicRequest(config, systemPrompt, userPrompt, imageBase64)
-                AiProviders.GEMINI -> geminiRequest(config, systemPrompt, userPrompt, imageBase64)
+            val (url, body, headers) = when (config.wire) {
+                AiWire.ANTHROPIC -> anthropicRequest(config, systemPrompt, userPrompt, imageBase64)
+                AiWire.GEMINI -> geminiRequest(config, systemPrompt, userPrompt, imageBase64)
                 else -> openAiRequest(config, systemPrompt, userPrompt, imageBase64)
             }
 
@@ -105,9 +135,9 @@ object AiClient {
                 if (!response.isSuccessful) {
                     throw AiException("${response.code} ${response.message}: ${text.take(400)}")
                 }
-                when (config.provider) {
-                    AiProviders.ANTHROPIC -> parseAnthropic(text)
-                    AiProviders.GEMINI -> parseGemini(text)
+                when (config.wire) {
+                    AiWire.ANTHROPIC -> parseAnthropic(text)
+                    AiWire.GEMINI -> parseGemini(text)
                     else -> parseOpenAi(text)
                 }
             }

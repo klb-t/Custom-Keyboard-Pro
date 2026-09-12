@@ -21,7 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.MainActivity
 import com.example.core.config.Settings
+import com.example.core.config.SettingsSchema
 import com.example.core.config.SettingsStore
+import com.example.core.panels.PanelGenerator
 import com.example.util.AppLogger
 
 /**
@@ -110,6 +112,12 @@ fun HomeScreen(
             )
             Divider()
             ActionRow(
+                "Theme editor",
+                "Every colour, with opacity — including keys you can see through",
+                onClick = { onNavigate(MainActivity.ROUTE_THEME_EDITOR) }
+            )
+            Divider()
+            ActionRow(
                 "Diagnostics",
                 "The keyboard's own log — for when something goes wrong and there is " +
                     "no computer to plug it into",
@@ -117,6 +125,36 @@ fun HomeScreen(
                     .let { if (it > 0) "$it crash" + (if (it == 1) "" else "es") else null },
                 onClick = { onNavigate(MainActivity.ROUTE_DIAGNOSTICS) }
             )
+        }
+
+        SettingsSection(
+            title = "Anything not on a screen yet",
+            subtitle = "The settings above are arranged by hand. These two reach the " +
+                "rest: all of them at once, or a panel built for what you actually " +
+                "want to change."
+        ) {
+            ActionRow(
+                "Ask for a panel",
+                "Say what you want to change; a model builds the panel for it",
+                onClick = { onNavigate(MainActivity.ROUTE_REQUEST_PANEL) }
+            )
+            Divider()
+            ActionRow(
+                "Every setting",
+                "All ${SettingsSchema.all.size} of them, searchable, nothing hidden",
+                trailing = "${SettingsSchema.all.size}",
+                onClick = { onNavigate(MainActivity.ROUTE_ALL_SETTINGS) }
+            )
+            val panels = remember(settings.generatedPanelsJson) { PanelGenerator.saved(settings) }
+            panels.forEach { panel ->
+                Divider()
+                ActionRow(
+                    panel.title,
+                    panel.description ?: "Built for: ${panel.request.take(60)}",
+                    trailing = "${panel.controls.size}",
+                    onClick = { onNavigate(MainActivity.ROUTE_PANEL_PREFIX + panel.id) }
+                )
+            }
         }
 
         SettingsSection(

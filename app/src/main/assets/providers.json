@@ -1,0 +1,155 @@
+[
+  {
+    "id": "openai",
+    "label": "OpenAI",
+    "wire": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "docsUrl": "https://platform.openai.com/api-keys"
+  },
+  {
+    "id": "anthropic",
+    "label": "Anthropic",
+    "wire": "anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "claude-haiku-4-5-20251001",
+    "docsUrl": "https://console.anthropic.com/settings/keys"
+  },
+  {
+    "id": "gemini",
+    "label": "Google Gemini",
+    "wire": "gemini",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "modelsPath": "/models",
+    "defaultModel": "gemini-2.5-flash",
+    "docsUrl": "https://aistudio.google.com/app/apikey"
+  },
+  {
+    "id": "groq",
+    "label": "Groq",
+    "wire": "openai",
+    "baseUrl": "https://api.groq.com/openai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama-3.3-70b-versatile",
+    "docsUrl": "https://console.groq.com/keys"
+  },
+  {
+    "id": "openrouter",
+    "label": "OpenRouter (many models, one key)",
+    "wire": "openai",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "modelsPath": "/models",
+    "defaultModel": "openai/gpt-4o-mini",
+    "docsUrl": "https://openrouter.ai/keys"
+  },
+  {
+    "id": "deepseek",
+    "label": "DeepSeek",
+    "wire": "openai",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "deepseek-chat",
+    "docsUrl": "https://platform.deepseek.com/api_keys"
+  },
+  {
+    "id": "mistral",
+    "label": "Mistral",
+    "wire": "openai",
+    "baseUrl": "https://api.mistral.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "mistral-small-latest",
+    "docsUrl": "https://console.mistral.ai/api-keys"
+  },
+  {
+    "id": "together",
+    "label": "Together AI",
+    "wire": "openai",
+    "baseUrl": "https://api.together.xyz/v1",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "docsUrl": "https://api.together.xyz/settings/api-keys"
+  },
+  {
+    "id": "fireworks",
+    "label": "Fireworks AI",
+    "wire": "openai",
+    "baseUrl": "https://api.fireworks.ai/inference/v1",
+    "modelsPath": "/models",
+    "defaultModel": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    "docsUrl": "https://fireworks.ai/api-keys"
+  },
+  {
+    "id": "cerebras",
+    "label": "Cerebras",
+    "wire": "openai",
+    "baseUrl": "https://api.cerebras.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama-3.3-70b",
+    "docsUrl": "https://cloud.cerebras.ai"
+  },
+  {
+    "id": "xai",
+    "label": "xAI (Grok)",
+    "wire": "openai",
+    "baseUrl": "https://api.x.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "grok-2-latest",
+    "docsUrl": "https://console.x.ai"
+  },
+  {
+    "id": "ollama",
+    "label": "Ollama (on this device or your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:11434/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama3.2",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://ollama.com"
+  },
+  {
+    "id": "lmstudio",
+    "label": "LM Studio (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:1234/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://lmstudio.ai"
+  },
+  {
+    "id": "llamacpp",
+    "label": "llama.cpp server (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:8080/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://github.com/ggml-org/llama.cpp"
+  },
+  {
+    "id": "vllm",
+    "label": "vLLM (your own server)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:8000/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://docs.vllm.ai"
+  },
+  {
+    "id": "openai_compatible",
+    "label": "Anything else that speaks the OpenAI shape",
+    "wire": "openai",
+    "baseUrl": "",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "docsUrl": ""
+  }
+]
