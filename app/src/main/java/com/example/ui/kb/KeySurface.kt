@@ -97,6 +97,10 @@ fun KeySurface(
      */
     onSurfaceSwipe: (SwipeDirection) -> Boolean = { false },
     learner: com.example.core.hitmap.TouchLearner? = null,
+    /** Identifies this surface when it reports its geometry; see KeyboardHost. */
+    surfaceId: String = "main",
+    /** False when this surface's keys should not claim touches from the app. */
+    reservesSpace: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val layer: LayerDef = layout.layer(layerName) ?: layout.base
@@ -123,9 +127,11 @@ fun KeySurface(
         // themselves. Reporting what was actually placed — rather than recomputing it
         // there — is what keeps the touchable region and the visible keys in step.
         val host = LocalKeyboardHost.current
-        LaunchedEffect(placement, surfaceOrigin) {
+        LaunchedEffect(placement, surfaceOrigin, reservesSpace) {
             host.reportKeyRects(
-                placement.filter { it.key.visible }.map { p ->
+                surfaceId,
+                if (!reservesSpace) emptyList()
+                else placement.filter { it.key.visible }.map { p ->
                     android.graphics.Rect(
                         (surfaceOrigin.x + p.left).toInt(),
                         (surfaceOrigin.y + p.top).toInt(),

@@ -259,8 +259,11 @@ object SettingsSchema {
             help = "Built-in themes plus any you made yourself."
         ),
         "presentation" to Meta(
-            kind = SettingKind.ENUM, group = GROUP_APPEARANCE, label = "Presentation",
-            help = "Full width, one-handed, split, a floating panel, or free keys with no panel at all.",
+            kind = SettingKind.ENUM, group = GROUP_APPEARANCE, label = "Presentation (layouts that do not say)",
+            help = "Full width, one-handed, split, a floating panel, or free keys with no " +
+                "panel at all. This is only the fallback: a layout that describes its own " +
+                "pieces — a docked panel with a floating block beside it, say — places them " +
+                "itself and ignores this.",
             options = PresentationMode.entries.filter { it != PresentationMode.CYCLE }.map { it.name }
         ),
         "heightPortrait" to Meta(group = GROUP_APPEARANCE, label = "Height (portrait)", min = 0.15f, max = 0.85f),

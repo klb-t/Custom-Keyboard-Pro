@@ -70,8 +70,12 @@ interface KeyboardHost {
      * the app underneath, and only the UI knows where those gaps are. Reporting the
      * drawn geometry rather than recomputing it service-side keeps the touchable
      * region and the visible keys from ever disagreeing.
+     *
+     * Keyed by [sourceId] because a layout can be several elements at once — a docked
+     * panel and a floating block are two surfaces, and the second reporting must not
+     * erase the first. An element that does not reserve space simply reports nothing.
      */
-    fun reportKeyRects(rects: List<android.graphics.Rect>)
+    fun reportKeyRects(sourceId: String, rects: List<android.graphics.Rect>)
 
     /** How the keyboard is currently getting out of the cursor's way, if at all. */
     val avoidance: AvoidanceState

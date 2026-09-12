@@ -609,7 +609,7 @@ object BuiltinLayouts {
 
     val ALL: List<LayoutDef> = listOf(
         QWERTY_PL, QWERTY_EN, QWERTY_NUMROW, QWERTZ, AZERTY, DVORAK, COLEMAK,
-        SYMBOLS, NUMPAD, NAVIGATION, HACKER, ScienceLayout.SCIENCE
+        SYMBOLS, NUMPAD, NAVIGATION, HACKER, ScienceLayout.SCIENCE, WorkbenchLayout.WORKBENCH
     )
 
     fun byId(id: String): LayoutDef? = ALL.firstOrNull { it.id == id }

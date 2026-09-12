@@ -395,10 +395,69 @@ data class BackgroundDef(
     val sensitivityFile: String? = null
 )
 
+/** Where one piece of a layout sits. */
+enum class ElementPlacement {
+    /** Part of the keyboard panel at the bottom, in the ordinary flow. */
+    DOCKED,
+
+    /** Its own block, positioned and draggable, with its own background. */
+    FLOATING,
+
+    /** Keys placed individually with nothing drawn behind them. */
+    FREE
+}
+
+/**
+ * One piece of a layout, with its own placement.
+ *
+ * This is the correction to a design mistake worth naming: docked, floating and free
+ * were a single app-wide setting, which cannot express the thing people actually
+ * want. "A docked panel, a floating numeric block, and a transparent Escape in the
+ * corner" is *one layout with three elements*, not three settings — and no amount of
+ * options on a global enum reaches it, because the global enum can only ever describe
+ * the keyboard as a whole.
+ *
+ * So placement moves where it belongs: into the layout, which is data. A layout with
+ * no elements is one docked element, which is every layout written so far, so nothing
+ * that existed has to change to keep working.
+ *
+ * Each element also answers the two questions that only make sense per element:
+ * whether it asks the app to keep space clear for it, and whether it may move out of
+ * the way of the text cursor. A floating numeric block should yield; an Escape key
+ * deliberately pinned to a corner should not.
+ */
+data class ElementDef(
+    val id: String,
+    /** The layer this element shows. Layers are how a layout is cut into pieces. */
+    val layer: String = LayoutDef.BASE_LAYER,
+    val placement: ElementPlacement = ElementPlacement.DOCKED,
+    /**
+     * Where it sits, as fractions of the input view. Ignored when docked; defaulted
+     * to something visible when a floating or free element omits it.
+     */
+    val bounds: NormRect? = null,
+    /** Multiplies whatever the theme and settings already decided, never overrides. */
+    val opacity: Float = 1f,
+    /** The element's own background. 0 leaves its keys floating over the app. */
+    val panelOpacity: Float = 1f,
+    /** Whether the app is asked to keep this element's space clear. */
+    val reservesSpace: Boolean = true,
+    /** Pinned elements stay put even when they would cover the text cursor. */
+    val pinned: Boolean = false,
+    val draggable: Boolean = true,
+    /** Drawn only when the field being typed into is of a matching kind, if set. */
+    val visible: Boolean = true
+)
+
 data class LayoutDef(
     val id: String,
     val name: String,
     val layers: Map<String, LayerDef>,
+    /**
+     * The pieces this layout is made of, and where each sits. Empty means the whole
+     * layout is one docked panel — which is what every layout without elements is.
+     */
+    val elements: List<ElementDef> = emptyList(),
     val defaultLayer: String = BASE_LAYER,
     /** BCP-47-ish tag used for language cycling and dictionary selection. */
     val locale: String? = null,

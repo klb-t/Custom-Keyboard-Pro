@@ -39,7 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.layout.KeyAction
+import com.example.core.layout.ElementDef
+import com.example.core.layout.ElementPlacement
 import com.example.core.layout.FreeKeyPins
+import com.example.core.layout.NormRect
 import com.example.core.layout.LayerTransforms
 import com.example.core.layout.LayoutDef
 import com.example.core.layout.LayoutRepository
@@ -91,12 +94,34 @@ fun KeyboardRoot(
     // does — the difference is that nothing is drawn behind them.
     val free = settings.presentation == PresentationMode.FREE
 
-    LaunchedEffect(totalHeightDp, floating, free, screenHeightDp) {
-        val target = if (floating || free) screenHeightDp.toFloat() else totalHeightDp
+    val needsWholeScreen = floating || free ||
+        host.layout.elements.any { it.visible && it.placement != ElementPlacement.DOCKED }
+
+    LaunchedEffect(totalHeightDp, needsWholeScreen, screenHeightDp) {
+        val target = if (needsWholeScreen) screenHeightDp.toFloat() else totalHeightDp
         onHeightChanged(with(density) { target.dp.roundToPx() })
     }
 
-    if (free) {
+    val elements = host.layout.elements.filter { it.visible }
+
+    if (elements.isNotEmpty()) {
+        // A layout that describes its own pieces decides its own placement, and the
+        // app-wide presentation setting stops applying: it can only ever say one
+        // thing about the whole keyboard, which is the limitation elements exist to
+        // remove.
+        ElementComposition(
+            settings = settings,
+            theme = theme,
+            elements = elements,
+            dockedHeightDp = totalHeightDp,
+            keyboardHeightDp = keyboardHeightDp,
+            stripHeight = stripHeight,
+            indicatorHeight = indicatorHeight,
+            suggestions = suggestions,
+            aiBusy = aiBusy,
+            panel = panel
+        )
+    } else if (free) {
         FreeKeySurface(settings = settings, theme = theme)
     } else if (floating) {
         FloatingShell(
@@ -248,11 +273,26 @@ private fun acceptSuggestion(host: KeyboardHost, suggestion: com.example.core.su
 }
 
 @Composable
-private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme) {
+private fun KeyArea(
+    layout: LayoutDef,
+    settings: Settings,
+    theme: KeyboardTheme,
+    /**
+     * Shows this layer instead of whichever one the keyboard is currently on.
+     *
+     * The docked panel follows layer switching, because that is what a layer key is
+     * for. An element pinned somewhere on the screen — a numeric block, a lone Escape
+     * — shows its own layer and keeps showing it, because its whole point is being
+     * there regardless of what the main panel is doing.
+     */
+    layerOverride: String? = null,
+    surfaceId: String = "main",
+    reservesSpace: Boolean = true
+) {
     val host = LocalKeyboardHost.current
     val state = host.state
 
-    val layerName = state.renderLayer(layout)
+    val layerName = layerOverride ?: state.renderLayer(layout)
     val rawLayer = layout.layer(layerName) ?: layout.base
 
     // A layout with no shift layer still shifts: uppercase its character keys.
@@ -292,6 +332,8 @@ private fun KeyArea(layout: LayoutDef, settings: Settings, theme: KeyboardTheme)
         onKeyDown = { key -> host.feedback(key) },
         onSurfaceSwipe = { direction -> host.performSurfaceGesture(direction) },
         learner = host.touchLearner,
+        surfaceId = surfaceId,
+        reservesSpace = reservesSpace,
         onCursorNudge = { steps ->
             repeat(kotlin.math.abs(steps)) {
                 host.perform(
@@ -649,6 +691,170 @@ private fun ArrangeOverlay(settings: Settings, theme: KeyboardTheme) {
                 color = theme.popupText,
                 fontSize = 12.sp
             )
+        }
+    }
+}
+
+/**
+ * A layout drawn as its own set of pieces.
+ *
+ * Docked elements share the panel at the bottom in the order the layout lists them;
+ * floating and free elements are placed by their own bounds over the whole screen.
+ * Each carries its own opacity, its own background, whether it claims space from the
+ * app, and whether it may move out of the cursor's way — because those are questions
+ * about a piece of keyboard, not about the keyboard.
+ */
+@Composable
+private fun ElementComposition(
+    settings: Settings,
+    theme: KeyboardTheme,
+    elements: List<ElementDef>,
+    dockedHeightDp: Float,
+    keyboardHeightDp: Float,
+    stripHeight: androidx.compose.ui.unit.Dp,
+    indicatorHeight: androidx.compose.ui.unit.Dp,
+    suggestions: List<com.example.core.suggest.Suggestion>,
+    aiBusy: Boolean,
+    panel: PanelId?
+) {
+    val host = LocalKeyboardHost.current
+    val density = LocalDensity.current
+    val layout = host.layout
+
+    val docked = elements.filter { it.placement == ElementPlacement.DOCKED }
+    val loose = elements.filter { it.placement != ElementPlacement.DOCKED }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewWidth = maxWidth
+        val viewHeight = maxHeight
+
+        if (docked.isNotEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(dockedHeightDp.dp)
+                    .align(Alignment.BottomCenter)
+            ) {
+                DockedElements(
+                    settings = settings,
+                    theme = theme,
+                    elements = docked,
+                    keyboardHeightDp = keyboardHeightDp,
+                    stripHeight = stripHeight,
+                    indicatorHeight = indicatorHeight,
+                    suggestions = suggestions,
+                    aiBusy = aiBusy,
+                    panel = panel
+                )
+            }
+        }
+
+        loose.forEach { element ->
+            // A floating piece with no stated position would otherwise be invisible at
+            // the top-left corner of nothing; put it somewhere reachable instead.
+            val bounds = element.bounds ?: NormRect(0.55f, 0.30f, 0.98f, 0.62f)
+            val shift = if (element.pinned) 0f else host.avoidance.shiftPx
+            val shiftDp = with(density) { shift.toDp() }
+
+            Box(
+                Modifier
+                    .offset(
+                        x = viewWidth * bounds.left,
+                        y = (viewHeight * bounds.top - shiftDp).coerceAtLeast(0.dp)
+                    )
+                    .size(
+                        width = viewWidth * bounds.width.coerceAtLeast(0.05f),
+                        height = viewHeight * bounds.height.coerceAtLeast(0.05f)
+                    )
+                    .alpha((settings.keyboardOpacity * element.opacity).coerceIn(0.05f, 1f))
+                    .then(
+                        if (element.placement == ElementPlacement.FLOATING)
+                            Modifier.background(
+                                theme.background.copy(
+                                    alpha = theme.background.alpha *
+                                        (settings.panelOpacity * element.panelOpacity).coerceIn(0f, 1f)
+                                ),
+                                RoundedCornerShape(12.dp)
+                            )
+                        else Modifier
+                    )
+            ) {
+                KeyArea(
+                    layout = layout,
+                    settings = settings,
+                    theme = theme,
+                    layerOverride = element.layer,
+                    surfaceId = element.id,
+                    reservesSpace = element.reservesSpace
+                )
+            }
+        }
+    }
+}
+
+/** The pieces that live in the panel at the bottom, stacked in the order given. */
+@Composable
+private fun DockedElements(
+    settings: Settings,
+    theme: KeyboardTheme,
+    elements: List<ElementDef>,
+    keyboardHeightDp: Float,
+    stripHeight: androidx.compose.ui.unit.Dp,
+    indicatorHeight: androidx.compose.ui.unit.Dp,
+    suggestions: List<com.example.core.suggest.Suggestion>,
+    aiBusy: Boolean,
+    panel: PanelId?
+) {
+    val host = LocalKeyboardHost.current
+    val layout = host.layout
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(
+                theme.background.copy(
+                    alpha = theme.background.alpha * settings.panelOpacity.coerceIn(0f, 1f)
+                )
+            )
+            .alpha(settings.keyboardOpacity.coerceIn(0.05f, 1f))
+    ) {
+        if (settings.indicatorStripVisible) {
+            IndicatorStrip(theme = theme, height = indicatorHeight)
+        }
+        if (settings.suggestionsEnabled || panel != null) {
+            SuggestionStrip(
+                suggestions = if (panel == null) suggestions else emptyList(),
+                settings = settings,
+                theme = theme,
+                aiBusy = aiBusy,
+                onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
+                onReject = { host.suggestions.block(it.text) },
+                onToolbar = { host.openPanel(it) },
+                height = stripHeight
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(keyboardHeightDp.dp)
+                .padding(horizontal = settings.sidePaddingDp.dp)
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                elements.forEach { element ->
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        KeyArea(
+                            layout = layout,
+                            settings = settings,
+                            theme = theme,
+                            // The first docked element is the main panel and follows
+                            // layer switching; any further ones show what they say.
+                            layerOverride = if (element === elements.first()) null else element.layer,
+                            surfaceId = element.id,
+                            reservesSpace = element.reservesSpace
+                        )
+                    }
+                }
+            }
         }
     }
 }

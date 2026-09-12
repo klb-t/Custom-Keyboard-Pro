@@ -426,6 +426,7 @@ object LayoutJson {
             },
             author = root.optStringOrNull("author"),
             description = root.optStringOrNull("description"),
+            elements = readElements(root),
             rowCountHint = root.optInt("rowCountHint", layers.values.maxOfOrNull { it.rows.size } ?: 4),
             builtIn = root.optBoolean("builtIn", false)
         )
@@ -497,6 +498,28 @@ object LayoutJson {
                     .putOpt("sensitivity", bg.sensitivityFile)
             })
             .put("layers", layers)
+            .also { out ->
+                if (layout.elements.isNotEmpty()) {
+                    out.put("elements", JSONArray().apply {
+                        layout.elements.forEach { element ->
+                            put(JSONObject().apply {
+                                put("id", element.id)
+                                put("layer", element.layer)
+                                put("placement", element.placement.name.lowercase())
+                                element.bounds?.let {
+                                    put("bounds", JSONArray(listOf(it.left, it.top, it.right, it.bottom)))
+                                }
+                                put("opacity", element.opacity.toDouble())
+                                put("panelOpacity", element.panelOpacity.toDouble())
+                                put("reservesSpace", element.reservesSpace)
+                                put("pinned", element.pinned)
+                                put("draggable", element.draggable)
+                                put("visible", element.visible)
+                            })
+                        }
+                    })
+                }
+            }
     }
 
     fun writeString(layout: LayoutDef, indent: Int = 2): String = write(layout).toString(indent)
@@ -566,5 +589,42 @@ private fun readPopupGroups(o: JSONObject): List<PopupGroup> {
         }
     }
 
+    return out
+}
+
+/**
+ * The pieces a layout is cut into, read tolerantly.
+ *
+ * An element that names a layer which does not exist is dropped: the alternative is
+ * an invisible piece of keyboard that takes up space and cannot be pressed.
+ */
+private fun readElements(root: JSONObject): List<ElementDef> {
+    val arr = root.optJSONArray("elements") ?: return emptyList()
+    val out = mutableListOf<ElementDef>()
+    for (i in 0 until arr.length()) {
+        val o = arr.optJSONObject(i) ?: continue
+        val layer = o.optString("layer").ifBlank { LayoutDef.BASE_LAYER }
+        val boundsArray = o.optJSONArray("bounds")
+        val bounds = if (boundsArray != null && boundsArray.length() >= 4) {
+            NormRect(
+                boundsArray.optDouble(0).toFloat(),
+                boundsArray.optDouble(1).toFloat(),
+                boundsArray.optDouble(2).toFloat(),
+                boundsArray.optDouble(3).toFloat()
+            )
+        } else null
+        out += ElementDef(
+            id = o.optString("id").ifBlank { "element_$i" },
+            layer = layer,
+            placement = enumOf(o.optString("placement", "docked"), ElementPlacement.DOCKED),
+            bounds = bounds,
+            opacity = o.optDouble("opacity", 1.0).toFloat(),
+            panelOpacity = o.optDouble("panelOpacity", 1.0).toFloat(),
+            reservesSpace = o.optBoolean("reservesSpace", true),
+            pinned = o.optBoolean("pinned", false),
+            draggable = o.optBoolean("draggable", true),
+            visible = o.optBoolean("visible", true)
+        )
+    }
     return out
 }

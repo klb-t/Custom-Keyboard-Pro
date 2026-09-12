@@ -645,12 +645,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * insets on its own schedule, and this is simply the freshest answer available
      * when it does.
      */
-    @Volatile
-    private var keyRects: List<Rect> = emptyList()
+    private val keyRectsBySource = java.util.concurrent.ConcurrentHashMap<String, List<Rect>>()
 
-    override fun reportKeyRects(rects: List<Rect>) {
-        val changed = rects.size != keyRects.size || rects != keyRects
-        keyRects = rects
+    private val keyRects: List<Rect>
+        get() = keyRectsBySource.values.flatten()
+
+    override fun reportKeyRects(sourceId: String, rects: List<Rect>) {
+        val previous = keyRectsBySource.put(sourceId, rects)
+        val changed = previous == null || previous != rects
         // The framework recomputes insets on layout, not on a whim, so a keyboard
         // whose keys moved without a relayout would keep the stale region.
         if (changed && SettingsStore.current.insetsMode == InsetsMode.KEYS_ONLY) {
