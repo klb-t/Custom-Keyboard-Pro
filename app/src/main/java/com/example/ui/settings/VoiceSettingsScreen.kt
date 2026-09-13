@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.core.config.AsrEngines
+import com.example.core.discovery.AiCapability
+import com.example.core.discovery.ProviderCatalog
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 
@@ -39,16 +42,84 @@ fun VoiceSettingsScreen(
 
         SettingsSection("Engine") {
             ChoiceRow(
-                label = "Recogniser",
-                description = "The system recogniser needs no account and on most phones " +
-                    "runs on the device, so the audio never leaves it. A Whisper-compatible " +
-                    "endpoint is usually more accurate and supports more languages, but " +
-                    "sends the recording to whatever you point it at.",
+                label = "Where dictation goes",
+                description = "This phone needs no account and on most devices runs on " +
+                    "the device itself, so the audio never leaves it. Anything else sends " +
+                    "the recording to whatever you point it at — usually more accurate, " +
+                    "and better with languages the phone does not know.",
                 options = AsrEngines.ALL,
                 selected = settings.asrEngine,
                 optionLabel = { AsrEngines.label(it) },
                 onSelect = { engine -> SettingsStore.update { it.copy(asrEngine = engine) } }
             )
+
+            if (settings.asrEngine == AsrEngines.PROVIDER) {
+                // Asked of the catalogue, never listed here: a provider the user adds,
+                // or one a model writes for them, shows up in this list on its own.
+                val providers = remember(settings.customProvidersJson) {
+                    ProviderCatalog.serving(AiCapability.TRANSCRIBE, settings)
+                }
+                if (providers.isEmpty()) {
+                    InfoRow("Nothing in the catalogue takes dictation. That should not happen.")
+                } else {
+                    ChoiceRow(
+                        label = "Provider",
+                        description = "Everything that can take dictation, including this " +
+                            "phone's own recogniser.",
+                        options = providers.map { it.id },
+                        selected = settings.asrProvider.ifBlank { providers.first().id },
+                        optionLabel = { id ->
+                            providers.firstOrNull { it.id == id }?.let { p ->
+                                p.label + if (p.local) " · stays on the device" else ""
+                            } ?: id
+                        },
+                        onSelect = { id ->
+                            val chosen = providers.firstOrNull { it.id == id }
+                            SettingsStore.update { s ->
+                                s.copy(
+                                    asrProvider = id,
+                                    // A model id from the previous provider is worse
+                                    // than none: it is rejected rather than ignored.
+                                    asrModel = chosen?.capability(AiCapability.TRANSCRIBE)
+                                        ?.defaultModel.orEmpty()
+                                )
+                            }
+                        }
+                    )
+                    val chosen = providers.firstOrNull { it.id == settings.asrProvider }
+                    if (chosen != null) {
+                        val models = chosen.capability(AiCapability.TRANSCRIBE)?.models.orEmpty()
+                        if (models.isNotEmpty()) {
+                            ChoiceRow(
+                                label = "Model",
+                                options = models,
+                                selected = settings.asrModel.ifBlank { models.first() },
+                                optionLabel = { it },
+                                onSelect = { m -> SettingsStore.update { it.copy(asrModel = m) } }
+                            )
+                        } else {
+                            TextRow(
+                                label = "Model",
+                                value = settings.asrModel,
+                                placeholder = chosen.capability(AiCapability.TRANSCRIBE)
+                                    ?.defaultModel.orEmpty(),
+                                onChange = { v -> SettingsStore.update { it.copy(asrModel = v) } }
+                            )
+                        }
+                        if (chosen.needsKey) {
+                            TextRow(
+                                label = "API key",
+                                description = chosen.docsUrl.ifBlank { null },
+                                value = settings.asrApiKey,
+                                secret = true,
+                                onChange = { v -> SettingsStore.update { it.copy(asrApiKey = v) } }
+                            )
+                        }
+                        if (chosen.note.isNotBlank()) InfoRow(chosen.note)
+                    }
+                }
+            }
+
             if (settings.asrEngine == AsrEngines.REMOTE) {
                 TextRow(
                     label = "Transcription endpoint",

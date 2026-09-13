@@ -414,7 +414,18 @@ object SettingsSchema {
         "aiMaxTokens" to Meta(group = GROUP_AI, label = "Max tokens", min = 8f, max = 2048f),
         "aiCustomTasksJson" to Meta(kind = SettingKind.JSON, group = GROUP_AI, label = "Custom AI tasks", multiline = true),
 
-        "asrEngine" to Meta(kind = SettingKind.ENUM, group = GROUP_VOICE, label = "Engine", options = AsrEngines.ALL),
+        "asrEngine" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_VOICE, label = "Where dictation goes",
+            help = "This phone needs nothing and works offline. A provider from the " +
+                "catalogue is usually more accurate and handles more languages. An " +
+                "endpoint is a URL you type yourself, including your own Whisper server.",
+            options = AsrEngines.ALL
+        ),
+        "asrProvider" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_VOICE, label = "Dictation provider",
+            help = "Everything in the catalogue that can take dictation, including " +
+                "this phone's own recogniser."
+        ),
         "asrRemoteUrl" to Meta(group = GROUP_VOICE, label = "Endpoint"),
         "asrApiKey" to Meta(group = GROUP_VOICE, label = "API key", secret = true),
         "asrModel" to Meta(group = GROUP_VOICE, label = "Model"),

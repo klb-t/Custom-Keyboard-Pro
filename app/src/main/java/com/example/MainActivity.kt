@@ -31,6 +31,7 @@ import com.example.core.config.SettingsStore
 import com.example.core.layout.LayoutRepository
 import com.example.core.config.SettingsSchema
 import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.AiCapability
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.panels.PanelGenerator
 import com.example.ui.settings.AboutScreen
@@ -216,6 +217,12 @@ class MainActivity : ComponentActivity() {
             ModelDiscovery.cachedModels(SettingsStore.current)
         }
         SettingsSchema.dynamicOptions["aiProvider"] = { ProviderCatalog.allIds(SettingsStore.current) }
+        // Asked of the catalogue rather than listed here, so a provider added as data
+        // — by the user, or by a model writing one — appears in this dropdown without
+        // anything in the app knowing it exists.
+        SettingsSchema.dynamicOptions["asrProvider"] = {
+            ProviderCatalog.serving(AiCapability.TRANSCRIBE, SettingsStore.current).map { it.id }
+        }
     }
 
     private fun openImeSettings() {

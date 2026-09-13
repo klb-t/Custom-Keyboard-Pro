@@ -192,6 +192,12 @@ data class Settings(
 
     // --- speech -----------------------------------------------------------
     val asrEngine: String = AsrEngines.ANDROID,
+    /**
+     * Which catalogue provider takes dictation, when [asrEngine] is
+     * [AsrEngines.PROVIDER]. Empty falls back to the hand-typed URL, so settings
+     * written before the catalogue could take dictation keep working unchanged.
+     */
+    val asrProvider: String = "",
     val asrRemoteUrl: String = "",
     val asrApiKey: String = "",
     val asrModel: String = "whisper-1",
@@ -304,11 +310,15 @@ object AsrEngines {
     /** Any OpenAI-compatible `/audio/transcriptions` endpoint, including local Whisper. */
     const val REMOTE = "remote"
 
-    val ALL = listOf(ANDROID, REMOTE)
+    /** Whatever the provider catalogue says can take dictation. */
+    const val PROVIDER = "provider"
+
+    val ALL = listOf(ANDROID, PROVIDER, REMOTE)
 
     fun label(id: String): String = when (id) {
-        ANDROID -> "System recogniser (no key, usually offline)"
-        REMOTE -> "Whisper-compatible endpoint"
+        ANDROID -> "This phone (no key, usually offline)"
+        PROVIDER -> "A provider from the catalogue"
+        REMOTE -> "A URL I type myself"
         else -> id
     }
 }

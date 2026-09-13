@@ -7,37 +7,32 @@ import android.media.MediaRecorder
 import android.os.Build
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
-import org.json.JSONObject
+import com.example.core.discovery.AiCapability
+import com.example.core.discovery.ProviderSpec
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
- * Dictation through any OpenAI-compatible `/audio/transcriptions` endpoint.
+ * Dictation that records to a file and hands it to somebody else to read.
  *
- * That covers the hosted Whisper API, Groq, and a Whisper server running on the
- * user's own machine — so someone who wants better accuracy than the system
- * recogniser, or a language it does not support, can have it without the app picking a
- * vendor for them.
+ * The recording half is the same whoever transcribes it — open the microphone, write
+ * AAC into the cache, delete it the moment the answer comes back — so it lives here
+ * once and *what to do with the file* is a parameter. That is what lets the same
+ * class serve a hand-typed Whisper URL, a provider out of the catalogue, and a
+ * provider nobody has written code for, without the recording logic being copied
+ * three times and diverging on the fourth.
  *
- * Audio is captured to AAC in the app's cache and deleted as soon as the response
- * comes back. This endpoint returns a single transcript rather than an N-best list,
- * so alternatives come from [com.example.core.asr.VoiceController] asking the
- * configured model to propose other readings — only when the user has turned that on.
+ * These endpoints return a single transcript rather than an N-best list, so
+ * alternatives come from [VoiceController] asking the configured model to propose
+ * other readings — only when the user has turned that on.
  */
 class RemoteAsr(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val endpoint: () -> String,
-    private val apiKey: () -> String,
-    private val model: () -> String
+    /** Null when dictation can run; otherwise the reason it cannot, for the user. */
+    private val unavailable: () -> String?,
+    /** Given the recorded file and the requested language, produce a transcript. */
+    private val transcribe: suspend (file: File, language: String) -> Result<String>
 ) : AsrEngine {
 
     private var recorder: MediaRecorder? = null
@@ -45,19 +40,12 @@ class RemoteAsr(
     private var listener: ((AsrState) -> Unit)? = null
     private var language: String = ""
 
-    private val client by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .build()
-    }
 
     private fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
-    override fun isAvailable(): Boolean = hasPermission() && endpoint().isNotBlank()
+    override fun isAvailable(): Boolean = hasPermission() && unavailable() == null
 
     override fun start(language: String, maxAlternatives: Int, onState: (AsrState) -> Unit) {
         listener = onState
@@ -67,8 +55,8 @@ class RemoteAsr(
             onState(AsrState.Error("Microphone permission has not been granted.", needsPermission = true))
             return
         }
-        if (endpoint().isBlank()) {
-            onState(AsrState.Error("No transcription endpoint is configured."))
+        unavailable()?.let { reason ->
+            onState(AsrState.Error(reason))
             return
         }
 
@@ -122,7 +110,7 @@ class RemoteAsr(
 
         listener?.invoke(AsrState.Processing)
         scope.launch {
-            val result = transcribe(file)
+            val result = transcribe(file, language)
             file.delete()
             result.onSuccess { text ->
                 listener?.invoke(
@@ -153,29 +141,66 @@ class RemoteAsr(
         outputFile = null
     }
 
-    private suspend fun transcribe(file: File): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            val url = endpoint().trimEnd('/').let {
-                if (it.endsWith("/audio/transcriptions")) it else "$it/audio/transcriptions"
+    companion object {
+
+        /**
+         * The original behaviour: a URL the user typed, spoken to in the OpenAI
+         * multipart shape. Kept exactly as it was, because it is what anyone
+         * running their own Whisper server already has configured.
+         */
+        fun forEndpoint(
+            context: Context,
+            scope: CoroutineScope,
+            endpoint: () -> String,
+            apiKey: () -> String,
+            model: () -> String
+        ): RemoteAsr = RemoteAsr(
+            context = context,
+            scope = scope,
+            unavailable = {
+                if (endpoint().isBlank()) "No transcription endpoint is configured." else null
+            },
+            transcribe = { file, language ->
+                Transcription.openAiAudio(
+                    baseUrl = endpoint(),
+                    apiKey = apiKey(),
+                    model = model().ifBlank { "whisper-1" },
+                    file = file,
+                    language = language
+                )
             }
-            val bodyBuilder = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("file", file.name, file.asRequestBody("audio/m4a".toMediaType()))
-                .addFormDataPart("model", model().ifBlank { "whisper-1" })
-                .addFormDataPart("response_format", "json")
-            if (language.isNotBlank()) bodyBuilder.addFormDataPart("language", language.take(2))
+        )
 
-            val request = Request.Builder().url(url).post(bodyBuilder.build()).apply {
-                if (apiKey().isNotBlank()) addHeader("Authorization", "Bearer ${apiKey()}")
-            }.build()
-
-            client.newCall(request).execute().use { response ->
-                val raw = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw Exception("${response.code} ${response.message}: ${raw.take(300)}")
+        /**
+         * Anywhere in the catalogue that says it can take dictation.
+         *
+         * The provider decides how: a wire the app implements, or a call it merely
+         * describes. Neither is visible from here, which is the point — adding a
+         * transcription provider is a catalogue entry, not a branch in this file.
+         */
+        fun forProvider(
+            context: Context,
+            scope: CoroutineScope,
+            provider: () -> ProviderSpec?,
+            apiKey: () -> String,
+            model: () -> String
+        ): RemoteAsr = RemoteAsr(
+            context = context,
+            scope = scope,
+            unavailable = {
+                val p = provider()
+                when {
+                    p == null -> "That dictation provider is no longer in the catalogue."
+                    !p.can(AiCapability.TRANSCRIBE) -> "${p.label} does not take dictation."
+                    p.needsKey && apiKey().isBlank() -> "${p.label} needs an API key."
+                    else -> null
                 }
-                JSONObject(raw).optString("text").trim()
+            },
+            transcribe = { file, language ->
+                val p = provider()
+                if (p == null) Result.failure(IllegalStateException("No dictation provider."))
+                else Transcription.via(p, model(), apiKey(), file, language)
             }
-        }
+        )
     }
 }

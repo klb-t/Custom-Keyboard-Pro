@@ -64,6 +64,48 @@ class ProviderCatalogTest {
     }
 
     @Test
+    fun `every dictation provider is one the code can actually reach`() {
+        // Three ways dictation can be served, and no fourth: the phone's own
+        // recogniser, the multipart shape written out in Transcription, or a call the
+        // catalogue describes. A provider served by none of them is a dropdown entry
+        // that fails at the moment the user presses the microphone.
+        bundled.filter { it.can(AiCapability.TRANSCRIBE) }
+            .also { assertTrue("nothing takes dictation", it.isNotEmpty()) }
+            .forEach { provider ->
+                val spec = provider.capability(AiCapability.TRANSCRIBE)!!
+                val reachable = spec.wire == AiWire.OPENAI_AUDIO ||
+                    spec.wire == AiWire.ON_DEVICE ||
+                    spec.call != null
+                assertTrue(
+                    "'${provider.id}' offers dictation in a way nothing can carry out " +
+                        "(wire='${spec.wire}', call=${spec.call != null})",
+                    reachable
+                )
+                if (spec.wire == AiWire.OPENAI_AUDIO) {
+                    assertFalse(
+                        "'${provider.id}' speaks the audio shape but has no base URL",
+                        provider.baseUrl.isBlank()
+                    )
+                }
+            }
+    }
+
+    @Test
+    fun `the phone itself is offered as a dictation provider`() {
+        // "Where does my voice go" should be one question with one list of answers,
+        // rather than a checkbox meaning "not the cloud" beside a dropdown meaning
+        // "which cloud".
+        val phone = bundled.firstOrNull { it.can(AiCapability.TRANSCRIBE) && it.local }
+        assertNotNull("nothing on-device takes dictation", phone)
+        assertEquals(
+            AiWire.ON_DEVICE,
+            bundled.first { it.id == "android_speech" }
+                .capability(AiCapability.TRANSCRIBE)?.wire
+        )
+        assertFalse(bundled.first { it.id == "android_speech" }.needsKey)
+    }
+
+    @Test
     fun `ids are unique`() {
         val ids = bundled.map { it.id }
         val repeated = ids.groupingBy { it }.eachCount().filterValues { it > 1 }.keys

@@ -194,6 +194,7 @@ object SettingsStore {
         put("aiCustomTasksJson", s.aiCustomTasksJson)
 
         put("asrEngine", s.asrEngine)
+        put("asrProvider", s.asrProvider)
         put("asrRemoteUrl", s.asrRemoteUrl)
         put("asrApiKey", s.asrApiKey)
         put("asrModel", s.asrModel)
@@ -331,6 +332,7 @@ object SettingsStore {
             aiCustomTasksJson = o.optString("aiCustomTasksJson", d.aiCustomTasksJson),
 
             asrEngine = o.optString("asrEngine", d.asrEngine),
+            asrProvider = o.optString("asrProvider", d.asrProvider),
             asrRemoteUrl = o.optString("asrRemoteUrl", d.asrRemoteUrl),
             asrApiKey = o.optString("asrApiKey", d.asrApiKey),
             asrModel = o.optString("asrModel", d.asrModel),

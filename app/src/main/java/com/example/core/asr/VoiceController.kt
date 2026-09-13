@@ -4,6 +4,10 @@ import android.content.Context
 import com.example.core.ai.AiClient
 import com.example.core.ai.AiConfig
 import com.example.core.config.AsrEngines
+import com.example.core.discovery.AiCapability
+import com.example.core.discovery.AiWire
+import com.example.core.discovery.ProviderCatalog
+import com.example.util.AppLogger
 import com.example.core.config.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,16 +50,7 @@ class VoiceController(
     fun start() {
         val s = settings()
         release()
-        val created = when (s.asrEngine) {
-            AsrEngines.REMOTE -> RemoteAsr(
-                context = context,
-                scope = scope,
-                endpoint = { settings().asrRemoteUrl },
-                apiKey = { settings().asrApiKey },
-                model = { settings().asrModel }
-            )
-            else -> AndroidAsr(context)
-        }
+        val created = engineFor(s)
         engine = created
         _state.value = AsrState.Listening()
         created.start(s.asrLanguage, s.asrAlternativeCount) { state ->
@@ -64,6 +59,46 @@ class VoiceController(
                 else -> _state.value = state
             }
         }
+    }
+
+    /**
+     * Which engine takes this dictation.
+     *
+     * The catalogue answers first when it has been asked to, and one of its answers
+     * is "this phone" — a provider whose transcription wire is the on-device
+     * recogniser. That is deliberate: it keeps "where does my voice go" a single
+     * question with one list of answers, instead of a checkbox that means "not the
+     * cloud" sitting next to a dropdown that means "which cloud".
+     */
+    private fun engineFor(s: Settings): AsrEngine {
+        if (s.asrEngine == AsrEngines.PROVIDER && s.asrProvider.isNotBlank()) {
+            val spec = ProviderCatalog.byId(s.asrProvider, s)
+            val wire = spec?.capability(AiCapability.TRANSCRIBE)?.wire
+            if (wire == AiWire.ON_DEVICE) return AndroidAsr(context)
+            if (spec != null) {
+                return RemoteAsr.forProvider(
+                    context = context,
+                    scope = scope,
+                    provider = { ProviderCatalog.byId(settings().asrProvider, settings()) },
+                    apiKey = { settings().asrApiKey },
+                    model = { settings().asrModel }
+                )
+            }
+            AppLogger.e(
+                "Voice",
+                "dictation provider '${s.asrProvider}' is not in the catalogue; using the phone"
+            )
+        }
+        if (s.asrEngine == AsrEngines.REMOTE) {
+            return RemoteAsr.forEndpoint(
+                context = context,
+                scope = scope,
+                endpoint = { settings().asrRemoteUrl },
+                apiKey = { settings().asrApiKey },
+                model = { settings().asrModel }
+            )
+        }
+        return AndroidAsr(context)
     }
 
     fun stop() {
