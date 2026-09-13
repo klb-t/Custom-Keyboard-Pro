@@ -8,6 +8,7 @@ import com.example.core.discovery.AuthStyle
 import com.example.core.discovery.BodyKind
 import com.example.core.discovery.CallSpec
 import com.example.core.discovery.CapabilitySpec
+import com.example.core.discovery.Privacy
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.discovery.ProviderSpec
 import com.example.core.layout.LayoutJson
@@ -103,6 +104,45 @@ class ProviderCatalogTest {
                 .capability(AiCapability.TRANSCRIBE)?.wire
         )
         assertFalse(bundled.first { it.id == "android_speech" }.needsKey)
+    }
+
+    @Test
+    fun `anything that streams says where the token is`() {
+        // The streaming fields are the whole reason a completion is described rather
+        // than coded. A provider that declares stream and then does not say where the
+        // token sits produces an empty suggestion strip and no error.
+        bundled.forEach { provider ->
+            provider.capabilities.forEach { (id, spec) ->
+                val call = spec.call ?: return@forEach
+                if (!call.stream) return@forEach
+                assertFalse(
+                    "'${provider.id}' streams '$id' without saying where the token is",
+                    call.streamTextPath.isBlank()
+                )
+                assertFalse(
+                    "'${provider.id}' streams '$id' with no end marker",
+                    call.streamDone.isBlank()
+                )
+                assertTrue(
+                    "'${provider.id}' streams '$id' but its body never asks for a stream",
+                    call.bodyTemplate.contains("\"stream\"")
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `finishing a sentence is offered by something, and by something free`() {
+        val completing = bundled.filter { it.can(AiCapability.COMPLETE) }
+        assertTrue("nothing can finish a sentence", completing.isNotEmpty())
+        assertTrue(
+            "no way to finish a sentence without paying",
+            completing.any { it.freeTier }
+        )
+        assertTrue(
+            "no way to finish a sentence without sending it anywhere",
+            completing.any { it.privacy == Privacy.ON_DEVICE }
+        )
     }
 
     @Test
@@ -218,7 +258,9 @@ class ProviderCatalogTest {
     fun `a placeholder in a template is one the caller can actually supply`() {
         val known = setOf(
             "model", "prompt", "language", "imageBase64", "imageMime", "key", "size",
-            "audioMime", "voice", "quality", "seconds"
+            "audioMime", "voice", "quality", "seconds",
+            // Model parameters, supplied from CallInput.params.
+            "maxTokens", "temperature", "topP", "topK", "seed"
         )
         val placeholder = Regex("\\{\\{(\\w+)}}")
         bundled.forEach { provider ->

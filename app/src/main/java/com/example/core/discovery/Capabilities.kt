@@ -16,8 +16,19 @@ import org.json.JSONObject
  * entry with four endpoints, not four entries in four lists.
  */
 object AiCapability {
-    /** Text in, text out. */
+    /** Text in, text out, as a conversation — with tools, turns and a system prompt. */
     const val CHAT = "chat"
+
+    /**
+     * Text in, more of the same text out.
+     *
+     * Deliberately not [CHAT], though it usually reaches the same endpoint. Chat is a
+     * conversation and earns hand-written code for its turns and tool calls;
+     * continuing a sentence is one request with one answer, which is a description —
+     * and being a description is what lets it stream, because [CallSpec] is where the
+     * streaming fields live. The suggestion strip wants this one.
+     */
+    const val COMPLETE = "complete"
 
     /** Audio in, text out — dictation. */
     const val TRANSCRIBE = "transcribe"
@@ -37,10 +48,11 @@ object AiCapability {
     /** Text in, numbers out. Used for finding things, not for writing them. */
     const val EMBED = "embed"
 
-    val ALL = listOf(CHAT, TRANSCRIBE, OCR, IMAGE, VIDEO, SPEECH, EMBED)
+    val ALL = listOf(CHAT, COMPLETE, TRANSCRIBE, OCR, IMAGE, VIDEO, SPEECH, EMBED)
 
     fun label(id: String): String = when (id) {
         CHAT -> "Writing and rewriting"
+        COMPLETE -> "Finishing what you are typing"
         TRANSCRIBE -> "Dictation"
         OCR -> "Text from a picture"
         IMAGE -> "Making pictures"
@@ -137,7 +149,26 @@ data class CallSpec(
     val pollDoneValues: List<String> = emptyList(),
     val pollFailedValues: List<String> = emptyList(),
     val pollIntervalMs: Long = 2000L,
-    val pollTimeoutMs: Long = 300_000L
+    val pollTimeoutMs: Long = 300_000L,
+
+    // --- streaming ---------------------------------------------------------
+    //
+    // Asking for a stream is already expressible: the body template carries
+    // "stream": true like any other field. What is not expressible is how to *read*
+    // one back, because the providers put the token in different places and always
+    // will. So the paths are data, and a provider that arrives next year with its own
+    // arrangement is an edited entry rather than a release.
+
+    /** Read the reply as server-sent events rather than waiting for all of it. */
+    val stream: Boolean = false,
+    /** Where one token sits in a streamed event. */
+    val streamTextPath: String = "choices[0].delta.content",
+    /** Where its log-probability sits, when the provider reports one. */
+    val streamLogProbPath: String = "",
+    /** The literal payload that ends the stream. */
+    val streamDone: String = "[DONE]",
+    /** Where a mid-stream failure explains itself. */
+    val streamErrorPath: String = "error.message"
 ) {
 
     val isAsync: Boolean get() = pollUrlPath.isNotBlank() || pollStatusPath.isNotBlank()
@@ -162,6 +193,13 @@ data class CallSpec(
         if (pollFailedValues.isNotEmpty()) put("pollFailedValues", JSONArray(pollFailedValues))
         if (pollIntervalMs != 2000L) put("pollIntervalMs", pollIntervalMs)
         if (pollTimeoutMs != 300_000L) put("pollTimeoutMs", pollTimeoutMs)
+        if (stream) {
+            put("stream", true)
+            put("streamTextPath", streamTextPath)
+            if (streamLogProbPath.isNotBlank()) put("streamLogProbPath", streamLogProbPath)
+            if (streamDone != "[DONE]") put("streamDone", streamDone)
+            if (streamErrorPath != "error.message") put("streamErrorPath", streamErrorPath)
+        }
     }
 
     companion object {
@@ -184,7 +222,13 @@ data class CallSpec(
             pollDoneValues = o.optJSONArray("pollDoneValues").toStringList(),
             pollFailedValues = o.optJSONArray("pollFailedValues").toStringList(),
             pollIntervalMs = o.optLong("pollIntervalMs", 2000L),
-            pollTimeoutMs = o.optLong("pollTimeoutMs", 300_000L)
+            pollTimeoutMs = o.optLong("pollTimeoutMs", 300_000L),
+            stream = o.optBoolean("stream", false),
+            streamTextPath = o.optString("streamTextPath")
+                .ifBlank { "choices[0].delta.content" },
+            streamLogProbPath = o.optString("streamLogProbPath"),
+            streamDone = o.optString("streamDone").ifBlank { "[DONE]" },
+            streamErrorPath = o.optString("streamErrorPath").ifBlank { "error.message" }
         )
     }
 }

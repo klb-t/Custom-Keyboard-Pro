@@ -64,6 +64,32 @@
           "resultPath": "data[0].embedding"
         },
         "defaultModel": "text-embedding-3-small"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "gpt-4o-mini",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
     },
     "needsCard": true,
@@ -204,6 +230,29 @@
           "resultPath": "data[0].embedding"
         },
         "defaultModel": "mistral-embed"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "mistral-small-latest",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
     },
     "freeTier": true,
@@ -232,6 +281,32 @@
           "whisper-large-v3-turbo",
           "whisper-large-v3"
         ]
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "llama-3.3-70b-versatile",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
     },
     "freeTier": true,
@@ -256,7 +331,32 @@
       "cheap",
       "reasoning",
       "code"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "deepseek-chat",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "xai",
@@ -351,6 +451,32 @@
           "resultPath": "data[0].embedding"
         },
         "defaultModel": "BAAI/bge-base-en-v1.5"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
     },
     "needsCard": true,
@@ -394,7 +520,35 @@
     "strengths": [
       "fast",
       "free-tier"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "llama3.3-70b",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "perplexity",
@@ -514,7 +668,35 @@
       "one-key-many-models",
       "free-models",
       "choice"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "openai/gpt-4o-mini",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "requesty",
@@ -957,7 +1139,32 @@
       "private",
       "offline",
       "free"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "llama3.2",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "lmstudio",
@@ -973,6 +1180,29 @@
       "transcribe": {
         "wire": "openai_audio",
         "defaultModel": "whisper-1"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
     },
     "freeTier": true,
@@ -999,7 +1229,35 @@
       "private",
       "offline",
       "free"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "vllm",
@@ -1017,7 +1275,35 @@
       "private",
       "offline",
       "free"
-    ]
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
   },
   {
     "id": "jan",

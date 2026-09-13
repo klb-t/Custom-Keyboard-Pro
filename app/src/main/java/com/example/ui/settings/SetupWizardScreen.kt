@@ -174,6 +174,7 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
         ) {
             listOf(
                 AiCapability.CHAT to "Writing and rewriting",
+                AiCapability.COMPLETE to "Finishing sentences as you type",
                 AiCapability.TRANSCRIBE to "Dictation",
                 AiCapability.OCR to "Text out of a picture",
                 AiCapability.IMAGE to "Making pictures"

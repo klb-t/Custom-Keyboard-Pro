@@ -1,9 +1,12 @@
 package com.example.core.discovery
 
 import android.util.Base64
+import com.example.core.predict.GenerationCut
+import com.example.core.predict.StopCondition
 import com.example.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -45,6 +48,9 @@ data class CallInput(
         put("key", apiKey)
     }
 }
+
+/** What a stream produced, and why it ended. */
+data class StreamOutcome(val text: String, val stoppedBecause: String?)
 
 /** What came back. Text, bytes, or both, plus the raw reply for when it went wrong. */
 class CallResult(
@@ -127,6 +133,91 @@ object CallEngine {
 
         val polled = poll(provider, call, root, apiKey, values)
         return extract(polled, call, first)
+    }
+
+    // -----------------------------------------------------------------------
+    // Streaming
+    // -----------------------------------------------------------------------
+
+    /**
+     * Runs a described call and hands back tokens as they arrive.
+     *
+     * Everything above this waits for a whole reply, which is right for a
+     * transcription and wrong for a suggestion. Cutting on a log-probability needs
+     * the probabilities while they are still coming, a time budget only means
+     * something if there is something to show when it expires, and a continuation
+     * that appears all at once four seconds late is one nobody waits for.
+     *
+     * The parsing is in [SseReader] and the stopping is in [GenerationCut], both of
+     * which are testable without a network. This function is the wire between them
+     * and deliberately holds no judgement of its own.
+     */
+    suspend fun stream(
+        provider: ProviderSpec,
+        capability: String,
+        input: CallInput,
+        apiKey: String,
+        condition: StopCondition,
+        onToken: (String) -> Unit
+    ): Result<StreamOutcome> = withContext(Dispatchers.IO) {
+        runCatching {
+            val spec = provider.capability(capability)
+                ?: error("${provider.label} cannot ${AiCapability.label(capability).lowercase()}.")
+            val call = spec.call ?: error("${provider.label} has no described call to stream.")
+            if (!call.stream) error("${provider.label} is not set up to stream this.")
+
+            val resolved = input.copy(model = input.model.ifBlank { spec.defaultModel })
+            val values = resolved.values(apiKey)
+            val url = resolveUrl(provider.baseUrl, Templates.fill(call.path, values), call, values)
+
+            val request = Request.Builder().url(url)
+            applyAuth(request, call, apiKey)
+            request.addHeader("Accept", "text/event-stream")
+            call.headers.forEach { (name, value) -> request.addHeader(name, Templates.fill(value, values)) }
+            request.post(buildBody(call, resolved, values) ?: emptyBody())
+
+            AppLogger.d("CallEngine", "streaming from ${provider.id}")
+            val reader = SseReader(call)
+            val cut = GenerationCut(condition)
+            var failure: String? = null
+
+            client.newCall(request.build()).execute().use { response ->
+                val body = response.body ?: error("The provider opened a stream with nothing in it.")
+                if (!response.isSuccessful) {
+                    error("${response.code} ${response.message}: ${body.string().take(300)}")
+                }
+                val source = body.source()
+                while (true) {
+                    // A blocking read that the coroutine's cancellation cannot
+                    // interrupt is how a cancelled suggestion keeps costing money, so
+                    // the loop checks between lines.
+                    if (!isActive) break
+                    val line = source.readUtf8Line() ?: break
+                    when (val chunk = reader.feed(line)) {
+                        null -> Unit
+                        is Chunk.Done -> break
+                        is Chunk.Failed -> {
+                            failure = chunk.message
+                            break
+                        }
+                        is Chunk.Token -> {
+                            val before = cut.text.length
+                            val keepGoing = cut.accept(chunk.text, chunk.logP)
+                            // Report only what was kept: the last token is often
+                            // trimmed by a stop string or the hard cap, and echoing
+                            // the raw token would show text that is not in the result.
+                            cut.text.drop(before).takeIf { it.isNotEmpty() }?.let(onToken)
+                            if (!keepGoing) break
+                        }
+                    }
+                }
+            }
+
+            failure?.let { error("The provider stopped: $it") }
+            StreamOutcome(cut.text, cut.stoppedBecause)
+        }.onFailure {
+            AppLogger.d("CallEngine", "stream from ${provider.id} ended: ${it.message}")
+        }
     }
 
     // -----------------------------------------------------------------------
