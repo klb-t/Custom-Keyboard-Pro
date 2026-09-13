@@ -155,14 +155,14 @@ object FactsFetcher {
         val map = source.fields
         return (0 until items.length()).mapNotNull { index ->
             val item = items.optJSONObject(index) ?: return@mapNotNull null
-            val id = JsonPath.string(item, map["id"] ?: "id")?.takeIf { it.isNotBlank() }
+            val id = text(item, map["id"], "id")?.takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
             ModelFact(
                 id = id,
-                label = JsonPath.string(item, map["label"] ?: "name")?.ifBlank { null } ?: id,
+                label = text(item, map["label"], "name")?.ifBlank { null } ?: id,
                 // "anthropic/claude-x" carries its provider in front of the slash,
                 // which is worth reading rather than leaving the field empty.
-                provider = JsonPath.string(item, map["provider"] ?: "")?.ifBlank { null }
+                provider = text(item, map["provider"], null)?.ifBlank { null }
                     ?: id.substringBefore('/', ""),
                 contextTokens = number(item, map["contextTokens"])?.toLong(),
                 promptPrice = perMillion(number(item, map["promptPrice"])),
@@ -171,6 +171,20 @@ object FactsFetcher {
                 source = source.id
             )
         }
+    }
+
+    /**
+     * One field of one row, or null when the source does not publish it.
+     *
+     * The guard is the whole point. An empty path means "the whole document" to
+     * [JsonPath] — correctly, and deliberately — so passing one through for a field
+     * the source never mapped does not read nothing, it reads *everything*, and the
+     * field comes back holding the entire JSON row. That is how "provider" ended up
+     * containing a model's complete description.
+     */
+    private fun text(item: JSONObject, path: String?, fallback: String?): String? {
+        val effective = path?.takeIf { it.isNotBlank() } ?: fallback ?: return null
+        return JsonPath.string(item, effective)
     }
 
     private fun number(item: JSONObject, path: String?): Double? {

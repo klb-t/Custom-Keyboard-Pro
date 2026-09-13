@@ -93,6 +93,20 @@ class ModelFactsTest {
     }
 
     @Test
+    fun `a field the source does not publish reads as absent, not as everything`() {
+        // An empty path means "the whole document" to JsonPath, correctly and on
+        // purpose. Passing one through for a field a source never mapped therefore
+        // does not read nothing — it reads the entire row, and the field comes back
+        // holding a model's complete JSON description.
+        val source = bundled.first { it.id == "openrouter_models" }
+        assertFalse("'provider' is not mapped by this source", source.fields.containsKey("provider"))
+
+        val fact = FactsFetcher.parse(openRouterShaped, source).first()
+        assertEquals("anthropic", fact.provider)
+        assertFalse("the whole row leaked into a field", fact.provider.contains("{"))
+    }
+
+    @Test
     fun `a source that changed shape reads as nothing, not as nonsense`() {
         val source = bundled.first { it.id == "openrouter_models" }
         assertTrue(FactsFetcher.parse("""{"models":[{"id":"x"}]}""", source).isEmpty())
