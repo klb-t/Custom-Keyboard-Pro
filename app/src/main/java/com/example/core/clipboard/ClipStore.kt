@@ -177,16 +177,26 @@ object ClipStore {
     /**
      * One entry as a clip. The single-item case, kept separate because it is the common one.
      *
-     * The resolver is not optional, however tempting it looks: [ClipData.newUri] asks
-     * it for the URI's type in order to fill in the clip's description, so a null one
-     * throws and the whole thing silently becomes "tapping a picture does nothing".
+     * Built by hand rather than with [ClipData.newUri], which looks like the obvious
+     * call and is the wrong one twice over. It asks the ContentResolver for the URI's
+     * type — so it throws outright on a null resolver, and even with a real one it
+     * depends on the provider answering a question we already know the answer to. The
+     * type was recorded when the bytes were captured; asking again can only agree or
+     * be wrong.
+     *
+     * This is also what [compose] does, so the one-item and several-item paths now
+     * build a clip the same way instead of disagreeing about whether files work.
      */
     fun single(context: Context, entry: ClipboardEntity): ClipData? {
         if (entry.isText) return ClipData.newPlainText(entry.label ?: "Text", entry.content)
         val file = fileFor(entry) ?: return null
         return runCatching {
             val uri = shareUri(context, file)
-            ClipData.newUri(context.contentResolver, entry.label ?: "File", uri)
+            val description = ClipDescription(
+                entry.label ?: "File",
+                arrayOf(entry.mime.ifBlank { "application/octet-stream" })
+            )
+            ClipData(description, ClipData.Item(uri))
         }.getOrNull()
     }
 

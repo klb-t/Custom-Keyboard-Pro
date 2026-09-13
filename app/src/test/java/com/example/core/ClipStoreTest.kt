@@ -90,7 +90,19 @@ class ClipStoreTest {
         val file = File(ClipStore.dir(context), "kept.png").apply { writeBytes(ByteArray(16)) }
         val entry = fileEntry(file.absolutePath)
         assertNotNull(ClipStore.fileFor(entry))
-        assertNotNull(ClipStore.single(context, entry))
+
+        // Step by step, so a failure names which step failed rather than just
+        // reporting that a nullable came back null.
+        val uri = ClipStore.shareUri(context, file)
+        assertEquals("content", uri.scheme)
+
+        val clip = ClipStore.single(context, entry)
+        assertNotNull("single() could not build a clip for a file that exists", clip)
+        assertEquals(1, clip!!.itemCount)
+        assertEquals(uri, clip.getItemAt(0).uri)
+        // The type comes from what was recorded at capture, not from asking the
+        // provider again — so it is right even where the provider will not answer.
+        assertTrue(clip.description.hasMimeType("image/png"))
         file.delete()
     }
 
