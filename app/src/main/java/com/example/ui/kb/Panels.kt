@@ -336,6 +336,7 @@ object EmojiRecents {
 // Clipboard
 // ---------------------------------------------------------------------------
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
     val host = LocalKeyboardHost.current
