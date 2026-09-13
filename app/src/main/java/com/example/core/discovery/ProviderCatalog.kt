@@ -79,7 +79,13 @@ object Privacy {
 data class ProviderSpec(
     override val id: String,
     val label: String,
-    val wire: String,
+    /**
+     * Which request shape this speaks. Defaults to the OpenAI one because the
+     * overwhelming majority do, and because [fromJson] already defaults a blank
+     * wire to exactly that — the two ways of building a spec disagreeing about it
+     * was a real inconsistency, and the compiler found it.
+     */
+    val wire: String = AiWire.OPENAI,
     val baseUrl: String,
     /** Path appended to [baseUrl] to list models. Empty means the provider has none. */
     val modelsPath: String = "/models",
