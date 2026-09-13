@@ -39,6 +39,36 @@ object AiWire {
 }
 
 /**
+ * What happens to text sent to a provider.
+ *
+ * A fact about the provider, not an opinion about it, which is why it is a field and
+ * not a sentence in the note: the advisor has to be able to rank on it, and a user who
+ * says "nothing leaves my phone" has to be able to filter on it.
+ */
+object Privacy {
+    /** Runs on hardware the user controls. Nothing is sent anywhere. */
+    const val ON_DEVICE = "on_device"
+
+    /** Sent, but the provider states it does not train on it. */
+    const val NO_TRAINING = "no_training"
+
+    /** Sent, and used for training unless the user opts out. */
+    const val TRAINS_BY_DEFAULT = "trains_by_default"
+
+    /** Not established. Shown as such rather than guessed at. */
+    const val UNKNOWN = "unknown"
+
+    val ALL = listOf(ON_DEVICE, NO_TRAINING, TRAINS_BY_DEFAULT, UNKNOWN)
+
+    fun label(id: String): String = when (id) {
+        ON_DEVICE -> "Nothing leaves the device"
+        NO_TRAINING -> "Sent, not trained on"
+        TRAINS_BY_DEFAULT -> "Sent, and trained on unless you opt out"
+        else -> "Not established"
+    }
+}
+
+/**
  * One model provider, described rather than coded.
  *
  * Adding a provider used to mean editing a `when` branch. It now means adding an
@@ -71,7 +101,26 @@ data class ProviderSpec(
     /** A gateway in front of other providers rather than a provider of its own. */
     val router: Boolean = false,
     /** Shown when choosing: why someone would pick this one. */
-    val note: String = ""
+    val note: String = "",
+
+    // --- what the setup advisor needs in order to weigh one against another ---
+    //
+    // These are facts about the world, so they live in the catalogue rather than in
+    // the advisor. The advisor cannot ask a model which provider to recommend: it is
+    // advising someone who has no account yet, which is the whole reason it exists.
+    // So it reasons over these, and adding a provider teaches it something new
+    // without anyone touching the ranking code.
+
+    /** Usable without paying anything, for at least light use. */
+    val freeTier: Boolean = false,
+    /** Wants payment details before it will answer at all. */
+    val needsCard: Boolean = false,
+    /** Where to get a key, when that is a different page from [docsUrl]. */
+    val signupUrl: String = "",
+    /** What becomes of the text sent here. See [Privacy]. */
+    val privacy: String = Privacy.UNKNOWN,
+    /** Short tags the advisor matches against what the user says they want. */
+    val strengths: List<String> = emptyList()
 ) : Discoverable {
 
     /**
@@ -105,6 +154,11 @@ data class ProviderSpec(
         put("docsUrl", docsUrl)
         if (router) put("router", true)
         if (note.isNotBlank()) put("note", note)
+        if (freeTier) put("freeTier", true)
+        if (needsCard) put("needsCard", true)
+        if (signupUrl.isNotBlank()) put("signupUrl", signupUrl)
+        if (privacy != Privacy.UNKNOWN) put("privacy", privacy)
+        if (strengths.isNotEmpty()) put("strengths", JSONArray(strengths))
         if (capabilities.isNotEmpty()) {
             put("capabilities", JSONObject().apply {
                 capabilities.forEach { (id, spec) -> put(id, spec.toJson()) }
@@ -133,7 +187,12 @@ data class ProviderSpec(
                     }
                 } ?: emptyMap(),
                 router = o.optBoolean("router", false),
-                note = o.optString("note")
+                note = o.optString("note"),
+                freeTier = o.optBoolean("freeTier", false),
+                needsCard = o.optBoolean("needsCard", false),
+                signupUrl = o.optString("signupUrl"),
+                privacy = o.optString("privacy").ifBlank { Privacy.UNKNOWN }.lowercase(),
+                strengths = o.optJSONArray("strengths").toStringList()
             )
         }
     }
@@ -176,10 +235,22 @@ object ProviderCatalog {
     fun custom(settings: Settings = SettingsStore.current): List<ProviderSpec> =
         parseList(settings.customProvidersJson)
 
-    /** User entries first, so a user's own base URL for "openai" overrides the bundled one. */
+    /** Downloaded from the catalogue address, if one is set. */
+    fun fetched(settings: Settings = SettingsStore.current): List<ProviderSpec> =
+        parseList(settings.fetchedProvidersJson)
+
+    /**
+     * Everything the app knows about, in order of how much it should be trusted.
+     *
+     * The user's own entries first, so a base URL somebody typed on purpose always
+     * wins. Then anything downloaded, which is how a provider that appeared after
+     * this build shipped becomes usable without one. Then the bundled file, then the
+     * three ids the app shipped with before any of this existed.
+     */
     fun all(settings: Settings = SettingsStore.current): List<ProviderSpec> {
         val merged = LinkedHashMap<String, ProviderSpec>()
-        (custom(settings) + bundled + LEGACY).forEach { merged.putIfAbsent(it.id, it) }
+        (custom(settings) + fetched(settings) + bundled + LEGACY)
+            .forEach { merged.putIfAbsent(it.id, it) }
         return merged.values.toList()
     }
 

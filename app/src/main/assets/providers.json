@@ -65,7 +65,16 @@
         },
         "defaultModel": "text-embedding-3-small"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "general",
+      "dictation",
+      "images",
+      "speech",
+      "well-known"
+    ]
   },
   {
     "id": "anthropic",
@@ -82,7 +91,15 @@
         "defaultModel": "claude-haiku-4-5-20251001",
         "notes": "Reads the picture with the same model that writes."
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "writing",
+      "rewriting",
+      "long-context",
+      "handwriting"
+    ]
   },
   {
     "id": "gemini",
@@ -136,7 +153,16 @@
         },
         "defaultModel": "text-embedding-004"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "trains_by_default",
+    "strengths": [
+      "free-tier",
+      "multimodal",
+      "long-context",
+      "video"
+    ],
+    "signupUrl": "https://aistudio.google.com/app/apikey"
   },
   {
     "id": "mistral",
@@ -179,7 +205,15 @@
         },
         "defaultModel": "mistral-embed"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "european",
+      "ocr",
+      "dictation",
+      "cheap"
+    ]
   },
   {
     "id": "groq",
@@ -199,7 +233,14 @@
           "whisper-large-v3"
         ]
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "fast",
+      "cheap",
+      "dictation"
+    ]
   },
   {
     "id": "deepseek",
@@ -208,7 +249,14 @@
     "baseUrl": "https://api.deepseek.com/v1",
     "modelsPath": "/models",
     "defaultModel": "deepseek-chat",
-    "docsUrl": "https://platform.deepseek.com/api_keys"
+    "docsUrl": "https://platform.deepseek.com/api_keys",
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "cheap",
+      "reasoning",
+      "code"
+    ]
   },
   {
     "id": "xai",
@@ -232,7 +280,13 @@
         },
         "defaultModel": "grok-2-image"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "general",
+      "images"
+    ]
   },
   {
     "id": "cohere",
@@ -255,7 +309,13 @@
         },
         "defaultModel": "embed-multilingual-v3.0"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "embeddings",
+      "multilingual"
+    ]
   },
   {
     "id": "together",
@@ -292,7 +352,13 @@
         },
         "defaultModel": "BAAI/bge-base-en-v1.5"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "open-weights",
+      "images"
+    ]
   },
   {
     "id": "fireworks",
@@ -307,7 +373,13 @@
         "wire": "openai_audio",
         "defaultModel": "whisper-v3-turbo"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "open-weights",
+      "dictation"
+    ]
   },
   {
     "id": "cerebras",
@@ -316,7 +388,13 @@
     "baseUrl": "https://api.cerebras.ai/v1",
     "modelsPath": "/models",
     "defaultModel": "llama3.3-70b",
-    "docsUrl": "https://cloud.cerebras.ai"
+    "docsUrl": "https://cloud.cerebras.ai",
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "fast",
+      "free-tier"
+    ]
   },
   {
     "id": "perplexity",
@@ -326,7 +404,13 @@
     "modelsPath": "",
     "defaultModel": "sonar",
     "docsUrl": "https://www.perplexity.ai/settings/api",
-    "note": "Answers with sources, because it searches before it writes."
+    "note": "Answers with sources, because it searches before it writes.",
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "search",
+      "sources"
+    ]
   },
   {
     "id": "moonshot",
@@ -423,7 +507,14 @@
     "defaultModel": "openai/gpt-4o-mini",
     "router": true,
     "docsUrl": "https://openrouter.ai/keys",
-    "note": "Nearly every model that exists, behind one key. Start here if you want one account rather than twenty."
+    "note": "Nearly every model that exists, behind one key. Start here if you want one account rather than twenty.",
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "one-key-many-models",
+      "free-models",
+      "choice"
+    ]
   },
   {
     "id": "requesty",
@@ -484,7 +575,14 @@
     "local": true,
     "router": true,
     "docsUrl": "https://docs.litellm.ai/docs/simple_proxy",
-    "note": "A router you run yourself, so keys never leave your machine. Point the base URL at wherever it runs."
+    "note": "A router you run yourself, so keys never leave your machine. Point the base URL at wherever it runs.",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "cloudflare_gateway",
@@ -511,7 +609,16 @@
       "transcribe": {
         "wire": "on_device"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free",
+      "dictation",
+      "no-account-needed"
+    ]
   },
   {
     "id": "deepgram",
@@ -538,7 +645,13 @@
           "nova-2"
         ]
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "dictation",
+      "fast"
+    ]
   },
   {
     "id": "elevenlabs",
@@ -577,7 +690,13 @@
         },
         "defaultModel": "eleven_multilingual_v2"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "unknown",
+    "strengths": [
+      "dictation",
+      "speech"
+    ]
   },
   {
     "id": "ocrspace",
@@ -605,7 +724,13 @@
           "resultPath": "ParsedResults[0].ParsedText"
         }
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "unknown",
+    "strengths": [
+      "ocr",
+      "no-account-needed"
+    ]
   },
   {
     "id": "bfl",
@@ -645,7 +770,12 @@
           "flux-kontext-pro"
         ]
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images"
+    ]
   },
   {
     "id": "fal",
@@ -695,7 +825,14 @@
           "fal-ai/kling-video/v1/standard/text-to-video"
         ]
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images",
+      "video",
+      "fast"
+    ]
   },
   {
     "id": "replicate",
@@ -754,7 +891,14 @@
         },
         "defaultModel": "wan-video/wan-2.5-t2v-fast"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images",
+      "video",
+      "anything"
+    ]
   },
   {
     "id": "luma",
@@ -789,7 +933,12 @@
         },
         "defaultModel": "ray-flash-2"
       }
-    }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "video"
+    ]
   },
   {
     "id": "ollama",
@@ -801,7 +950,14 @@
     "needsKey": false,
     "local": true,
     "docsUrl": "https://ollama.com",
-    "note": "Nothing leaves the machine it runs on."
+    "note": "Nothing leaves the machine it runs on.",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "lmstudio",
@@ -818,7 +974,14 @@
         "wire": "openai_audio",
         "defaultModel": "whisper-1"
       }
-    }
+    },
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "llamacpp",
@@ -829,7 +992,14 @@
     "defaultModel": "",
     "needsKey": false,
     "local": true,
-    "docsUrl": "https://github.com/ggml-org/llama.cpp"
+    "docsUrl": "https://github.com/ggml-org/llama.cpp",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "vllm",
@@ -840,7 +1010,14 @@
     "defaultModel": "",
     "needsKey": false,
     "local": true,
-    "docsUrl": "https://docs.vllm.ai"
+    "docsUrl": "https://docs.vllm.ai",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "jan",
@@ -851,7 +1028,14 @@
     "defaultModel": "",
     "needsKey": false,
     "local": true,
-    "docsUrl": "https://jan.ai"
+    "docsUrl": "https://jan.ai",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "koboldcpp",
@@ -862,7 +1046,14 @@
     "defaultModel": "",
     "needsKey": false,
     "local": true,
-    "docsUrl": "https://github.com/LostRuins/koboldcpp"
+    "docsUrl": "https://github.com/LostRuins/koboldcpp",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
   },
   {
     "id": "openai_compatible",

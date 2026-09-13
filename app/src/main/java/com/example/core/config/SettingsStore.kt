@@ -192,6 +192,10 @@ object SettingsStore {
         put("aiTemperature", s.aiTemperature.toDouble())
         put("aiMaxTokens", s.aiMaxTokens)
         put("aiCustomTasksJson", s.aiCustomTasksJson)
+        put("catalogUrl", s.catalogUrl)
+        put("fetchedProvidersJson", s.fetchedProvidersJson)
+        put("catalogFetchedAt", s.catalogFetchedAt)
+        put("setupDone", s.setupDone)
 
         put("asrEngine", s.asrEngine)
         put("asrProvider", s.asrProvider)
@@ -332,6 +336,10 @@ object SettingsStore {
             aiTemperature = o.optDouble("aiTemperature", d.aiTemperature.toDouble()).toFloat(),
             aiMaxTokens = o.optInt("aiMaxTokens", d.aiMaxTokens),
             aiCustomTasksJson = o.optString("aiCustomTasksJson", d.aiCustomTasksJson),
+            catalogUrl = o.optString("catalogUrl", d.catalogUrl),
+            fetchedProvidersJson = o.optString("fetchedProvidersJson", d.fetchedProvidersJson),
+            catalogFetchedAt = o.optLong("catalogFetchedAt", d.catalogFetchedAt),
+            setupDone = o.optBoolean("setupDone", d.setupDone),
 
             asrEngine = o.optString("asrEngine", d.asrEngine),
             asrProvider = o.optString("asrProvider", d.asrProvider),

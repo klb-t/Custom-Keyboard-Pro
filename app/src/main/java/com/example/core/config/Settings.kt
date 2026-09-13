@@ -189,6 +189,17 @@ data class Settings(
     val aiTemperature: Float = 0.3f,
     val aiMaxTokens: Int = 64,
     val aiCustomTasksJson: String = "",
+    /**
+     * Where to fetch an updated provider catalogue from. Empty by default, and
+     * deliberately so: a default would point every install at an address of the
+     * author's choosing and make a keyboard that works offline quietly phone home.
+     */
+    val catalogUrl: String = "",
+    /** Providers fetched from [catalogUrl]. Kept apart from the user's own. */
+    val fetchedProvidersJson: String = "",
+    val catalogFetchedAt: Long = 0L,
+    /** False until the setup wizard has been through once. */
+    val setupDone: Boolean = false,
 
     // --- speech -----------------------------------------------------------
     val asrEngine: String = AsrEngines.ANDROID,
