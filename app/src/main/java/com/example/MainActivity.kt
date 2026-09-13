@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_ALL_SETTINGS = "all"
         const val ROUTE_REQUEST_PANEL = "request"
         const val ROUTE_THEME_EDITOR = "theme"
+        const val ROUTE_SETUP = "setup"
         /** A panel the user asked for: "panel:<id>". */
         const val ROUTE_PANEL_PREFIX = "panel:"
     }
@@ -107,7 +108,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by SettingsStore.state.collectAsState()
-            var route by remember { mutableStateOf(intent?.getStringExtra(EXTRA_ROUTE) ?: ROUTE_HOME) }
+            // A first launch opens the wizard; every later one opens the home
+            // screen. The wizard marks itself done even when skipped, so it never
+            // greets the same person twice.
+            var route by remember {
+                mutableStateOf(
+                    intent?.getStringExtra(EXTRA_ROUTE)
+                        ?: if (SettingsStore.current.setupDone) ROUTE_HOME else ROUTE_SETUP
+                )
+            }
 
             MyApplicationTheme {
                 Scaffold(
@@ -151,6 +160,11 @@ class MainActivity : ComponentActivity() {
                             ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings)
                             ROUTE_REQUEST_PANEL -> RequestPanelScreen(settings)
                             ROUTE_THEME_EDITOR -> ThemeEditorScreen(settings)
+                            ROUTE_SETUP -> SetupWizardScreen(
+                                settings = settings,
+                                onDone = { route = ROUTE_HOME },
+                                onNavigate = { route = it }
+                            )
                             else -> {
                                 // A generated panel's route carries its id, so routes do
                                 // not have to be known at compile time — which is the
@@ -255,5 +269,6 @@ private fun titleFor(route: String): String = when (route) {
     MainActivity.ROUTE_ALL_SETTINGS -> "Every setting"
     MainActivity.ROUTE_REQUEST_PANEL -> "Ask for a panel"
     MainActivity.ROUTE_THEME_EDITOR -> "Theme editor"
+    MainActivity.ROUTE_SETUP -> "Setting up"
     else -> if (route.startsWith(MainActivity.ROUTE_PANEL_PREFIX)) "Your panel" else "Custom Keyboard Pro"
 }

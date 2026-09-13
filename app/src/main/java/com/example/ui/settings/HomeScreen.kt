@@ -152,6 +152,13 @@ fun HomeScreen(
             )
             Divider()
             ActionRow(
+                "Set up AI, dictation and the rest",
+                "The guide that runs on a fresh install. Safe to run again — it changes " +
+                    "nothing until you pick something.",
+                onClick = { onNavigate(MainActivity.ROUTE_SETUP) }
+            )
+            Divider()
+            ActionRow(
                 "About & help",
                 "Compose sequences, key reference, import and export",
                 onClick = { onNavigate(MainActivity.ROUTE_ABOUT) }
