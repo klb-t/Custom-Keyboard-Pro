@@ -45,7 +45,10 @@ data class StopCondition(
             surpriseBudget = o.optDouble("surpriseBudget", 0.0),
             stopStrings = o.optJSONArray("stopStrings")
                 ?.let { arr -> (0 until arr.length()).map { arr.optString(it) } }
-                ?.filter { it.isNotBlank() }
+                // Not isNotBlank: "\n\n" is entirely whitespace and is also the
+                // commonest stop string there is — "stop at the end of the
+                // paragraph". Filtering blanks silently threw it away.
+                ?.filter { it.isNotEmpty() }
                 ?: emptyList(),
             maxChars = o.optInt("maxChars", 2000),
             maxMillis = o.optLong("maxMillis", 4000L),

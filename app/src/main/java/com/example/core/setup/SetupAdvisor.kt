@@ -158,7 +158,12 @@ object SetupAdvisor {
             reasons += "Good at what you described: $strength"
         }
 
-        if (provider.local && provider.id != "android_speech") {
+        // Something local that still points at an address needs that address to be
+        // serving. The phone's own recogniser has no base URL because there is
+        // nothing to point at — which is exactly what makes it easier, and is read
+        // off the entry rather than hardcoded against its id.
+        if (provider.local && provider.baseUrl.isNotBlank()) {
+            score -= 15
             caveats += "Needs a server you run yourself"
         }
         if (provider.baseUrl.contains("ACCOUNT_ID") || provider.baseUrl.contains("GATEWAY")) {
@@ -180,9 +185,29 @@ object SetupAdvisor {
     internal fun matchedStrengths(provider: ProviderSpec, notes: String): List<String> {
         if (notes.isBlank() || provider.strengths.isEmpty()) return emptyList()
         val said = notes.lowercase()
+        val saidWords = said.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
         return provider.strengths.filter { tag ->
-            val word = tag.replace('-', ' ')
-            said.contains(word) || word.split(' ').any { it.length > 3 && said.contains(it) }
+            val phrase = tag.replace('-', ' ')
+            said.contains(phrase) || phrase.split(' ').any { part -> matches(part, saidWords) }
         }
     }
+
+    /**
+     * Whether a tag and something the user wrote are the same idea.
+     *
+     * Compared on a short common prefix rather than for equality, because nobody
+     * writes "dictation" — they write "I dictate a lot", and a matcher that cannot
+     * connect those two is useless for the case it exists to serve. Five characters
+     * is enough to keep "dictate" and "dictation" together while keeping "private"
+     * and "print" apart.
+     */
+    private fun matches(tag: String, saidWords: List<String>): Boolean {
+        if (tag.length <= 3) return false
+        val stem = tag.take(STEM)
+        return saidWords.any { word ->
+            word.length > 3 && (word.startsWith(stem) || tag.startsWith(word.take(STEM)))
+        }
+    }
+
+    private const val STEM = 5
 }
