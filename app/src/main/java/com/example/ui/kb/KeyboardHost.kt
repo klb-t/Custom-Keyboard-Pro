@@ -33,6 +33,16 @@ interface KeyboardHost {
     /** Runs an action as if a key bound to it had been pressed. */
     fun perform(action: KeyAction)
 
+    /**
+     * Puts a clip the UI built onto the system clipboard.
+     *
+     * Exists because a composite — several history entries pasted as one thing — has
+     * no other way of reaching an app. The clipboard is the only channel between two
+     * apps that both sides already understand, so the UI assembles the [ClipData] and
+     * the service, which is the part that holds the clipboard manager, sets it.
+     */
+    fun putOnClipboard(clip: android.content.ClipData)
+
     /** Feedback for a press: haptics and sound, subject to settings. */
     fun feedback(key: KeyDef?)
 

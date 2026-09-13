@@ -1,6 +1,11 @@
 package com.example.ime
 
+import android.content.ClipData
 import android.content.ClipboardManager
+import kotlinx.coroutines.withContext
+import android.net.Uri
+import java.util.UUID
+import com.example.core.clipboard.ClipStore
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
@@ -670,6 +675,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     // Action execution — the one switch that says what this keyboard can do
     // -----------------------------------------------------------------------
 
+    override fun putOnClipboard(clip: ClipData) {
+        val manager = clipboardManager
+        if (manager == null) {
+            AppLogger.e("Clipboard", "no clipboard manager; cannot hand over ${clip.itemCount} items")
+            return
+        }
+        // Setting this fires our own listener, which would re-record everything the
+        // user just assembled as if they had copied it. Suppressing the next change is
+        // cheaper and more predictable than trying to recognise our own clip later.
+        suppressNextClipboardChange = true
+        manager.setPrimaryClip(clip)
+        AppLogger.d("Clipboard", "handed over ${clip.itemCount} item(s)")
+    }
+
     override fun perform(action: KeyAction) {
         val settings = SettingsStore.current
         when (action) {
@@ -1045,8 +1064,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * password field. The previous build recorded everything, which meant a password
      * manager's copy landed in a plain-text database on the device.
      */
+    /**
+     * Set when the keyboard itself is about to write to the clipboard.
+     *
+     * Without it, pasting a composite immediately records every part of it again as a
+     * fresh copy, and the history grows a duplicate of itself every time it is used.
+     */
+    private var suppressNextClipboardChange = false
+
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         val settings = SettingsStore.current
+        if (suppressNextClipboardChange) {
+            suppressNextClipboardChange = false
+            return@OnPrimaryClipChangedListener
+        }
         if (!settings.clipboardEnabled) return@OnPrimaryClipChangedListener
         if (settings.clipboardIgnorePasswordFields && editor.isSensitive) {
             return@OnPrimaryClipChangedListener
@@ -1061,16 +1092,95 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             if (isSensitive) return@OnPrimaryClipChangedListener
         }
 
-        val item = clip.getItemAt(0)
-        val text = item.text?.toString()
-        val uri = item.uri?.toString()
+        // Every item, not just the first. A clip can hold several — a file and its
+        // name, a selection and its HTML — and taking only item zero threw away the
+        // half the user was more likely to want.
+        val group = UUID.randomUUID().toString()
+        val source = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            clip.description?.extras?.getString("android.content.extra.SOURCE_PACKAGE")
+        } else {
+            null
+        }
+        val items = (0 until clip.itemCount).map { clip.getItemAt(it) }
+        val multi = items.size > 1
+        val maxBytes = settings.clipboardMaxFileMb.coerceAtLeast(0) * 1_000_000L
+
         serviceScope.launch {
-            when {
-                !text.isNullOrBlank() ->
-                    repository.rememberClip(ClipboardEntity.TYPE_TEXT, text, settings.clipboardMaxItems)
-                !uri.isNullOrBlank() ->
-                    repository.rememberClip(ClipboardEntity.TYPE_URI, uri, settings.clipboardMaxItems)
+            items.forEach { item ->
+                val text = item.text?.toString()
+                val uri = item.uri
+                when {
+                    !text.isNullOrBlank() -> repository.rememberClipEntry(
+                        ClipboardEntity(
+                            type = ClipboardEntity.TYPE_TEXT,
+                            content = text,
+                            mime = "text/plain",
+                            sourcePackage = source,
+                            groupId = if (multi) group else null
+                        ),
+                        settings.clipboardMaxItems
+                    )
+
+                    uri != null -> rememberFileClip(uri, source, if (multi) group else null, maxBytes)
+                }
             }
         }
+    }
+
+    /**
+     * Takes a copy of what a clipboard URI points at, now, while it can be read.
+     *
+     * The grant on a clipboard URI is temporary and belongs to the clip. By the time
+     * the user opens their history it is usually gone, which is why the previous
+     * version's picture and file entries were dead on arrival — present in the list,
+     * unreadable when tapped, and silent about it. Copying the bytes is only possible
+     * at this moment, so it happens at this moment.
+     */
+    private suspend fun rememberFileClip(uri: Uri, source: String?, group: String?, maxBytes: Long) {
+        val settings = SettingsStore.current
+        if (!settings.clipboardKeepFiles) {
+            // Still worth remembering that it happened, even without the bytes.
+            repository.rememberClipEntry(
+                ClipboardEntity(
+                    type = ClipboardEntity.TYPE_URI,
+                    content = uri.toString(),
+                    mime = contentResolver.getType(uri) ?: ClipStore.guessMime(uri.toString()),
+                    sourcePackage = source,
+                    groupId = group
+                ),
+                settings.clipboardMaxItems
+            )
+            return
+        }
+
+        val mime = contentResolver.getType(uri) ?: ClipStore.guessMime(uri.toString())
+        val file = withContext(Dispatchers.IO) { ClipStore.capture(this@CustomKeyboardIme, uri, maxBytes) }
+        if (file == null) {
+            AppLogger.d("Clipboard", "could not keep the bytes of $uri; remembering the name only")
+            repository.rememberClipEntry(
+                ClipboardEntity(
+                    type = ClipboardEntity.TYPE_URI,
+                    content = uri.toString(),
+                    mime = mime,
+                    sourcePackage = source,
+                    groupId = group
+                ),
+                settings.clipboardMaxItems
+            )
+            return
+        }
+
+        repository.rememberClipEntry(
+            ClipboardEntity(
+                type = ClipboardEntity.TYPE_FILE,
+                content = uri.lastPathSegment ?: file.name,
+                mime = mime,
+                filePath = file.absolutePath,
+                sizeBytes = file.length(),
+                sourcePackage = source,
+                groupId = group
+            ),
+            settings.clipboardMaxItems
+        )
     }
 }

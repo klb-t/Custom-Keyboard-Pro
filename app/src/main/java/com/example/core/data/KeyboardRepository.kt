@@ -1,5 +1,7 @@
 package com.example.core.data
 
+import com.example.core.clipboard.ClipStore
+
 import android.content.Context
 import com.example.core.text.TextOps
 import kotlinx.coroutines.flow.Flow
@@ -32,16 +34,49 @@ class KeyboardRepository(context: Context) {
         if (maxItems > 0) clipboard.trimTo(maxItems)
     }
 
+    /**
+     * Remembers an entry that already knows what it is — a file we took a copy of, a
+     * part of a multi-item clip, or text with a source attached.
+     *
+     * Trimming deletes rows, and rows now own bytes, so the files those rows pointed
+     * at go with them. Without this the app would quietly accumulate every picture
+     * ever copied, long after its history entry was gone.
+     */
+    suspend fun rememberClipEntry(entry: ClipboardEntity, maxItems: Int) {
+        if (entry.content.isBlank() && entry.filePath.isNullOrBlank()) return
+        if (entry.isText) {
+            if (clipboard.newest()?.content == entry.content) return
+            clipboard.deleteByContent(entry.content)
+        }
+        clipboard.insert(entry)
+        if (maxItems > 0) {
+            val doomed = clipboard.overflowing(maxItems)
+            doomed.forEach { ClipStore.delete(it) }
+            clipboard.trimTo(maxItems)
+        }
+    }
+
     suspend fun newestClip(): ClipboardEntity? = clipboard.newest()
 
-    suspend fun deleteClip(id: Long) = clipboard.deleteById(id)
+    suspend fun deleteClip(id: Long) {
+        clipboard.byId(id)?.let { ClipStore.delete(it) }
+        clipboard.deleteById(id)
+    }
     suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned)
     suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content)
-    suspend fun clearClipboard() = clipboard.deleteAllUnpinned()
+    suspend fun clearClipboard() {
+        clipboard.allUnpinned().forEach { ClipStore.delete(it) }
+        clipboard.deleteAllUnpinned()
+    }
     suspend fun sweepClipboard(retentionDays: Int) {
         if (retentionDays <= 0) return
-        clipboard.deleteOlderThan(System.currentTimeMillis() - retentionDays * 24L * 3600L * 1000L)
+        val before = System.currentTimeMillis() - retentionDays * 24L * 3600L * 1000L
+        clipboard.olderThan(before).forEach { ClipStore.delete(it) }
+        clipboard.deleteOlderThan(before)
     }
+
+    /** Every file still spoken for, so orphans can be told apart from the rest. */
+    suspend fun clipFilePaths(): List<String> = clipboard.filePaths()
 
     // --- dictionary --------------------------------------------------------
 

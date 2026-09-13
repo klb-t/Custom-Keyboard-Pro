@@ -438,6 +438,17 @@ object SettingsSchema {
         "clipboardRetentionDays" to Meta(group = GROUP_CLIPBOARD, label = "Keep for (days, 0 = forever)", min = 0f, max = 365f),
         "clipboardMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Maximum entries", min = 10f, max = 2000f),
         "clipboardIgnorePasswordFields" to Meta(group = GROUP_CLIPBOARD, label = "Never record from password fields"),
+        "clipboardKeepFiles" to Meta(
+            group = GROUP_CLIPBOARD, label = "Keep pictures and files, not just their names",
+            help = "A copied picture's link stops working almost immediately — the " +
+                "permission that came with it belongs to the clip, not to you. Keeping " +
+                "the bytes is the only way the entry still works later. Off stores " +
+                "nothing but the name."
+        ),
+        "clipboardMaxFileMb" to Meta(
+            group = GROUP_CLIPBOARD, label = "Largest file to keep (MB)", min = 0f, max = 500f,
+            help = "Anything bigger is noted by name only. 0 means no limit."
+        ),
         "clipboardSuggestions" to Meta(group = GROUP_CLIPBOARD, label = "Offer a fresh copy as a suggestion"),
         "clipboardSuggestionSeconds" to Meta(group = GROUP_CLIPBOARD, label = "…for how long", min = 5f, max = 600f),
 

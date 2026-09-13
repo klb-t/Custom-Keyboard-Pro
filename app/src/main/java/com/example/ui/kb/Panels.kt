@@ -50,6 +50,8 @@ import com.example.core.ai.AiTask
 import com.example.core.ai.AiTasks
 import com.example.core.asr.AsrState
 import com.example.core.config.Settings
+import androidx.compose.ui.platform.LocalContext
+import com.example.core.clipboard.ClipStore
 import com.example.core.data.ClipboardEntity
 import com.example.core.layout.ClipboardOp
 import com.example.core.layout.CursorDirection
@@ -345,19 +347,51 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
     }
     val clips by clipFlow.collectAsState(initial = emptyList())
     var editing by remember { mutableStateOf<ClipboardEntity?>(null) }
+    // Selecting turns the list into a way of building one clip out of several
+    // entries. Android's clipboard has one slot and no "add to", so two things copied
+    // in two apps can only ever meet here.
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val context = LocalContext.current
 
     PanelFrame(
-        title = "Clipboard",
+        title = if (selected.isEmpty()) "Clipboard" else "${selected.size} selected",
         theme = theme,
         onClose = onClose,
         actions = {
-            Box(
-                Modifier.fillMaxHeight()
-                    .clickable { scope.launch { host.repository.clearClipboard() } }
-                    .padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                PanelText("Clear", theme.stripText, 13.sp)
+            if (selected.isNotEmpty()) {
+                Box(
+                    Modifier.fillMaxHeight()
+                        .clickable {
+                            val chosen = clips.filter { it.id in selected }
+                            val clip = ClipStore.compose(context, chosen)
+                            if (clip != null) {
+                                host.putOnClipboard(clip)
+                                host.perform(KeyAction.Clipboard(ClipboardOp.PASTE))
+                            }
+                            selected = emptySet()
+                        }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PanelText("Paste together", theme.stripText, 13.sp)
+                }
+                Box(
+                    Modifier.fillMaxHeight()
+                        .clickable { selected = emptySet() }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PanelText("Cancel", theme.stripText, 13.sp)
+                }
+            } else {
+                Box(
+                    Modifier.fillMaxHeight()
+                        .clickable { scope.launch { host.repository.clearClipboard() } }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PanelText("Clear", theme.stripText, 13.sp)
+                }
             }
         }
     ) {
@@ -381,28 +415,78 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                     )
                 }
             } else {
+                if (selected.isEmpty()) {
+                    PanelText(
+                        "Hold an entry to start picking several.",
+                        theme.keyHintText, 11.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                    )
+                }
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(clips, key = { it.id }) { item ->
+                        val isSelected = item.id in selected
+                        val selecting = selected.isNotEmpty()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { host.perform(KeyAction.Text(item.content)) }
+                                .background(
+                                    if (isSelected) theme.keyActiveBackground
+                                    else androidx.compose.ui.graphics.Color.Transparent
+                                )
+                                .combinedClickable(
+                                    onClick = {
+                                        when {
+                                            // Once picking has started, a tap adds to
+                                            // the pick rather than pasting: changing
+                                            // what a tap means mid-gesture is how
+                                            // multi-select goes wrong everywhere else.
+                                            selecting ->
+                                                selected = if (isSelected) selected - item.id
+                                                else selected + item.id
+                                            item.isText -> host.perform(KeyAction.Text(item.content))
+                                            else -> {
+                                                val clip = ClipStore.single(context, item)
+                                                if (clip != null) {
+                                                    host.putOnClipboard(clip)
+                                                    host.perform(KeyAction.Clipboard(ClipboardOp.PASTE))
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onLongClick = {
+                                        selected = if (isSelected) selected - item.id
+                                        else selected + item.id
+                                    }
+                                )
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PanelText(
-                                text = item.content.replace('\n', ' '),
-                                color = theme.keyText,
-                                fontSize = 14.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
+                            if (selecting) {
+                                PanelText(
+                                    if (isSelected) "☑" else "☐",
+                                    theme.keyText, 15.sp,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                            }
+                            Column(Modifier.weight(1f)) {
+                                PanelText(
+                                    text = if (item.isText) item.content.replace('\n', ' ')
+                                    else item.content,
+                                    color = theme.keyText,
+                                    fontSize = 14.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (!item.isText) {
+                                    PanelText(ClipStore.describe(item), theme.keyHintText, 11.sp)
+                                }
+                            }
                             IconAction(if (item.pinned) "★" else "☆", theme) {
                                 scope.launch { host.repository.setClipPinned(item.id, !item.pinned) }
                             }
-                            IconAction("✎", theme) { editing = item }
+                            if (item.isText) IconAction("✎", theme) { editing = item }
                             IconAction("🗑", theme) {
+                                selected = selected - item.id
                                 scope.launch { host.repository.deleteClip(item.id) }
                             }
                         }

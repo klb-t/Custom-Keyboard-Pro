@@ -213,6 +213,17 @@ data class Settings(
     val clipboardRetentionDays: Int = 0,
     val clipboardMaxItems: Int = 200,
     val clipboardIgnorePasswordFields: Boolean = true,
+    /**
+     * Keep a copy of pictures and files, not just their names.
+     *
+     * On, because the alternative is a history full of entries that cannot be opened:
+     * a clipboard URI's read permission lapses with the clip, so the name alone is
+     * worth nothing by the time anybody wants it back. Off keeps the names and stores
+     * no bytes, for anyone who would rather the app held nothing.
+     */
+    val clipboardKeepFiles: Boolean = true,
+    /** Anything larger than this is noted by name and not copied. 0 means no limit. */
+    val clipboardMaxFileMb: Int = 25,
     /** Offer something just copied as a suggestion while the field is still empty. */
     val clipboardSuggestions: Boolean = true,
     /** How long after copying it stays on offer. */

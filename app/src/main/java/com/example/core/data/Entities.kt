@@ -18,11 +18,41 @@ data class ClipboardEntity(
     val timestamp: Long = System.currentTimeMillis(),
     /** Pinned entries survive retention sweeps and "clear all". */
     val pinned: Boolean = false,
-    val label: String? = null
+    val label: String? = null,
+    /**
+     * What this actually is. Text entries say so; everything else carries the type
+     * the source app declared, which is what a paste needs in order to be accepted.
+     */
+    val mime: String = "text/plain",
+    /**
+     * Where the bytes live, in our own storage.
+     *
+     * Not a `content://` URI, deliberately. A URI on the clipboard carries a
+     * temporary read grant tied to that clip, so keeping the URI string produces an
+     * entry that is unreadable by the time anyone wants it. The bytes are copied at
+     * capture, which is the only moment they can be.
+     */
+    val filePath: String? = null,
+    val sizeBytes: Long = 0L,
+    /** Which app it was copied from, when the system says. */
+    val sourcePackage: String? = null,
+    /**
+     * Parts of one copy that arrived together.
+     *
+     * A single clip can hold several items — a file plus its name, a selection plus
+     * its HTML — and splitting them into rows keeps each one usable on its own while
+     * this records that they came as one thing.
+     */
+    val groupId: String? = null
 ) {
+    val isText: Boolean get() = type == TYPE_TEXT
+
     companion object {
         const val TYPE_TEXT = "TEXT"
         const val TYPE_URI = "URI"
+
+        /** Bytes of our own, on disk. The type every non-text entry has from now on. */
+        const val TYPE_FILE = "FILE"
     }
 }
 

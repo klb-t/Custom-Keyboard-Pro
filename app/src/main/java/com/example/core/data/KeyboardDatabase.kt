@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ClipboardEntity::class, WordEntity::class, BigramEntity::class, ShortcutEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class KeyboardDatabase : RoomDatabase() {
@@ -31,10 +31,31 @@ abstract class KeyboardDatabase : RoomDatabase() {
                     KeyboardDatabase::class.java,
                     NAME
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }
+
+        /**
+         * Version 3 lets a clipboard entry be something other than text.
+         *
+         * All columns, no table changes, and every one nullable or defaulted — so
+         * everything already copied survives, and an old row simply reads as the text
+         * entry it always was.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE clipboard_items ADD COLUMN mime TEXT NOT NULL DEFAULT 'text/plain'"
+                )
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN filePath TEXT")
+                db.execSQL(
+                    "ALTER TABLE clipboard_items ADD COLUMN sizeBytes INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN sourcePackage TEXT")
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN groupId TEXT")
+            }
+        }
 
         /**
          * Version 1 shipped only the clipboard table. Adding columns and tables rather

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the clipboard provider is allowed to hand out.
+
+  Exactly one directory, the one ClipStore writes into. Nothing else in the app's
+  storage is reachable through it, which matters because a paste grants the receiving
+  app read access to whatever URI it is given.
+-->
+<paths>
+    <files-path name="clips" path="clips/" />
+</paths>

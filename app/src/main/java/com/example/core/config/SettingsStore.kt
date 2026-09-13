@@ -207,6 +207,8 @@ object SettingsStore {
         put("clipboardRetentionDays", s.clipboardRetentionDays)
         put("clipboardMaxItems", s.clipboardMaxItems)
         put("clipboardIgnorePasswordFields", s.clipboardIgnorePasswordFields)
+        put("clipboardKeepFiles", s.clipboardKeepFiles)
+        put("clipboardMaxFileMb", s.clipboardMaxFileMb)
         put("clipboardSuggestions", s.clipboardSuggestions)
         put("clipboardSuggestionSeconds", s.clipboardSuggestionSeconds)
 
@@ -345,6 +347,8 @@ object SettingsStore {
             clipboardRetentionDays = o.optInt("clipboardRetentionDays", d.clipboardRetentionDays),
             clipboardMaxItems = o.optInt("clipboardMaxItems", d.clipboardMaxItems),
             clipboardIgnorePasswordFields = o.optBoolean("clipboardIgnorePasswordFields", d.clipboardIgnorePasswordFields),
+            clipboardKeepFiles = o.optBoolean("clipboardKeepFiles", d.clipboardKeepFiles),
+            clipboardMaxFileMb = o.optInt("clipboardMaxFileMb", d.clipboardMaxFileMb),
             clipboardSuggestions = o.optBoolean("clipboardSuggestions", d.clipboardSuggestions),
             clipboardSuggestionSeconds = o.optInt("clipboardSuggestionSeconds", d.clipboardSuggestionSeconds),
 

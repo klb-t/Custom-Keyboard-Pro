@@ -21,6 +21,30 @@ interface ClipboardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: ClipboardEntity): Long
 
+    @Query("SELECT * FROM clipboard_items WHERE id = :id")
+    suspend fun byId(id: Long): ClipboardEntity?
+
+    @Query("SELECT * FROM clipboard_items WHERE pinned = 0")
+    suspend fun allUnpinned(): List<ClipboardEntity>
+
+    @Query("SELECT * FROM clipboard_items WHERE pinned = 0 AND timestamp < :before")
+    suspend fun olderThan(before: Long): List<ClipboardEntity>
+
+    @Query("SELECT filePath FROM clipboard_items WHERE filePath IS NOT NULL")
+    suspend fun filePaths(): List<String>
+
+    /**
+     * The rows a trim is about to remove.
+     *
+     * Asked for separately rather than inferred, because rows now own files on disk
+     * and a trim that only deletes rows leaves every picture ever copied behind.
+     */
+    @Query(
+        "SELECT * FROM clipboard_items WHERE pinned = 0 AND id NOT IN (" +
+            "SELECT id FROM clipboard_items ORDER BY pinned DESC, timestamp DESC LIMIT :keep)"
+    )
+    suspend fun overflowing(keep: Int): List<ClipboardEntity>
+
     @Query("DELETE FROM clipboard_items WHERE id = :id")
     suspend fun deleteById(id: Long)
 

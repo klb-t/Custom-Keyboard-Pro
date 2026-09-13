@@ -43,6 +43,25 @@
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
+
+        <!--
+          Hands clipboard files to whatever app is being pasted into.
+
+          Needed because our files are ours: an app receiving a paste cannot read a
+          path, only a URI it has been granted. Scoped to one directory by
+          res/xml/clip_paths.xml, and not exported, so a grant only ever exists for
+          the duration of a clip the user themselves created.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.clips"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clip_paths" />
+        </provider>
+
     </application>
 
 </manifest>
