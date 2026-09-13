@@ -17,6 +17,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.example.core.config.SettingsSchema
+import com.example.core.layout.LayoutDoctor
+import com.example.core.layout.LayoutRepository
 import com.example.util.AppLogger
 
 /**
@@ -72,6 +75,50 @@ fun DiagnosticsScreen() {
                 "Cannot be undone",
                 onClick = { AppLogger.clear() }
             )
+        }
+
+        SettingsSection(
+            title = "Layout health",
+            subtitle = "Layouts are data, and a model is allowed to write them — so " +
+                "they can say things no compiler would have let through. This is every " +
+                "layout on the device, checked. Anything listed here draws wrongly on " +
+                "the keyboard with no other sign that it is wrong."
+        ) {
+            val layouts = LayoutRepository.all()
+            val findings = layouts.map { it to LayoutDoctor.check(it) }.filter { it.second.isNotEmpty() }
+            if (findings.isEmpty()) {
+                InfoRow("All ${layouts.size} layouts check out.")
+            } else {
+                findings.forEach { (layout, problems) ->
+                    InfoRow("${layout.name} (${layout.id}) — ${problems.size} problem" +
+                        if (problems.size == 1) "" else "s")
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        problems.forEach { finding ->
+                            Text(
+                                "· $finding" +
+                                    if (finding.repairable) "  — fixed automatically when saved" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (finding.severity == LayoutDoctor.Severity.BROKEN)
+                                    MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Divider()
+                }
+            }
+        }
+
+        if (SettingsSchema.orphanedMetadata.isNotEmpty()) {
+            SettingsSection(
+                title = "Settings with mismatched descriptions",
+                subtitle = "These names appear in the table that gives settings their " +
+                    "labels and ranges, but no such setting exists. Harmless, except " +
+                    "that whatever they were meant for is showing a generated label."
+            ) {
+                SettingsSchema.orphanedMetadata.forEach { InfoRow(it) }
+            }
         }
 
         SettingsSection("Log") {

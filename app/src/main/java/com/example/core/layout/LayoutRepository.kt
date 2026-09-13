@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.example.util.AppLogger
 import java.io.File
 
 /**
@@ -65,10 +66,29 @@ object LayoutRepository {
             ?: byId(BuiltinLayouts.QWERTY_PL.id)
             ?: BuiltinLayouts.QWERTY_PL
 
+    /**
+     * Writes a layout, after putting right anything that would have made it draw
+     * wrongly.
+     *
+     * The repair happens here rather than at the point of use because a layout
+     * arrives from places that cannot be trusted to be careful — a model's reply, a
+     * hand-edited file, an import from another phone — and because a fault caught
+     * once on the way in beats the same fault being worked around by every screen
+     * that reads it afterwards. What cannot be repaired is left exactly as written
+     * and reported by [LayoutDoctor.check]; nothing is ever silently dropped.
+     */
     fun save(layout: LayoutDef): Result<Unit> = runCatching {
         val ctx = appContext ?: error("Layout repository is not initialised.")
-        File(layoutDir(ctx), "${sanitise(layout.id)}.json")
-            .writeText(LayoutJson.writeString(layout))
+        val healthy = LayoutDoctor.repair(layout)
+        if (healthy != layout) {
+            AppLogger.d(
+                "Layouts",
+                "repaired '${layout.id}' on save: " +
+                    LayoutDoctor.check(layout).filter { it.repairable }.joinToString("; ")
+            )
+        }
+        File(layoutDir(ctx), "${sanitise(healthy.id)}.json")
+            .writeText(LayoutJson.writeString(healthy))
         reload()
     }
 

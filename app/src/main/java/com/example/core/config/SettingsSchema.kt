@@ -58,6 +58,19 @@ object SettingsSchema {
 
     val all: List<SettingSpec> by lazy { derive() }
 
+    /**
+     * Metadata entries that describe a setting which does not exist.
+     *
+     * A mistyped key here is invisible in every other way: the setting it was meant
+     * for quietly falls back to a generated label and a guessed group, which looks
+     * like an oversight rather than a typo. Naming them costs one list and makes the
+     * failure findable — Diagnostics shows it, and a test fails on it.
+     */
+    val orphanedMetadata: List<String> by lazy {
+        val real = SettingsStore.toJson(Settings()).keys().asSequence().toSet()
+        METADATA.keys.filterNot { it in real }.sorted()
+    }
+
     private val byKey: Map<String, SettingSpec> by lazy { all.associateBy { it.key } }
 
     fun spec(key: String): SettingSpec? = byKey[key]

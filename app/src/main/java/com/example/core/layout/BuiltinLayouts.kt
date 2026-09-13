@@ -299,13 +299,19 @@ object BuiltinLayouts {
         )
     )
 
-    private fun symbolShiftLayer(): LayerDef = LayerDef(
+    /**
+     * [digitsLayer] is where "?123" goes back to. It is the symbol layer inside a
+     * full alphabetic layout, but the *base* layer of the standalone Symbols layout,
+     * where the digits page is all there is — and a key pointing at a layer that
+     * layout does not have is a key that does nothing when pressed.
+     */
+    private fun symbolShiftLayer(digitsLayer: String = LayoutDef.SYMBOL_LAYER): LayerDef = LayerDef(
         name = LayoutDef.SYMBOL_SHIFT_LAYER,
         rows = listOf(
             RowDef("~`|•√π÷×¶∆".map { ch(it.toString()) }),
             RowDef(listOf("£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\").map { ch(it) }),
             RowDef(
-                listOf(fn("to_sym1", "?123", KeyAction.Layer(LayoutDef.SYMBOL_LAYER, LayerMode.TOGGLE), 1.5f)) +
+                listOf(fn("to_sym1", "?123", KeyAction.Layer(digitsLayer, LayerMode.TOGGLE), 1.5f)) +
                     listOf("%", "©", "®", "™", "✓", "[", "]").map { ch(it) } +
                     listOf(backspace)
             ),
@@ -597,7 +603,7 @@ object BuiltinLayouts {
         name = "Symbols",
         layers = linkedMapOf(
             LayoutDef.BASE_LAYER to symbolLayer().copy(name = LayoutDef.BASE_LAYER),
-            LayoutDef.SYMBOL_SHIFT_LAYER to symbolShiftLayer()
+            LayoutDef.SYMBOL_SHIFT_LAYER to symbolShiftLayer(digitsLayer = LayoutDef.BASE_LAYER)
         ),
         rowCountHint = 4,
         builtIn = true
