@@ -8,13 +8,34 @@ import com.example.util.AppLogger
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** The three request shapes that exist. This is the invariant; the providers are not. */
+/**
+ * The request shapes the app speaks in code. This is the invariant; the providers are not.
+ *
+ * Three of them are chat formats, which earn hand-written code because streaming,
+ * message arrays and tool calls are not a template. The fourth is dictation's
+ * multipart shape, which nearly every transcription endpoint copied from OpenAI and
+ * which therefore covers more providers than any description of it would.
+ *
+ * Everything else — making pictures, making video, reading text out of one, any
+ * provider nobody has heard of yet — is described by a [CallSpec] instead of coded.
+ */
 object AiWire {
     const val OPENAI = "openai"
     const val ANTHROPIC = "anthropic"
     const val GEMINI = "gemini"
 
-    val ALL = listOf(OPENAI, ANTHROPIC, GEMINI)
+    /** Multipart POST to an OpenAI-shaped `/audio/transcriptions`. */
+    const val OPENAI_AUDIO = "openai_audio"
+
+    /** Android's own recogniser. No network, no key, no provider. */
+    const val ON_DEVICE = "on_device"
+
+    /** Described by a [CallSpec] rather than by code. */
+    const val DESCRIBED = "described"
+
+    val CHAT = listOf(OPENAI, ANTHROPIC, GEMINI)
+
+    val ALL = listOf(OPENAI, ANTHROPIC, GEMINI, OPENAI_AUDIO, ON_DEVICE, DESCRIBED)
 }
 
 /**
@@ -36,8 +57,41 @@ data class ProviderSpec(
     val needsKey: Boolean = true,
     /** Runs on the user's own machine, so an empty key is normal and nothing leaves. */
     val local: Boolean = false,
-    val docsUrl: String = ""
+    val docsUrl: String = "",
+    /**
+     * Everything this provider can do beyond chat, keyed by [AiCapability].
+     *
+     * Absent means "chat only", which is what every entry written before capabilities
+     * existed meant — so nothing that already worked has to change to keep working.
+     * A provider serving four capabilities is one entry with four endpoints rather
+     * than four entries in four separate lists, which is the whole reason this is a
+     * map and not another top-level list.
+     */
+    val capabilities: Map<String, CapabilitySpec> = emptyMap(),
+    /** A gateway in front of other providers rather than a provider of its own. */
+    val router: Boolean = false,
+    /** Shown when choosing: why someone would pick this one. */
+    val note: String = ""
 ) : Discoverable {
+
+    /**
+     * Chat is described by the top-level fields rather than by an entry in the map,
+     * because that is what every provider written before capabilities existed said.
+     *
+     * The fallback is conditional on the wire actually being a chat format: a
+     * provider that only makes pictures has a base URL too, and reading that as
+     * "it can also chat" would offer the user an endpoint that answers 404.
+     */
+    fun capability(id: String): CapabilitySpec? = when {
+        id == AiCapability.CHAT && !capabilities.containsKey(id) ->
+            if (baseUrl.isBlank() || wire !in AiWire.CHAT) null
+            else CapabilitySpec(wire = wire, defaultModel = defaultModel, modelsPath = modelsPath)
+        else -> capabilities[id]
+    }
+
+    fun can(id: String): Boolean = capability(id) != null
+
+    val abilities: List<String> get() = AiCapability.ALL.filter { can(it) }
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -49,6 +103,13 @@ data class ProviderSpec(
         put("needsKey", needsKey)
         put("local", local)
         put("docsUrl", docsUrl)
+        if (router) put("router", true)
+        if (note.isNotBlank()) put("note", note)
+        if (capabilities.isNotEmpty()) {
+            put("capabilities", JSONObject().apply {
+                capabilities.forEach { (id, spec) -> put(id, spec.toJson()) }
+            })
+        }
     }
 
     companion object {
@@ -63,7 +124,16 @@ data class ProviderSpec(
                 defaultModel = o.optString("defaultModel"),
                 needsKey = o.optBoolean("needsKey", true),
                 local = o.optBoolean("local", false),
-                docsUrl = o.optString("docsUrl")
+                docsUrl = o.optString("docsUrl"),
+                capabilities = o.optJSONObject("capabilities")?.let { caps ->
+                    buildMap {
+                        caps.keys().forEach { key ->
+                            caps.optJSONObject(key)?.let { put(key, CapabilitySpec.fromJson(it)) }
+                        }
+                    }
+                } ?: emptyMap(),
+                router = o.optBoolean("router", false),
+                note = o.optString("note")
             )
         }
     }
@@ -117,6 +187,30 @@ object ProviderCatalog {
 
     fun byId(id: String, settings: Settings = SettingsStore.current): ProviderSpec? =
         all(settings).firstOrNull { it.id == id }
+
+    /**
+     * Every provider that can do one particular thing.
+     *
+     * This is what a settings screen asks when it offers a choice of somewhere to
+     * send dictation, or a picture, or a request for a picture. It never has to know
+     * which providers those are — only what it needs done.
+     */
+    fun serving(
+        capability: String,
+        settings: Settings = SettingsStore.current
+    ): List<ProviderSpec> = all(settings).filter { it.can(capability) }
+
+    /** Every capability at least one known provider serves, in a stable order. */
+    fun capabilitiesOffered(settings: Settings = SettingsStore.current): List<String> =
+        AiCapability.ALL.filter { cap -> all(settings).any { it.can(cap) } }
+
+    /** Gateways in front of other providers — one key, many models. */
+    fun routers(settings: Settings = SettingsStore.current): List<ProviderSpec> =
+        all(settings).filter { it.router }
+
+    /** Providers of their own models, as opposed to [routers] and local servers. */
+    fun direct(settings: Settings = SettingsStore.current): List<ProviderSpec> =
+        all(settings).filter { !it.router && !it.local && it.id != "openai_compatible" }
 
     fun addCustom(spec: ProviderSpec) {
         SettingsStore.update { s ->
