@@ -784,7 +784,8 @@
           ],
           "resultPath": "assets.video",
           "resultIsUrl": true,
-          "pollTimeoutMs": 900000
+          "pollTimeoutMs": 900000,
+          "pollUrlTemplate": "/generations/{{poll}}"
         },
         "defaultModel": "ray-flash-2"
       }

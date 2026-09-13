@@ -128,6 +128,11 @@ data class CallSpec(
      * us it has finished. Image and video generation are nearly always like this.
      */
     val pollUrlPath: String = "",
+    /**
+     * How to turn what [pollUrlPath] found into a URL, when it is an id rather than
+     * a link. `{{poll}}` is the value that was found. Empty means it already is a URL.
+     */
+    val pollUrlTemplate: String = "",
     val pollStatusPath: String = "",
     val pollDoneValues: List<String> = emptyList(),
     val pollFailedValues: List<String> = emptyList(),
@@ -151,6 +156,7 @@ data class CallSpec(
         if (resultPath.isNotBlank()) put("resultPath", resultPath)
         if (resultIsUrl) put("resultIsUrl", true)
         if (pollUrlPath.isNotBlank()) put("pollUrlPath", pollUrlPath)
+        if (pollUrlTemplate.isNotBlank()) put("pollUrlTemplate", pollUrlTemplate)
         if (pollStatusPath.isNotBlank()) put("pollStatusPath", pollStatusPath)
         if (pollDoneValues.isNotEmpty()) put("pollDoneValues", JSONArray(pollDoneValues))
         if (pollFailedValues.isNotEmpty()) put("pollFailedValues", JSONArray(pollFailedValues))
@@ -173,6 +179,7 @@ data class CallSpec(
             resultPath = o.optString("resultPath"),
             resultIsUrl = o.optBoolean("resultIsUrl", false),
             pollUrlPath = o.optString("pollUrlPath"),
+            pollUrlTemplate = o.optString("pollUrlTemplate"),
             pollStatusPath = o.optString("pollStatusPath"),
             pollDoneValues = o.optJSONArray("pollDoneValues").toStringList(),
             pollFailedValues = o.optJSONArray("pollFailedValues").toStringList(),

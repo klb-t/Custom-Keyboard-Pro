@@ -34,6 +34,39 @@ object ModelDiscovery {
             .build()
     }
 
+    /**
+     * What a provider serves for one particular capability.
+     *
+     * Three answers, in order of how much they are worth: what the provider says when
+     * asked, what the catalogue records for that capability, and its default. The
+     * order matters because a live list is right and a written one is merely current
+     * — but a written one is still better than an empty dropdown, which is what the
+     * user sees when the network is down or the provider publishes no list at all.
+     */
+    suspend fun forCapability(
+        provider: ProviderSpec,
+        capability: String,
+        apiKey: String
+    ): List<ModelInfo> {
+        val spec = provider.capability(capability) ?: return emptyList()
+        val declared = (spec.models + spec.defaultModel)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .map { ModelInfo(id = it, provider = provider.id) }
+
+        val path = spec.modelsPath.ifBlank { provider.modelsPath }
+        if (path.isBlank()) return declared
+
+        val live = fetch(provider.copy(modelsPath = path), apiKey).getOrNull().orEmpty()
+        if (live.isEmpty()) return declared
+
+        // A declared model the provider did not list is still offered: several list
+        // only chat models while happily serving a transcription one.
+        val merged = LinkedHashMap<String, ModelInfo>()
+        (declared + live).forEach { merged.putIfAbsent(it.id, it) }
+        return merged.values.toList()
+    }
+
     /** A live source for one provider, usable anywhere [Discovery] is. */
     fun source(provider: ProviderSpec, apiKey: String): DiscoverySource<ModelInfo> =
         object : DiscoverySource<ModelInfo> {
