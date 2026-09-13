@@ -2,7 +2,6 @@ package com.example.core.clipboard
 
 import android.content.ClipData
 import android.content.ClipDescription
-import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
@@ -175,13 +174,19 @@ object ClipStore {
         return clip
     }
 
-    /** One entry as a clip. The single-item case, kept separate because it is the common one. */
+    /**
+     * One entry as a clip. The single-item case, kept separate because it is the common one.
+     *
+     * The resolver is not optional, however tempting it looks: [ClipData.newUri] asks
+     * it for the URI's type in order to fill in the clip's description, so a null one
+     * throws and the whole thing silently becomes "tapping a picture does nothing".
+     */
     fun single(context: Context, entry: ClipboardEntity): ClipData? {
         if (entry.isText) return ClipData.newPlainText(entry.label ?: "Text", entry.content)
         val file = fileFor(entry) ?: return null
         return runCatching {
             val uri = shareUri(context, file)
-            ClipData.newUri(null as ContentResolver?, entry.label ?: "File", uri)
+            ClipData.newUri(context.contentResolver, entry.label ?: "File", uri)
         }.getOrNull()
     }
 
