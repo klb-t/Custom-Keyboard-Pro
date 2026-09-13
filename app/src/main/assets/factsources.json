@@ -1,0 +1,46 @@
+[
+  {
+    "id": "openrouter_models",
+    "label": "OpenRouter's public model list",
+    "note": "Prices, context lengths and modalities for several hundred models across most providers, readable without an account. The single most useful thing available to somebody who has no keys yet.",
+    "needsKey": false,
+    "enabled": true,
+    "call": {
+      "method": "GET",
+      "path": "https://openrouter.ai/api/v1/models",
+      "auth": "none",
+      "bodyKind": "none"
+    },
+    "itemPath": "data",
+    "fields": {
+      "id": "id",
+      "label": "name",
+      "contextTokens": "context_length",
+      "promptPrice": "pricing.prompt",
+      "completionPrice": "pricing.completion",
+      "modalities": "architecture.input_modalities"
+    }
+  },
+  {
+    "id": "openrouter_models_alt",
+    "label": "OpenRouter, older field names",
+    "note": "The same list read the way it was shaped before input_modalities existed. Kept as a second entry rather than as a fallback inside the first, so that whichever one still works can simply be the one left enabled.",
+    "needsKey": false,
+    "enabled": false,
+    "call": {
+      "method": "GET",
+      "path": "https://openrouter.ai/api/v1/models",
+      "auth": "none",
+      "bodyKind": "none"
+    },
+    "itemPath": "data",
+    "fields": {
+      "id": "id",
+      "label": "name",
+      "contextTokens": "context_length",
+      "promptPrice": "pricing.prompt",
+      "completionPrice": "pricing.completion",
+      "modalities": "architecture.modality"
+    }
+  }
+]
