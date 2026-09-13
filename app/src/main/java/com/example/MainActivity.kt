@@ -42,6 +42,7 @@ import com.example.ui.settings.DiagnosticsScreen
 import com.example.ui.settings.DictionaryScreen
 import com.example.ui.settings.GeneratedPanelScreen
 import com.example.ui.settings.RequestPanelScreen
+import com.example.ui.settings.SetupWizardScreen
 import com.example.ui.settings.ThemeEditorScreen
 import com.example.ui.kb.ThemeStore
 import com.example.ui.settings.HomeScreen
