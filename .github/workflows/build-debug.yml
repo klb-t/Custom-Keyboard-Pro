@@ -47,12 +47,38 @@ jobs:
             exit 1
           fi
 
+      # Gradle's console output names the failing test and the line it failed on,
+      # and stops there. The message — which is the part that says what actually
+      # went wrong — only exists in the JUnit XML. Several rounds were lost to
+      # diagnosing an exception whose text nobody could read, so the reports are
+      # parsed here and printed in full.
       - name: Run unit tests
         run: |
           set -o pipefail
           if ! gradle :app:testDebugUnitTest --console=plain 2>&1 | tee test.log; then
             echo "---- TEST FAILURES ----"
-            grep -E 'FAILED|expected:|actual:|AssertionError|Exception' test.log | head -80 || true
+            python3 - <<'PYEOF' || true
+          import glob, xml.etree.ElementTree as ET
+          shown = 0
+          for path in sorted(glob.glob("app/build/test-results/**/*.xml", recursive=True)):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for case in root.iter("testcase"):
+                  for bad in list(case.findall("failure")) + list(case.findall("error")):
+                      shown += 1
+                      print("=" * 70)
+                      print(f"{case.get('classname')} > {case.get('name')}")
+                      print("-" * 70)
+                      print((bad.get("message") or "").strip())
+                      trace = (bad.text or "").strip().splitlines()
+                      for line in trace[:25]:
+                          print("    " + line)
+                      print()
+          if shown == 0:
+              print("(no failures in the XML reports; see the log above)")
+          PYEOF
             exit 1
           fi
 
@@ -72,5 +98,7 @@ jobs:
         if: failure()
         with:
           name: test-reports
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            app/build/test-results/
           if-no-files-found: ignore
