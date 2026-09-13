@@ -114,7 +114,7 @@ data class PanelSpec(
         fun listFromJson(raw: String): List<PanelSpec> {
             if (raw.isBlank()) return emptyList()
             return try {
-                val arr = JSONArray(LayoutJson.stripCodeFence(raw))
+                val arr = JSONArray(LayoutJson.stripCodeFenceArray(raw))
                 (0 until arr.length()).mapNotNull { i ->
                     arr.optJSONObject(i)?.let { fromJson(it) }
                 }

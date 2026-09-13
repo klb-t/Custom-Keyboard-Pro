@@ -10,6 +10,7 @@ import com.example.core.discovery.CallSpec
 import com.example.core.discovery.CapabilitySpec
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.discovery.ProviderSpec
+import com.example.core.layout.LayoutJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -239,6 +240,33 @@ class ProviderCatalogTest {
         // The trailing slash is trimmed on the way in, so nothing downstream has to.
         assertEquals("https://x", parsed.single().baseUrl)
         assertTrue(ProviderCatalog.parseList("not json").isEmpty())
+    }
+
+    @Test
+    fun `an array survives being unwrapped, which it did not before`() {
+        val raw = """[{"id":"a","label":"A"},{"id":"b","label":"B"}]"""
+        // The object-shaped unwrapper narrowed this to `{"id":"a",...},{"id":"b",...}`
+        // by cutting at the outermost braces, which parses as nothing. Every reader of
+        // an array — this catalogue, custom themes, generated panels — then returned an
+        // empty list and said nothing, because they all catch and fall back.
+        assertEquals(raw, LayoutJson.stripCodeFenceArray(raw))
+        assertEquals(2, ProviderCatalog.parseList(raw).size)
+    }
+
+    @Test
+    fun `an array still survives a model wrapping it in prose and a fence`() {
+        val fenced = "Sure, here they are:\n```json\n" +
+            """[{"id":"a","label":"A"}]""" + "\n```\nHope that helps."
+        assertEquals(1, ProviderCatalog.parseList(fenced).size)
+    }
+
+    @Test
+    fun `unwrapping an object is unchanged`() {
+        assertEquals("""{"a":1}""", LayoutJson.stripCodeFence("""prose {"a":1} more"""))
+        assertEquals(
+            """{"a":[1,2]}""",
+            LayoutJson.stripCodeFence("```json\n" + """{"a":[1,2]}""" + "\n```")
+        )
     }
 
     @Test

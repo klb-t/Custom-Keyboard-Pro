@@ -525,15 +525,34 @@ object LayoutJson {
     fun writeString(layout: LayoutDef, indent: Int = 2): String = write(layout).toString(indent)
 
     /** LLMs like fencing their JSON. Take it off before parsing. */
-    fun stripCodeFence(raw: String): String {
+    fun stripCodeFence(raw: String): String = narrowTo(raw, '{', '}')
+
+    /**
+     * The same, for a reply that is a JSON *array*.
+     *
+     * Needed as its own function because [stripCodeFence] narrows to the outermost
+     * braces, which is right for an object and quietly destroys an array: given
+     * `[{"a":1},{"b":2}]` it returns `{"a":1},{"b":2}`, which parses as nothing. Three
+     * things in this app are stored as arrays — the provider catalogue, custom themes
+     * and generated panels — and all three came back empty because of it, with no
+     * error anywhere, because every one of those readers catches and returns a list.
+     *
+     * Keeping the two apart rather than making one function guess is deliberate: a
+     * model's reply can legitimately contain both shapes, and the caller is the only
+     * one that knows which it asked for.
+     */
+    fun stripCodeFenceArray(raw: String): String = narrowTo(raw, '[', ']')
+
+    private fun narrowTo(raw: String, open: Char, close: Char): String {
         var s = raw.trim()
         if (s.startsWith("```")) {
             s = s.substringAfter('\n', "")
             val end = s.lastIndexOf("```")
             if (end >= 0) s = s.substring(0, end)
+            s = s.trim()
         }
-        val first = s.indexOf('{')
-        val last = s.lastIndexOf('}')
+        val first = s.indexOf(open)
+        val last = s.lastIndexOf(close)
         return if (first >= 0 && last > first) s.substring(first, last + 1) else s.trim()
     }
 }

@@ -167,7 +167,7 @@ object ProviderCatalog {
     }
 
     fun parseList(raw: String): List<ProviderSpec> = try {
-        val arr = JSONArray(LayoutJson.stripCodeFence(raw))
+        val arr = JSONArray(LayoutJson.stripCodeFenceArray(raw))
         (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { ProviderSpec.fromJson(it) } }
     } catch (e: Exception) {
         emptyList()
