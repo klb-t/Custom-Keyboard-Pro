@@ -111,6 +111,36 @@ is an entry in a file. `AiConfig` resolves its *wire format* from that catalogue
 than from a `when` over three ids — the three request shapes are the invariant, the
 list of providers is not.
 
+A provider is also *what it can do*: dictation, reading text out of a picture, making
+one, and so on are fields rather than separate lists, and how to reach each is either a
+coded request shape or a described call. The pipeline that keeps the catalogue current,
+probes what is actually reachable, and advises somebody who has no account anywhere is
+in **`docs/PROVIDERS.md`**, along with the reason the advisor cannot ask a model to do
+its job for it.
+
+## Corrections and predictions
+
+Two lanes with different rules, because one changes text that already exists and the
+other adds text the user must accept. The modifier registry, what a modifier is allowed
+to do, why deciding is not the same as ranking, and why nothing is ever silently
+substituted across a difference in cost are in **`docs/PREDICTION.md`**.
+
+## The clipboard keeps bytes
+
+A `content://` URI on the clipboard carries a *temporary* read grant tied to that clip.
+Storing the URI produces a history entry that is unreadable by the time anybody wants
+it, and says nothing about it. So the bytes are copied at the moment of capture, which
+is the only moment it is possible, and handed back out through a `FileProvider` scoped
+to one directory. Rows own files, so trimming, sweeping and clearing take the bytes
+with them.
+
+Android's clipboard has one slot and no "add to", so two things copied in two apps can
+never meet there. They meet in the history instead: several entries can be emitted as
+one multi-item clip. What that cannot do is make the receiving app read them — most
+read `getItemAt(0)` and nothing else — so the parts are ordered and a text rendition of
+the whole goes first. The degradation is the honest best available, not a shortcoming
+of the code.
+
 ## Diagnostics
 
 The crash handler is installed by the `Application`, not by whichever component starts
