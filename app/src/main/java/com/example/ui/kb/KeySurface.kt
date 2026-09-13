@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -175,21 +176,31 @@ fun KeySurface(
             )
         }
 
+        // Read through a live handle rather than keying the gesture loop on it.
+        //
+        // Placement changes on every Shift, because a shifted layer is a different
+        // layer with different key actions — and keying the loop on it meant the loop
+        // was torn down and rebuilt in the middle of typing, taking any finger
+        // currently down with it. Nothing about the *gesture* changes when a label
+        // does, so the loop keeps running and simply reads the newest geometry.
+        val livePlacement by rememberUpdatedState(placement)
+        val liveLearnedOffsets by rememberUpdatedState(learnedOffsets)
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(placement, settings, layerName) {
+                .pointerInput(settings, layerName) {
                     val touches = mutableMapOf<PointerId, Touch>()
 
                     fun resolve(x: Float, y: Float): PlacedKey? =
                         if (settings.touchModelEnabled) {
                             KeyPlacement.probableKey(
-                                placement, x, y,
+                                livePlacement, x, y,
                                 with(density) { settings.touchModelSigmaDp.dp.toPx() },
-                                learnedOffsets
+                                liveLearnedOffsets
                             )
                         } else {
-                            KeyPlacement.hitTest(placement, x, y)
+                            KeyPlacement.hitTest(livePlacement, x, y)
                         }
 
                     fun stopTimers(touch: Touch) {
@@ -383,22 +394,46 @@ fun KeySurface(
                         }
                     }
 
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            event.changes.forEach { change: PointerInputChange ->
-                                when {
-                                    change.changedToDownIgnoreConsumed() ->
-                                        beginTouch(change.id, change.position.x, change.position.y)
-                                    change.changedToUpIgnoreConsumed() ->
-                                        endTouch(change.id, cancelled = false)
-                                    else ->
-                                        moveTouch(change.id, change.position.x, change.position.y)
+                    // The gesture loop is restarted whenever its keys change — a
+                    // rotation, a window resize, a settings write, a layer switch. That
+                    // cancels this coroutine wherever it happens to be, including with a
+                    // finger down and a popup open, and nothing downstream ever hears
+                    // about it. Cleaning up here is what stops a cancelled gesture from
+                    // leaving a popup on screen for the rest of the session.
+                    try {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { change: PointerInputChange ->
+                                    when {
+                                        change.changedToDownIgnoreConsumed() ->
+                                            beginTouch(change.id, change.position.x, change.position.y)
+                                        change.changedToUpIgnoreConsumed() ->
+                                            endTouch(change.id, cancelled = false)
+                                        else ->
+                                            moveTouch(change.id, change.position.x, change.position.y)
+                                    }
+                                }
+                                // Consume so the keyboard body's own gestures do not also fire.
+                                if (touches.isNotEmpty()) event.changes.forEach { it.consume() }
+
+                                // No finger down means nothing may still be showing as
+                                // held. Enforced every event rather than trusted to the
+                                // release path, because the release path is exactly what
+                                // a cancelled gesture skips.
+                                if (touches.isEmpty()) {
+                                    if (popup != null) popup = null
+                                    if (preview != null) preview = null
+                                    if (pressed.isNotEmpty()) pressed.clear()
                                 }
                             }
-                            // Consume so the keyboard body's own gestures do not also fire.
-                            if (touches.isNotEmpty()) event.changes.forEach { it.consume() }
                         }
+                    } finally {
+                        touches.values.forEach { stopTimers(it) }
+                        touches.clear()
+                        popup = null
+                        preview = null
+                        pressed.clear()
                     }
                 }
         ) {
