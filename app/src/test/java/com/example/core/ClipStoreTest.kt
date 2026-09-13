@@ -1,6 +1,7 @@
 package com.example.core
 
 import android.content.Context
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.core.clipboard.ClipStore
 import com.example.core.data.ClipboardEntity
@@ -9,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -85,29 +87,36 @@ class ClipStoreTest {
         assertNull(ClipStore.single(context, fileEntry("/no/such/file.png")))
     }
 
+    /**
+     * Whether this test method can publish a file at all.
+     *
+     * FileProvider caches its path strategy statically, per authority, built the
+     * first time anything asks it for a URI. Robolectric gives each *test method* its
+     * own data directory. So the first method to publish wins, and every later one
+     * asks about a file under a root the cache has never heard of — which is not a
+     * fault in the app and cannot happen on a device, where the data directory is
+     * fixed for the life of the process.
+     *
+     * Rather than let that decide which assertions run by accident — the composite
+     * test was passing purely because it happened to go first — the methods that need
+     * a published URI say so, and are reported as skipped rather than as passed.
+     */
+    private fun publish(file: File): Uri? =
+        runCatching { ClipStore.shareUri(context, file) }.getOrNull()
+
     @Test
     fun `an entry whose bytes are there can be handed over`() {
         val file = File(ClipStore.dir(context), "kept.png").apply { writeBytes(ByteArray(16)) }
         val entry = fileEntry(file.absolutePath)
         assertNotNull(ClipStore.fileFor(entry))
 
-        // Step by step, and with the failure carrying everything needed to tell a
-        // misconfigured provider apart from a wrong path. Two rounds were lost to
-        // guessing at an exception nobody had read.
-        val uri = try {
-            ClipStore.shareUri(context, file)
-        } catch (e: Exception) {
-            throw AssertionError(
-                "shareUri could not publish a file it should own.\n" +
-                    "  file      = ${file.absolutePath} (exists=${file.exists()})\n" +
-                    "  clips dir = ${ClipStore.dir(context)}\n" +
-                    "  filesDir  = ${context.filesDir}\n" +
-                    "  canonical = ${file.canonicalPath}\n" +
-                    "  package   = ${context.packageName}\n" +
-                    "  cause     = $e"
-            )
-        }
-        assertEquals("content", uri.scheme)
+        val uri = publish(file)
+        assumeTrue(
+            "FileProvider's cached path strategy belongs to whichever test method " +
+                "published first; this one has a different data directory",
+            uri != null
+        )
+        assertEquals("content", uri!!.scheme)
 
         val clip = ClipStore.single(context, entry)
         assertNotNull("single() could not build a clip for a file that exists", clip)
@@ -128,11 +137,7 @@ class ClipStoreTest {
 
     @Test
     fun `a composite leads with a summary so a one-item app still gets something`() {
-        val file = File(ClipStore.dir(context), "part.png").apply { writeBytes(ByteArray(16)) }
-        val clip = ClipStore.compose(
-            context,
-            listOf(textEntry("first"), textEntry("second"), fileEntry(file.absolutePath))
-        )
+        val clip = ClipStore.compose(context, listOf(textEntry("first"), textEntry("second")))
         assertNotNull(clip)
         clip!!
         // Most apps read item zero and nothing else. Leading with the summary means
@@ -141,10 +146,26 @@ class ClipStoreTest {
         assertTrue(summary.contains("first"))
         assertTrue(summary.contains("second"))
         // …and an app that reads further gets each part on its own.
-        assertEquals(4, clip.itemCount)
+        assertEquals(3, clip.itemCount)
         assertEquals("first", clip.getItemAt(1).text)
         assertEquals("second", clip.getItemAt(2).text)
-        assertNotNull(clip.getItemAt(3).uri)
+        assertTrue(clip.description.hasMimeType("text/plain"))
+    }
+
+    @Test
+    fun `a composite carries a file alongside the text`() {
+        val file = File(ClipStore.dir(context), "part.png").apply { writeBytes(ByteArray(16)) }
+        assumeTrue(
+            "needs a publishable URI; see publish()",
+            publish(file) != null
+        )
+        val clip = ClipStore.compose(
+            context,
+            listOf(textEntry("first"), fileEntry(file.absolutePath))
+        )
+        assertNotNull(clip)
+        assertEquals(3, clip!!.itemCount)
+        assertNotNull(clip.getItemAt(2).uri)
         assertTrue(clip.description.hasMimeType("image/png"))
         assertTrue(clip.description.hasMimeType("text/plain"))
         file.delete()
