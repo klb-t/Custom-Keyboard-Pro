@@ -91,9 +91,22 @@ class ClipStoreTest {
         val entry = fileEntry(file.absolutePath)
         assertNotNull(ClipStore.fileFor(entry))
 
-        // Step by step, so a failure names which step failed rather than just
-        // reporting that a nullable came back null.
-        val uri = ClipStore.shareUri(context, file)
+        // Step by step, and with the failure carrying everything needed to tell a
+        // misconfigured provider apart from a wrong path. Two rounds were lost to
+        // guessing at an exception nobody had read.
+        val uri = try {
+            ClipStore.shareUri(context, file)
+        } catch (e: Exception) {
+            throw AssertionError(
+                "shareUri could not publish a file it should own.\n" +
+                    "  file      = ${file.absolutePath} (exists=${file.exists()})\n" +
+                    "  clips dir = ${ClipStore.dir(context)}\n" +
+                    "  filesDir  = ${context.filesDir}\n" +
+                    "  canonical = ${file.canonicalPath}\n" +
+                    "  package   = ${context.packageName}\n" +
+                    "  cause     = $e"
+            )
+        }
         assertEquals("content", uri.scheme)
 
         val clip = ClipStore.single(context, entry)
