@@ -163,3 +163,35 @@ The selected tab is remembered per key. Tapping an already-selected tab pins it,
 a pinned tab shows alongside whatever is selected next — which is how you write an
 equation inside Polish prose without toggling between maths and diacritics.
 
+
+## What gets checked
+
+A layout is data, and a model is allowed to write it. That is the point — it is what
+makes "describe the keyboard you want" work at all — but it means the drawing code is
+handed things a compiler would never have let through, and none of them throw:
+
+| Fault | What you see on the phone |
+|---|---|
+| element shows a layer nobody defined | a piece of the keyboard is missing |
+| `defaultLayer` names a layer that does not exist | the keyboard opens on nothing |
+| a floating element with no `bounds` | a block with no position |
+| two keys in one layer share an `id` | touch learning, popup memory and cursor avoidance get crossed |
+| a key switches to a layer that does not exist | pressing it does nothing |
+| a popup tab with no items | a tab that opens and shows nothing |
+
+`LayoutDoctor.check` lists them; `LayoutDoctor.repair` fixes the ones that can be
+fixed without guessing, and `LayoutRepository.save` runs it on the way in — so a fault
+from a model's reply, a hand-edited file or an import is put right once rather than
+worked around by every screen afterwards.
+
+Repair is conservative on purpose. It never invents a key and never drops one: a
+duplicate id is suffixed rather than deleted, an element pointing nowhere is redirected
+to the default layer rather than removed. A key that ends up oddly named is a
+complaint; a key that silently vanished is a bug report with nothing to go on.
+
+What it will not repair is anything that needs a decision: a key switching to a layer
+that does not exist would need a layer full of keys nobody asked for. Those are
+reported and left exactly as written.
+
+Settings → Diagnostics → **Layout health** shows the result for every layout on the
+device, which is the only way to see it without a computer.

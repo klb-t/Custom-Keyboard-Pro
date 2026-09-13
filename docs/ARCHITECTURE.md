@@ -119,3 +119,15 @@ its `onCreate`, so a handler installed in `onCreate` cannot see them — which i
 where a bug hid once, producing a report of a crash alongside a log containing no
 crash and no process restart, both true and both useless.
 
+
+Two more things are checked rather than trusted, for the same reason — the only test
+device belongs to the user, so a fault that is silent is a fault nobody finds:
+
+- `LayoutDoctor` reads a layout and reports what would make it draw wrongly, and
+  repairs what can be repaired without guessing. See `docs/LAYOUT_FORMAT.md`.
+- `SettingsSchema.orphanedMetadata` names entries in the settings metadata table that
+  describe a setting which does not exist. A typo there is invisible in every other
+  way: the setting it was written for falls back to a generated label and a guessed
+  group, which reads as an oversight rather than as a mistake.
+
+Both surface in Diagnostics, and both fail a unit test.
