@@ -50,6 +50,7 @@ import com.example.core.layout.PresentationMode
 import com.example.core.layout.SwipeDirection
 import com.example.core.layout.SwitchTarget
 import com.example.core.suggest.Correction
+import com.example.core.predict.CompletionEngine
 import com.example.core.suggest.SuggestionEngine
 import com.example.core.text.TextOps
 import com.example.ui.kb.KeyboardHost
@@ -94,6 +95,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override val suggestions: SuggestionEngine by lazy {
         SuggestionEngine(this, serviceScope, repository) { SettingsStore.current }
+    }
+
+    override val completions: CompletionEngine by lazy {
+        CompletionEngine(serviceScope) { SettingsStore.current }
     }
 
     override val voice: VoiceController by lazy {
@@ -285,6 +290,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             state.resetLayer(LayoutDef.BASE_LAYER)
             state.clearPending()
             suggestions.clear()
+            completions.clear()
             previousWord = ""
 
             // Only ask for cursor reports when something will act on them: monitoring
@@ -318,6 +324,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         super.onFinishInputView(finishingInput)
         voice.cancel()
         suggestions.clear()
+        completions.clear()
         panelState.value = null
     }
 
@@ -924,11 +931,17 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     private fun refreshSuggestions() {
+        val before = editor.textBefore(SettingsStore.current.aiContextChars.coerceAtLeast(64))
+        val sensitive = editor.isSensitive
         suggestions.update(
-            textBeforeCursor = editor.textBefore(SettingsStore.current.aiContextChars.coerceAtLeast(64)),
-            sensitive = editor.isSensitive,
+            textBeforeCursor = before,
+            sensitive = sensitive,
             locale = layout.locale.orEmpty()
         )
+        // Same trigger, two lanes. The engine debounces and refuses sensitive fields
+        // itself, so this stays one call rather than a policy scattered over the
+        // service — every place text changes already ends up here.
+        completions.request(before, sensitive)
     }
 
     /**

@@ -9,6 +9,7 @@ import com.example.core.layout.KeyAction
 import com.example.core.layout.KeyDef
 import com.example.core.layout.LayoutDef
 import com.example.core.layout.PanelId
+import com.example.core.predict.CompletionEngine
 import com.example.core.suggest.SuggestionEngine
 import com.example.ime.EditorController
 import com.example.ime.KeyboardState
@@ -24,6 +25,16 @@ interface KeyboardHost {
     val state: KeyboardState
     val editor: EditorController
     val suggestions: SuggestionEngine
+
+    /**
+     * The other lane: what could come *next*, rather than what the last word should
+     * have been. Kept apart from [suggestions] all the way up to the UI because the
+     * two obey opposite rules — one changes text the user already wrote and is
+     * therefore timid, the other only ever adds text on a deliberate tap and can
+     * afford to be bold.
+     */
+    val completions: CompletionEngine
+
     val voice: VoiceController
     val repository: KeyboardRepository
 

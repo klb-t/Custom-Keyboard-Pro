@@ -238,6 +238,15 @@ class MainActivity : ComponentActivity() {
         SettingsSchema.dynamicOptions["asrProvider"] = {
             ProviderCatalog.serving(AiCapability.TRANSCRIBE, SettingsStore.current).map { it.id }
         }
+        // The same question, asked about continuing text rather than transcribing it.
+        // A blank entry first because blank means "use the AI provider", and a
+        // dropdown with no way back to the default is a dropdown that traps you.
+        SettingsSchema.dynamicOptions["completionProvider"] = {
+            listOf("") + ProviderCatalog.serving(AiCapability.COMPLETE, SettingsStore.current).map { it.id }
+        }
+        SettingsSchema.dynamicOptions["completionModel"] = {
+            ModelDiscovery.cachedModels(SettingsStore.current)
+        }
     }
 
     private fun openImeSettings() {

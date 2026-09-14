@@ -204,6 +204,10 @@ object SettingsSchema {
     }
 
     private fun groupFor(key: String): String = when {
+        // Before the generic rules, or "completionDebounceMs" lands under Timing and
+        // "completionMaxChars" under Typing — one feature in three places, which is
+        // how a settings screen becomes unusable while every setting is present.
+        key.startsWith("completion") -> GROUP_PREDICTION
         key.startsWith("ai") -> GROUP_AI
         key.startsWith("asr") -> GROUP_VOICE
         key.startsWith("clipboard") -> GROUP_CLIPBOARD
@@ -232,6 +236,7 @@ object SettingsSchema {
     const val GROUP_FEEDBACK = "Feedback"
     const val GROUP_SUGGESTIONS = "Suggestions"
     const val GROUP_AI = "AI"
+    const val GROUP_PREDICTION = "Prediction"
     const val GROUP_VOICE = "Dictation"
     const val GROUP_CLIPBOARD = "Clipboard"
     const val GROUP_INDICATORS = "Indicators"
@@ -413,6 +418,69 @@ object SettingsSchema {
         "aiTemperature" to Meta(group = GROUP_AI, label = "Temperature", min = 0f, max = 2f),
         "aiMaxTokens" to Meta(group = GROUP_AI, label = "Max tokens", min = 8f, max = 2048f),
         "aiCustomTasksJson" to Meta(kind = SettingKind.JSON, group = GROUP_AI, label = "Custom AI tasks", multiline = true),
+
+        // The prediction lane. Its own group rather than a corner of the AI one,
+        // because it is the only feature here that sends text somewhere on its own,
+        // without anyone pressing anything — which is a thing to be able to find.
+        "completionEnabled" to Meta(
+            group = GROUP_PREDICTION, label = "Predict what comes next",
+            help = "Off by default. When on, the keyboard asks a model to continue " +
+                "what you are writing shortly after you stop typing, and offers the " +
+                "result on a second row. That costs a request per pause and sends " +
+                "the text being written. Never in a password field."
+        ),
+        "completionProvider" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_PREDICTION, label = "Provider",
+            help = "Blank uses the AI provider. Only providers that can complete text " +
+                "are offered — a chat endpoint answers a continuation with a reply to it."
+        ),
+        "completionModel" to Meta(kind = SettingKind.ENUM, group = GROUP_PREDICTION, label = "Model"),
+        "completionApiKey" to Meta(group = GROUP_PREDICTION, label = "API key", secret = true),
+        "completionMinChars" to Meta(
+            group = GROUP_PREDICTION, label = "Start predicting after", min = 0f, max = 80f,
+            help = "Characters written before it is worth asking anything."
+        ),
+        "completionDebounceMs" to Meta(
+            group = GROUP_PREDICTION, label = "Wait before asking", min = 100f, max = 5000f,
+            help = "Every keystroke sending a request would pay for text you are still " +
+                "changing. This is how long the typing has to stop first."
+        ),
+        "completionReserveRow" to Meta(
+            group = GROUP_PREDICTION, label = "Keep the row's space when empty",
+            help = "On, the keys never move. Off gives the space back and the board " +
+                "shifts by one row whenever a prediction arrives or goes."
+        ),
+        "completionMaxTokens" to Meta(
+            group = GROUP_PREDICTION, label = "Max tokens", min = 8f, max = 1024f, expert = true
+        ),
+        "completionTemperature" to Meta(
+            group = GROUP_PREDICTION, label = "Temperature", min = 0f, max = 2f, expert = true
+        ),
+        "completionTokenFloor" to Meta(
+            group = GROUP_PREDICTION, label = "Stop below this log-probability",
+            min = -12f, max = 0f, expert = true,
+            help = "0 disables it. A single uncertain token — a name, a number — cuts " +
+                "an otherwise good continuation in half here, which is why the budget " +
+                "below is usually the better one to set."
+        ),
+        "completionSurpriseBudget" to Meta(
+            group = GROUP_PREDICTION, label = "Total surprise allowed", min = 0f, max = 60f, expert = true,
+            help = "Stops when the generation as a whole has drifted rather than when " +
+                "one token was odd. 0 disables it."
+        ),
+        "completionMaxChars" to Meta(
+            group = GROUP_PREDICTION, label = "Longest prediction", min = 20f, max = 4000f, expert = true,
+            help = "The hard stop. Every other condition can fail to fire."
+        ),
+        "completionMaxMillis" to Meta(
+            group = GROUP_PREDICTION, label = "Stop after", min = 300f, max = 20000f, expert = true,
+            help = "On a phone, having been kept waiting is itself a reason to stop."
+        ),
+        "completionAcceptedScope" to Meta(
+            group = GROUP_PREDICTION, label = "Last length accepted", expert = true,
+            help = "Written by the keyboard, not for you to set: which depth of " +
+                "prediction you last took. Shown because nothing here is hidden."
+        ),
 
         "asrEngine" to Meta(
             kind = SettingKind.ENUM, group = GROUP_VOICE, label = "Where dictation goes",

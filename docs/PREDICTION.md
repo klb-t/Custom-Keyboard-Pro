@@ -132,10 +132,50 @@ actually wandered.
 mid-expression — `fun x() ` is balanced the instant it is written — so counting them
 stops every code generation on its first token.
 
-## Not yet wired
+## The second row
 
-The core above is compiled and tested; nothing calls it. That was deliberate: it is the
-piece where being subtly wrong is worse than being obviously broken, so it stands on
-its own first. Still to come: the two rows in the UI, the tree, and streaming in the
-call engine — which everything above needs, since cutting on a log-probability requires
-tokens as they arrive rather than a finished reply.
+The prediction lane is now on screen, below the suggestion strip and never beside it.
+It is marked with a `›`, it shows the offers shortest-first with the depth of each
+(`word`, `phrase`, `sentence`, …), a `…` while tokens are still arriving, and the
+reason it stopped once it has. A tap commits the slice verbatim — the generation
+carries its own leading space, so nothing adds a second one.
+
+Two things about the row that are not obvious:
+
+**It holds its space while empty.** A row that appears when a continuation arrives and
+disappears when the next keystroke cancels it moves every key on the board by its own
+height, twice, between one letter and the next — under a finger already travelling
+towards a key. `completionReserveRow` is on by default for that reason and can be
+turned off by anyone who would rather have the pixels.
+
+**It refuses sensitive fields inside the engine, not at the call site.** This is the
+one path in the keyboard where what is being typed leaves the device before anybody
+presses anything, so the check lives where the request is made. A guard repeated at
+every call site is a guard that will one day be missing from a new one. The decision
+is `Refusal.of`, a pure function with no network in it, which is the only reason it
+can be tested at all.
+
+`Refusal` names its four reasons rather than returning a boolean, because three of them
+mean *not yet* and `SENSITIVE` means *not ever from here*, and somebody later deciding
+whether a check can be relaxed needs to be able to tell which is which.
+
+Off by default, like everything that leaves the device. Eleven of the bundled providers
+declare `complete`, OpenRouter and the local servers among them.
+
+## Still to come
+
+The **tree**: descending is taking a longer slice, or regenerating from the one just
+accepted. The **touch model as a distribution** rather than a static offset. And the
+overlap below.
+
+### An overlap, named rather than quietly left
+
+There is an older AI completion (`aiCompletionEnabled`) that asks a chat model for a
+short continuation and merges it into the **first** row. That is exactly the arrangement
+the table at the top of this file says not to build: an addition sitting among
+replacements, where a mis-tap inserts text instead of fixing a word.
+
+It predates the two-lane split and it still works, with any chat provider, where the
+new lane wants one that declares `complete`. Removing it would close an option that
+currently functions, so it stays until that is a decision rather than a side effect of
+this change.

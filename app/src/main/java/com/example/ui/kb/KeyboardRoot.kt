@@ -49,6 +49,8 @@ import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
 import com.example.core.layout.PanelId
 import com.example.core.layout.PresentationMode
+import com.example.core.predict.CompletionState
+import com.example.core.predict.Slice
 import com.example.core.layout.TextUnit as EditUnit
 
 /**
@@ -82,10 +84,22 @@ fun KeyboardRoot(
 
     val suggestions by host.suggestions.suggestions.collectAsState()
     val aiBusy by host.suggestions.aiBusy.collectAsState()
+    val completion by host.completions.state.collectAsState()
     val panel = host.openPanelId
+
+    // Whether the prediction row occupies height at all.
+    //
+    // Never while completion is off, so the keyboard is exactly as tall as it always
+    // was for anyone who has not turned it on — which is everyone, until they do.
+    // With it on, the row holds its space even while empty by default, because a row
+    // that comes and goes between keystrokes moves every key under a finger already
+    // travelling towards one. [Settings.completionReserveRow] hands that choice back.
+    val completionShowing = settings.completionEnabled && panel == null &&
+        (settings.completionReserveRow || !completion.isEmpty || completion.running)
 
     val totalHeightDp = keyboardHeightDp +
         (if (settings.suggestionsEnabled || panel != null) stripHeight.value else 0f) +
+        (if (completionShowing) stripHeight.value else 0f) +
         (if (settings.indicatorStripVisible) indicatorHeight.value else 0f) +
         settings.bottomPaddingDp
 
@@ -119,6 +133,7 @@ fun KeyboardRoot(
             indicatorHeight = indicatorHeight,
             suggestions = suggestions,
             aiBusy = aiBusy,
+            completion = if (completionShowing) completion else null,
             panel = panel
         )
     } else if (free) {
@@ -132,7 +147,8 @@ fun KeyboardRoot(
             avoidFade = host.avoidance.fade
         ) {
             KeyboardBody(
-                settings, theme, suggestions, aiBusy, panel,
+                settings, theme, suggestions, aiBusy,
+                if (completionShowing) completion else null, panel,
                 keyboardHeightDp, stripHeight, indicatorHeight
             )
         }
@@ -162,7 +178,8 @@ fun KeyboardRoot(
         ) {
             Box(Modifier.fillMaxHeight().width((screenWidthDp * widthFraction).dp)) {
                 KeyboardBody(
-                    settings, theme, suggestions, aiBusy, panel,
+                    settings, theme, suggestions, aiBusy,
+                    if (completionShowing) completion else null, panel,
                     keyboardHeightDp, stripHeight, indicatorHeight
                 )
             }
@@ -183,6 +200,8 @@ private fun KeyboardBody(
     theme: KeyboardTheme,
     suggestions: List<com.example.core.suggest.Suggestion>,
     aiBusy: Boolean,
+    /** Null when there is nothing to offer, which is also when it takes no height. */
+    completion: CompletionState?,
     panel: PanelId?,
     keyboardHeightDp: Float,
     stripHeight: androidx.compose.ui.unit.Dp,
@@ -206,6 +225,19 @@ private fun KeyboardBody(
                 onReject = { host.suggestions.block(it.text) },
                 onToolbar = { host.openPanel(it) },
                 height = stripHeight
+            )
+        }
+
+        // Below the corrections, never beside them. The row above replaces what is
+        // already written; this one only ever adds, and the two must not be one
+        // horizontal list where a mis-tap turns an addition into a substitution.
+        completion?.let { state ->
+            CompletionRow(
+                state = state,
+                theme = theme,
+                height = stripHeight,
+                onAccept = { slice -> acceptCompletion(host, slice) },
+                onDismiss = { host.completions.clear() }
             )
         }
 
@@ -270,6 +302,18 @@ private fun acceptSuggestion(host: KeyboardHost, suggestion: com.example.core.su
         )
     }
     host.suggestions.clear()
+}
+
+/**
+ * Taking a slice of the continuation.
+ *
+ * Verbatim, and without the space a next-word suggestion gets: the generation already
+ * carries its own leading space, and [Slicer.cut] keeps it for exactly this reason.
+ * Adding another produces "the  keyboard" on every single tap.
+ */
+private fun acceptCompletion(host: KeyboardHost, slice: Slice) {
+    host.editor.commitCompletion(slice.text)
+    host.completions.accepted(slice)
 }
 
 @Composable
@@ -715,6 +759,7 @@ private fun ElementComposition(
     indicatorHeight: androidx.compose.ui.unit.Dp,
     suggestions: List<com.example.core.suggest.Suggestion>,
     aiBusy: Boolean,
+    completion: CompletionState?,
     panel: PanelId?
 ) {
     val host = LocalKeyboardHost.current
@@ -744,6 +789,7 @@ private fun ElementComposition(
                     indicatorHeight = indicatorHeight,
                     suggestions = suggestions,
                     aiBusy = aiBusy,
+                    completion = completion,
                     panel = panel
                 )
             }
@@ -803,6 +849,7 @@ private fun DockedElements(
     indicatorHeight: androidx.compose.ui.unit.Dp,
     suggestions: List<com.example.core.suggest.Suggestion>,
     aiBusy: Boolean,
+    completion: CompletionState?,
     panel: PanelId?
 ) {
     val host = LocalKeyboardHost.current
@@ -831,6 +878,19 @@ private fun DockedElements(
                 onReject = { host.suggestions.block(it.text) },
                 onToolbar = { host.openPanel(it) },
                 height = stripHeight
+            )
+        }
+
+        // Below the corrections, never beside them. The row above replaces what is
+        // already written; this one only ever adds, and the two must not be one
+        // horizontal list where a mis-tap turns an addition into a substitution.
+        completion?.let { state ->
+            CompletionRow(
+                state = state,
+                theme = theme,
+                height = stripHeight,
+                onAccept = { slice -> acceptCompletion(host, slice) },
+                onDismiss = { host.completions.clear() }
             )
         }
         Box(

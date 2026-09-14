@@ -192,6 +192,20 @@ object SettingsStore {
         put("aiTemperature", s.aiTemperature.toDouble())
         put("aiMaxTokens", s.aiMaxTokens)
         put("aiCustomTasksJson", s.aiCustomTasksJson)
+        put("completionEnabled", s.completionEnabled)
+        put("completionProvider", s.completionProvider)
+        put("completionModel", s.completionModel)
+        put("completionApiKey", s.completionApiKey)
+        put("completionMinChars", s.completionMinChars)
+        put("completionDebounceMs", s.completionDebounceMs)
+        put("completionMaxTokens", s.completionMaxTokens)
+        put("completionTemperature", s.completionTemperature)
+        put("completionTokenFloor", s.completionTokenFloor)
+        put("completionSurpriseBudget", s.completionSurpriseBudget)
+        put("completionMaxChars", s.completionMaxChars)
+        put("completionMaxMillis", s.completionMaxMillis)
+        put("completionAcceptedScope", s.completionAcceptedScope)
+        put("completionReserveRow", s.completionReserveRow)
         put("catalogUrl", s.catalogUrl)
         put("fetchedProvidersJson", s.fetchedProvidersJson)
         put("catalogFetchedAt", s.catalogFetchedAt)
@@ -336,6 +350,20 @@ object SettingsStore {
             aiTemperature = o.optDouble("aiTemperature", d.aiTemperature.toDouble()).toFloat(),
             aiMaxTokens = o.optInt("aiMaxTokens", d.aiMaxTokens),
             aiCustomTasksJson = o.optString("aiCustomTasksJson", d.aiCustomTasksJson),
+            completionEnabled = o.optBoolean("completionEnabled", d.completionEnabled),
+            completionProvider = o.optString("completionProvider", d.completionProvider),
+            completionModel = o.optString("completionModel", d.completionModel),
+            completionApiKey = o.optString("completionApiKey", d.completionApiKey),
+            completionMinChars = o.optInt("completionMinChars", d.completionMinChars),
+            completionDebounceMs = o.optLong("completionDebounceMs", d.completionDebounceMs),
+            completionMaxTokens = o.optInt("completionMaxTokens", d.completionMaxTokens),
+            completionTemperature = o.optDouble("completionTemperature", d.completionTemperature.toDouble()).toFloat(),
+            completionTokenFloor = o.optDouble("completionTokenFloor", d.completionTokenFloor.toDouble()).toFloat(),
+            completionSurpriseBudget = o.optDouble("completionSurpriseBudget", d.completionSurpriseBudget.toDouble()).toFloat(),
+            completionMaxChars = o.optInt("completionMaxChars", d.completionMaxChars),
+            completionMaxMillis = o.optLong("completionMaxMillis", d.completionMaxMillis),
+            completionAcceptedScope = o.optString("completionAcceptedScope", d.completionAcceptedScope),
+            completionReserveRow = o.optBoolean("completionReserveRow", d.completionReserveRow),
             catalogUrl = o.optString("catalogUrl", d.catalogUrl),
             fetchedProvidersJson = o.optString("fetchedProvidersJson", d.fetchedProvidersJson),
             catalogFetchedAt = o.optLong("catalogFetchedAt", d.catalogFetchedAt),

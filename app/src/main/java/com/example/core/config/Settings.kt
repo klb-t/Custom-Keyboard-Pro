@@ -189,6 +189,44 @@ data class Settings(
     val aiTemperature: Float = 0.3f,
     val aiMaxTokens: Int = 64,
     val aiCustomTasksJson: String = "",
+
+    // --- finishing sentences (the prediction lane) ------------------------
+    //
+    // Off by default. It costs money per keystroke-pause and sends what is being
+    // written to whoever is configured; neither is a thing to switch on for somebody.
+    val completionEnabled: Boolean = false,
+    /** Empty follows the main AI provider. */
+    val completionProvider: String = "",
+    val completionModel: String = "",
+    val completionApiKey: String = "",
+    /** Nothing is asked for until this much has been typed. */
+    val completionMinChars: Int = 12,
+    /** Time after the last keystroke before asking. Not politeness — money. */
+    val completionDebounceMs: Long = 500L,
+    val completionMaxTokens: Int = 96,
+    val completionTemperature: Float = 0.3f,
+    /** Cut when one token drops below this log-probability. 0 disables it. */
+    val completionTokenFloor: Float = 0f,
+    /** Cut when the generation as a whole has drifted. Better than a floor alone. */
+    val completionSurpriseBudget: Float = 12f,
+    val completionMaxChars: Int = 400,
+    /** On a phone, waiting is a reason to stop. */
+    val completionMaxMillis: Long = 3500L,
+    /** Which depth the user last took, so the strip can lead with it. */
+    val completionAcceptedScope: String = "",
+    /**
+     * Keep the prediction row's space even while it is empty.
+     *
+     * On by default, and the reason is the keys rather than the row. A row that
+     * appears when a continuation arrives and vanishes when the next keystroke
+     * cancels it moves every key on the board by its own height, twice, between one
+     * letter and the next — under a finger already on its way down. Reserving the
+     * space costs the height of one strip and makes the board stop moving.
+     *
+     * Off gives the space back to anyone who would rather have it and does not mind
+     * the jump.
+     */
+    val completionReserveRow: Boolean = true,
     /**
      * Where to fetch an updated provider catalogue from. Empty by default, and
      * deliberately so: a default would point every install at an address of the
