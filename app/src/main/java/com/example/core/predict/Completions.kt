@@ -60,10 +60,13 @@ enum class Refusal {
          *
          * [provider] is a lambda because resolving one parses the catalogue, and doing
          * that on every keystroke in a password field would be work done solely to
-         * reach a conclusion already reached on the first line.
+         * reach a conclusion already reached on the first line. [before] is a
+         * CharSequence for the same reason: that is what the editor hands out, and
+         * copying the whole surrounding buffer into a String in order to decide
+         * whether to look at it is the wrong way round.
          */
         fun of(
-            before: String,
+            before: CharSequence,
             sensitive: Boolean,
             s: Settings,
             provider: () -> ProviderSpec?
@@ -125,7 +128,7 @@ class CompletionEngine(
      * refused at the point of departure. A guard placed at every call site is a guard
      * that will one day be missing from a new call site.
      */
-    fun request(before: String, sensitive: Boolean) {
+    fun request(before: CharSequence, sensitive: Boolean) {
         val s = settings()
         // Lazy, and looked up at most once: the catalogue is parsed from JSON on
         // every lookup, and this runs on every keystroke. In a password field the
@@ -170,8 +173,15 @@ class CompletionEngine(
                 provider = provider,
                 capability = AiCapability.COMPLETE,
                 input = CallInput(
-                    model = s.completionModel,
-                    prompt = before.takeLast(s.aiContextChars),
+                    // Blank means "whatever this capability says it uses". Sending an
+                    // empty model name is a 400 that reads like a broken key, and a
+                    // provider that names its own default should not need the user to
+                    // repeat it before the feature works at all.
+                    model = s.completionModel.ifBlank {
+                        provider.capability(AiCapability.COMPLETE)?.defaultModel.orEmpty()
+                            .ifBlank { provider.defaultModel }
+                    },
+                    prompt = before.takeLast(s.aiContextChars).toString(),
                     params = mapOf(
                         "maxTokens" to s.completionMaxTokens.toString(),
                         "temperature" to s.completionTemperature.toString()

@@ -41,7 +41,7 @@ class CompletionGateTest {
 
     @Test
     fun `a working configuration is not refused`() {
-        assertNull(Refusal.of(enough, sensitive = false, ready) { completer })
+        assertNull(Refusal.of(enough, false, ready) { completer })
     }
 
     @Test
@@ -51,7 +51,7 @@ class CompletionGateTest {
         // the reason — and no amount of later configuration can talk it round.
         assertEquals(
             Refusal.SENSITIVE,
-            Refusal.of(enough, sensitive = true, ready) { completer }
+            Refusal.of(enough, true, ready) { completer }
         )
     }
 
@@ -59,12 +59,12 @@ class CompletionGateTest {
     fun `the feature is off until it is turned on`() {
         assertEquals(
             Refusal.DISABLED,
-            Refusal.of(enough, sensitive = false, Settings(completionProvider = "test")) { completer }
+            Refusal.of(enough, false, Settings(completionProvider = "test")) { completer }
         )
         // And the default settings are that state: nothing leaves a fresh install.
         assertEquals(
             Refusal.DISABLED,
-            Refusal.of(enough, sensitive = false, Settings()) { completer }
+            Refusal.of(enough, false, Settings()) { completer }
         )
     }
 
@@ -72,11 +72,11 @@ class CompletionGateTest {
     fun `too little text is not worth an inference`() {
         assertEquals(
             Refusal.TOO_SHORT,
-            Refusal.of("hi", sensitive = false, ready) { completer }
+            Refusal.of("hi", false, ready) { completer }
         )
         assertEquals(
             Refusal.TOO_SHORT,
-            Refusal.of("", sensitive = false, ready) { completer }
+            Refusal.of("", false, ready) { completer }
         )
     }
 
@@ -98,7 +98,7 @@ class CompletionGateTest {
         // keystroke. Resolving a provider in order to decide something already decided
         // would be work done for no reason, on the battery, forever.
         var resolved = 0
-        Refusal.of(enough, sensitive = true, ready) { resolved++; completer }
+        Refusal.of(enough, true, ready) { resolved++; completer }
         assertEquals(0, resolved)
     }
 }
