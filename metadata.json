@@ -1,6 +1,0 @@
-{
-  "name": "Full Customize Keyboard",
-  "description": "Fully customizable Android Keyboard with dynamic layouts and API integrations.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
