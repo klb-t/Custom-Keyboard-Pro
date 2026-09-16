@@ -4,34 +4,101 @@ on:
   push:
     branches:
       - main
+      - 'claude/**'
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew || true
+      # The repository intentionally ships no Gradle wrapper binary, so Gradle is
+      # provisioned by the setup action instead of `./gradlew`.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7.1'
 
-    - name: Run Tests
-      run: ./gradlew :app:testDebugUnitTest
+      # Compiler diagnostics are re-printed at the very end of the step so that a
+      # failure is legible from the log tail instead of buried under a stack trace.
+      - name: Compile
+        run: |
+          set -o pipefail
+          if ! gradle :app:compileDebugKotlin --console=plain 2>&1 | tee compile.log; then
+            echo "::group::Kotlin diagnostics"
+            grep -E '^(e|w): ' compile.log | head -120 || true
+            echo "::endgroup::"
+            echo "---- COMPILE ERRORS ----"
+            grep -E '^e: ' compile.log | head -80 || echo "(no 'e:' lines; see full log)"
+            exit 1
+          fi
 
-    - name: Build Debug APK
-      run: ./gradlew :app:assembleDebug
+      # Gradle's console output names the failing test and the line it failed on,
+      # and stops there. The message — which is the part that says what actually
+      # went wrong — only exists in the JUnit XML. Several rounds were lost to
+      # diagnosing an exception whose text nobody could read, so the reports are
+      # parsed here and printed in full.
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          if ! gradle :app:testDebugUnitTest --console=plain 2>&1 | tee test.log; then
+            echo "---- TEST FAILURES ----"
+            python3 - <<'PYEOF' || true
+          import glob, xml.etree.ElementTree as ET
+          shown = 0
+          for path in sorted(glob.glob("app/build/test-results/**/*.xml", recursive=True)):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for case in root.iter("testcase"):
+                  for bad in list(case.findall("failure")) + list(case.findall("error")):
+                      shown += 1
+                      print("=" * 70)
+                      print(f"{case.get('classname')} > {case.get('name')}")
+                      print("-" * 70)
+                      print((bad.get("message") or "").strip())
+                      trace = (bad.text or "").strip().splitlines()
+                      for line in trace[:25]:
+                          print("    " + line)
+                      print()
+          if shown == 0:
+              print("(no failures in the XML reports; see the log above)")
+          PYEOF
+            exit 1
+          fi
 
-    - name: Upload Debug APK
-      uses: actions/upload-artifact@v3
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --console=plain
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore

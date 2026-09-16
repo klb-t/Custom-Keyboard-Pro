@@ -1,0 +1,1354 @@
+[
+  {
+    "id": "openai",
+    "label": "OpenAI",
+    "wire": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "docsUrl": "https://platform.openai.com/api-keys",
+    "note": "Chat, dictation, pictures, reading aloud and embeddings from one key.",
+    "capabilities": {
+      "transcribe": {
+        "wire": "openai_audio",
+        "defaultModel": "whisper-1",
+        "models": [
+          "whisper-1",
+          "gpt-4o-transcribe",
+          "gpt-4o-mini-transcribe"
+        ]
+      },
+      "ocr": {
+        "wire": "openai",
+        "defaultModel": "gpt-4o-mini",
+        "notes": "Reads the picture with the same model that writes."
+      },
+      "image": {
+        "call": {
+          "path": "/images/generations",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "prompt": "{{prompt}}",
+            "n": 1
+          },
+          "resultPath": "data[0].b64_json"
+        },
+        "defaultModel": "gpt-image-1",
+        "models": [
+          "gpt-image-1",
+          "dall-e-3"
+        ]
+      },
+      "speech": {
+        "call": {
+          "path": "/audio/speech",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}",
+            "voice": "alloy"
+          },
+          "resultPath": ""
+        },
+        "defaultModel": "gpt-4o-mini-tts"
+      },
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "text-embedding-3-small"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "gpt-4o-mini",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "general",
+      "dictation",
+      "images",
+      "speech",
+      "well-known"
+    ]
+  },
+  {
+    "id": "anthropic",
+    "label": "Anthropic",
+    "wire": "anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "claude-haiku-4-5-20251001",
+    "docsUrl": "https://console.anthropic.com/settings/keys",
+    "note": "Strong at rewriting and at reading messy handwriting.",
+    "capabilities": {
+      "ocr": {
+        "wire": "anthropic",
+        "defaultModel": "claude-haiku-4-5-20251001",
+        "notes": "Reads the picture with the same model that writes."
+      }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "writing",
+      "rewriting",
+      "long-context",
+      "handwriting"
+    ]
+  },
+  {
+    "id": "gemini",
+    "label": "Google Gemini",
+    "wire": "gemini",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "modelsPath": "/models",
+    "defaultModel": "gemini-2.5-flash",
+    "docsUrl": "https://aistudio.google.com/app/apikey",
+    "note": "Chat, pictures and video behind one key, with a free tier.",
+    "capabilities": {
+      "ocr": {
+        "wire": "gemini",
+        "defaultModel": "gemini-2.5-flash",
+        "notes": "Reads the picture with the same model that writes."
+      },
+      "image": {
+        "call": {
+          "path": "/models/{{model}}:predict",
+          "auth": "query",
+          "authName": "key",
+          "body": {
+            "instances": [
+              {
+                "prompt": "{{prompt}}"
+              }
+            ],
+            "parameters": {
+              "sampleCount": 1
+            }
+          },
+          "resultPath": "predictions[0].bytesBase64Encoded"
+        },
+        "defaultModel": "imagen-4.0-generate-001"
+      },
+      "embed": {
+        "call": {
+          "path": "/models/{{model}}:embedContent",
+          "auth": "query",
+          "authName": "key",
+          "body": {
+            "content": {
+              "parts": [
+                {
+                  "text": "{{prompt}}"
+                }
+              ]
+            }
+          },
+          "resultPath": "embedding.values"
+        },
+        "defaultModel": "text-embedding-004"
+      }
+    },
+    "freeTier": true,
+    "privacy": "trains_by_default",
+    "strengths": [
+      "free-tier",
+      "multimodal",
+      "long-context",
+      "video"
+    ],
+    "signupUrl": "https://aistudio.google.com/app/apikey"
+  },
+  {
+    "id": "mistral",
+    "label": "Mistral",
+    "wire": "openai",
+    "baseUrl": "https://api.mistral.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "mistral-small-latest",
+    "docsUrl": "https://console.mistral.ai/api-keys",
+    "note": "The only one here with an OCR endpoint built for documents rather than chat.",
+    "capabilities": {
+      "transcribe": {
+        "wire": "openai_audio",
+        "defaultModel": "voxtral-mini-latest"
+      },
+      "ocr": {
+        "call": {
+          "path": "/ocr",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "document": {
+              "type": "image_url",
+              "image_url": "data:{{imageMime}};base64,{{imageBase64}}"
+            }
+          },
+          "resultPath": "pages[0].markdown"
+        },
+        "defaultModel": "mistral-ocr-latest"
+      },
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "mistral-embed"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "mistral-small-latest",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "european",
+      "ocr",
+      "dictation",
+      "cheap"
+    ]
+  },
+  {
+    "id": "groq",
+    "label": "Groq",
+    "wire": "openai",
+    "baseUrl": "https://api.groq.com/openai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama-3.3-70b-versatile",
+    "docsUrl": "https://console.groq.com/keys",
+    "note": "Fastest answers here, and the cheapest dictation.",
+    "capabilities": {
+      "transcribe": {
+        "wire": "openai_audio",
+        "defaultModel": "whisper-large-v3-turbo",
+        "models": [
+          "whisper-large-v3-turbo",
+          "whisper-large-v3"
+        ]
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "llama-3.3-70b-versatile",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "fast",
+      "cheap",
+      "dictation"
+    ]
+  },
+  {
+    "id": "deepseek",
+    "label": "DeepSeek",
+    "wire": "openai",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "deepseek-chat",
+    "docsUrl": "https://platform.deepseek.com/api_keys",
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "cheap",
+      "reasoning",
+      "code"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "deepseek-chat",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "xai",
+    "label": "xAI (Grok)",
+    "wire": "openai",
+    "baseUrl": "https://api.x.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "grok-3-mini",
+    "docsUrl": "https://console.x.ai",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/images/generations",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "prompt": "{{prompt}}",
+            "n": 1
+          },
+          "resultPath": "data[0].b64_json"
+        },
+        "defaultModel": "grok-2-image"
+      }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "general",
+      "images"
+    ]
+  },
+  {
+    "id": "cohere",
+    "label": "Cohere",
+    "wire": "openai",
+    "baseUrl": "https://api.cohere.ai/compatibility/v1",
+    "modelsPath": "/models",
+    "defaultModel": "command-r7b-12-2024",
+    "docsUrl": "https://dashboard.cohere.com/api-keys",
+    "capabilities": {
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "embed-multilingual-v3.0"
+      }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "embeddings",
+      "multilingual"
+    ]
+  },
+  {
+    "id": "together",
+    "label": "Together AI",
+    "wire": "openai",
+    "baseUrl": "https://api.together.xyz/v1",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "docsUrl": "https://api.together.ai/settings/api-keys",
+    "note": "Open-weight models, including FLUX for pictures.",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/images/generations",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "prompt": "{{prompt}}",
+            "n": 1
+          },
+          "resultPath": "data[0].b64_json"
+        },
+        "defaultModel": "black-forest-labs/FLUX.1-schnell-Free"
+      },
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "BAAI/bge-base-en-v1.5"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "open-weights",
+      "images"
+    ]
+  },
+  {
+    "id": "fireworks",
+    "label": "Fireworks AI",
+    "wire": "openai",
+    "baseUrl": "https://api.fireworks.ai/inference/v1",
+    "modelsPath": "/models",
+    "defaultModel": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    "docsUrl": "https://fireworks.ai/account/api-keys",
+    "capabilities": {
+      "transcribe": {
+        "wire": "openai_audio",
+        "defaultModel": "whisper-v3-turbo"
+      }
+    },
+    "needsCard": true,
+    "privacy": "no_training",
+    "strengths": [
+      "open-weights",
+      "dictation"
+    ]
+  },
+  {
+    "id": "cerebras",
+    "label": "Cerebras",
+    "wire": "openai",
+    "baseUrl": "https://api.cerebras.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama3.3-70b",
+    "docsUrl": "https://cloud.cerebras.ai",
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "fast",
+      "free-tier"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "llama3.3-70b",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "perplexity",
+    "label": "Perplexity",
+    "wire": "openai",
+    "baseUrl": "https://api.perplexity.ai",
+    "modelsPath": "",
+    "defaultModel": "sonar",
+    "docsUrl": "https://www.perplexity.ai/settings/api",
+    "note": "Answers with sources, because it searches before it writes.",
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "search",
+      "sources"
+    ]
+  },
+  {
+    "id": "moonshot",
+    "label": "Moonshot (Kimi)",
+    "wire": "openai",
+    "baseUrl": "https://api.moonshot.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "kimi-k2-0905-preview",
+    "docsUrl": "https://platform.moonshot.ai/console/api-keys"
+  },
+  {
+    "id": "zai",
+    "label": "Z.ai (GLM)",
+    "wire": "openai",
+    "baseUrl": "https://api.z.ai/api/paas/v4",
+    "modelsPath": "",
+    "defaultModel": "glm-4.6",
+    "docsUrl": "https://z.ai/manage-apikey/apikey-list"
+  },
+  {
+    "id": "dashscope",
+    "label": "Alibaba Qwen (DashScope)",
+    "wire": "openai",
+    "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "modelsPath": "/models",
+    "defaultModel": "qwen-plus",
+    "docsUrl": "https://bailian.console.alibabacloud.com"
+  },
+  {
+    "id": "nebius",
+    "label": "Nebius AI Studio",
+    "wire": "openai",
+    "baseUrl": "https://api.studio.nebius.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
+    "docsUrl": "https://studio.nebius.com"
+  },
+  {
+    "id": "sambanova",
+    "label": "SambaNova",
+    "wire": "openai",
+    "baseUrl": "https://api.sambanova.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "Meta-Llama-3.3-70B-Instruct",
+    "docsUrl": "https://cloud.sambanova.ai/apis"
+  },
+  {
+    "id": "deepinfra",
+    "label": "DeepInfra",
+    "wire": "openai",
+    "baseUrl": "https://api.deepinfra.com/v1/openai",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
+    "docsUrl": "https://deepinfra.com/dash/api_keys",
+    "capabilities": {
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "BAAI/bge-m3"
+      }
+    }
+  },
+  {
+    "id": "novita",
+    "label": "Novita AI",
+    "wire": "openai",
+    "baseUrl": "https://api.novita.ai/v3/openai",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/llama-3.3-70b-instruct",
+    "docsUrl": "https://novita.ai/settings/key-management"
+  },
+  {
+    "id": "hyperbolic",
+    "label": "Hyperbolic",
+    "wire": "openai",
+    "baseUrl": "https://api.hyperbolic.xyz/v1",
+    "modelsPath": "/models",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
+    "docsUrl": "https://app.hyperbolic.xyz/settings"
+  },
+  {
+    "id": "openrouter",
+    "label": "OpenRouter",
+    "wire": "openai",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "modelsPath": "/models",
+    "defaultModel": "openai/gpt-4o-mini",
+    "router": true,
+    "docsUrl": "https://openrouter.ai/keys",
+    "note": "Nearly every model that exists, behind one key. Start here if you want one account rather than twenty.",
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "one-key-many-models",
+      "free-models",
+      "choice"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "openai/gpt-4o-mini",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "requesty",
+    "label": "Requesty",
+    "wire": "openai",
+    "baseUrl": "https://router.requesty.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "openai/gpt-4o-mini",
+    "router": true,
+    "docsUrl": "https://app.requesty.ai/api-keys",
+    "note": "Router with spend caps and automatic failover between providers."
+  },
+  {
+    "id": "aimlapi",
+    "label": "AI/ML API",
+    "wire": "openai",
+    "baseUrl": "https://api.aimlapi.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "router": true,
+    "docsUrl": "https://aimlapi.com/app/keys",
+    "note": "One key across text, pictures and video models.",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/images/generations",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "prompt": "{{prompt}}",
+            "n": 1
+          },
+          "resultPath": "data[0].b64_json"
+        },
+        "defaultModel": "flux/schnell"
+      }
+    }
+  },
+  {
+    "id": "portkey",
+    "label": "Portkey",
+    "wire": "openai",
+    "baseUrl": "https://api.portkey.ai/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "router": true,
+    "docsUrl": "https://app.portkey.ai/api-keys",
+    "note": "Gateway with caching, retries and per-key budgets. Needs a virtual key set up first."
+  },
+  {
+    "id": "litellm",
+    "label": "LiteLLM proxy (yours)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:4000/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "needsKey": false,
+    "local": true,
+    "router": true,
+    "docsUrl": "https://docs.litellm.ai/docs/simple_proxy",
+    "note": "A router you run yourself, so keys never leave your machine. Point the base URL at wherever it runs.",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
+  },
+  {
+    "id": "cloudflare_gateway",
+    "label": "Cloudflare AI Gateway",
+    "wire": "openai",
+    "baseUrl": "https://gateway.ai.cloudflare.com/v1/ACCOUNT_ID/GATEWAY/compat",
+    "modelsPath": "",
+    "defaultModel": "openai/gpt-4o-mini",
+    "router": true,
+    "docsUrl": "https://developers.cloudflare.com/ai-gateway/",
+    "note": "Replace ACCOUNT_ID and GATEWAY in the base URL with your own before using it."
+  },
+  {
+    "id": "android_speech",
+    "label": "This phone",
+    "wire": "on_device",
+    "baseUrl": "",
+    "modelsPath": "",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "note": "Android's own recogniser. No key, no account, nothing leaves the device.",
+    "capabilities": {
+      "transcribe": {
+        "wire": "on_device"
+      }
+    },
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free",
+      "dictation",
+      "no-account-needed"
+    ]
+  },
+  {
+    "id": "deepgram",
+    "label": "Deepgram",
+    "wire": "described",
+    "baseUrl": "https://api.deepgram.com/v1",
+    "modelsPath": "",
+    "defaultModel": "nova-3",
+    "docsUrl": "https://console.deepgram.com",
+    "note": "Dictation only, and the fastest of them.",
+    "capabilities": {
+      "transcribe": {
+        "call": {
+          "path": "/listen?model={{model}}&language={{language}}&punctuate=true&smart_format=true",
+          "auth": "prefixed",
+          "authName": "Authorization",
+          "authPrefix": "Token",
+          "bodyKind": "binary",
+          "resultPath": "results.channels[0].alternatives[0].transcript"
+        },
+        "defaultModel": "nova-3",
+        "models": [
+          "nova-3",
+          "nova-2"
+        ]
+      }
+    },
+    "freeTier": true,
+    "privacy": "no_training",
+    "strengths": [
+      "dictation",
+      "fast"
+    ]
+  },
+  {
+    "id": "elevenlabs",
+    "label": "ElevenLabs",
+    "wire": "described",
+    "baseUrl": "https://api.elevenlabs.io/v1",
+    "modelsPath": "",
+    "defaultModel": "scribe_v1",
+    "docsUrl": "https://elevenlabs.io/app/settings/api-keys",
+    "note": "Dictation and reading aloud.",
+    "capabilities": {
+      "transcribe": {
+        "call": {
+          "path": "/speech-to-text",
+          "auth": "header",
+          "authName": "xi-api-key",
+          "bodyKind": "multipart",
+          "fileField": "file",
+          "fields": {
+            "model_id": "{{model}}"
+          },
+          "resultPath": "text"
+        },
+        "defaultModel": "scribe_v1"
+      },
+      "speech": {
+        "call": {
+          "path": "/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+          "auth": "header",
+          "authName": "xi-api-key",
+          "body": {
+            "text": "{{prompt}}",
+            "model_id": "{{model}}"
+          },
+          "resultPath": ""
+        },
+        "defaultModel": "eleven_multilingual_v2"
+      }
+    },
+    "freeTier": true,
+    "privacy": "unknown",
+    "strengths": [
+      "dictation",
+      "speech"
+    ]
+  },
+  {
+    "id": "ocrspace",
+    "label": "OCR.space",
+    "wire": "described",
+    "baseUrl": "https://api.ocr.space",
+    "modelsPath": "",
+    "defaultModel": "",
+    "needsKey": true,
+    "docsUrl": "https://ocr.space/ocrapi",
+    "note": "Reading text from a picture, with a free tier and no account needed.",
+    "capabilities": {
+      "ocr": {
+        "call": {
+          "path": "/parse/image",
+          "auth": "header",
+          "authName": "apikey",
+          "bodyKind": "multipart",
+          "fileField": "file",
+          "fields": {
+            "language": "{{language}}",
+            "OCREngine": "2",
+            "scale": "true"
+          },
+          "resultPath": "ParsedResults[0].ParsedText"
+        }
+      }
+    },
+    "freeTier": true,
+    "privacy": "unknown",
+    "strengths": [
+      "ocr",
+      "no-account-needed"
+    ]
+  },
+  {
+    "id": "bfl",
+    "label": "Black Forest Labs (FLUX)",
+    "wire": "described",
+    "baseUrl": "https://api.bfl.ai/v1",
+    "modelsPath": "",
+    "defaultModel": "flux-dev",
+    "docsUrl": "https://dashboard.bfl.ai",
+    "note": "The FLUX models, from the people who made them.",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/{{model}}",
+          "auth": "header",
+          "authName": "x-key",
+          "body": {
+            "prompt": "{{prompt}}"
+          },
+          "pollUrlPath": "polling_url",
+          "pollStatusPath": "status",
+          "pollDoneValues": [
+            "Ready"
+          ],
+          "pollFailedValues": [
+            "Error",
+            "Content Moderated",
+            "Request Moderated"
+          ],
+          "resultPath": "result.sample",
+          "resultIsUrl": true
+        },
+        "defaultModel": "flux-dev",
+        "models": [
+          "flux-dev",
+          "flux-pro-1.1",
+          "flux-kontext-pro"
+        ]
+      }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images"
+    ]
+  },
+  {
+    "id": "fal",
+    "label": "fal.ai",
+    "wire": "described",
+    "baseUrl": "https://fal.run",
+    "modelsPath": "",
+    "defaultModel": "fal-ai/flux/schnell",
+    "docsUrl": "https://fal.ai/dashboard/keys",
+    "note": "Hundreds of picture and video models, each addressed by its name in the path.",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/{{model}}",
+          "auth": "prefixed",
+          "authName": "Authorization",
+          "authPrefix": "Key",
+          "body": {
+            "prompt": "{{prompt}}"
+          },
+          "resultPath": "images[0].url",
+          "resultIsUrl": true
+        },
+        "defaultModel": "fal-ai/flux/schnell",
+        "models": [
+          "fal-ai/flux/schnell",
+          "fal-ai/flux/dev",
+          "fal-ai/recraft-v3"
+        ]
+      },
+      "video": {
+        "call": {
+          "path": "/{{model}}",
+          "auth": "prefixed",
+          "authName": "Authorization",
+          "authPrefix": "Key",
+          "body": {
+            "prompt": "{{prompt}}"
+          },
+          "resultPath": "video.url",
+          "resultIsUrl": true,
+          "pollTimeoutMs": 900000
+        },
+        "defaultModel": "fal-ai/ltx-video",
+        "models": [
+          "fal-ai/ltx-video",
+          "fal-ai/kling-video/v1/standard/text-to-video"
+        ]
+      }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images",
+      "video",
+      "fast"
+    ]
+  },
+  {
+    "id": "replicate",
+    "label": "Replicate",
+    "wire": "described",
+    "baseUrl": "https://api.replicate.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "black-forest-labs/flux-schnell",
+    "docsUrl": "https://replicate.com/account/api-tokens",
+    "note": "Anything anyone has published. Pictures, video, audio, and a great deal else.",
+    "capabilities": {
+      "image": {
+        "call": {
+          "path": "/models/{{model}}/predictions",
+          "auth": "bearer",
+          "body": {
+            "input": {
+              "prompt": "{{prompt}}"
+            }
+          },
+          "pollUrlPath": "urls.get",
+          "pollStatusPath": "status",
+          "pollDoneValues": [
+            "succeeded"
+          ],
+          "pollFailedValues": [
+            "failed",
+            "canceled"
+          ],
+          "resultPath": "output[0]",
+          "resultIsUrl": true
+        },
+        "defaultModel": "black-forest-labs/flux-schnell"
+      },
+      "video": {
+        "call": {
+          "path": "/models/{{model}}/predictions",
+          "auth": "bearer",
+          "body": {
+            "input": {
+              "prompt": "{{prompt}}"
+            }
+          },
+          "pollUrlPath": "urls.get",
+          "pollStatusPath": "status",
+          "pollDoneValues": [
+            "succeeded"
+          ],
+          "pollFailedValues": [
+            "failed",
+            "canceled"
+          ],
+          "resultPath": "output",
+          "resultIsUrl": true,
+          "pollTimeoutMs": 900000
+        },
+        "defaultModel": "wan-video/wan-2.5-t2v-fast"
+      }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "images",
+      "video",
+      "anything"
+    ]
+  },
+  {
+    "id": "luma",
+    "label": "Luma (Dream Machine)",
+    "wire": "described",
+    "baseUrl": "https://api.lumalabs.ai/dream-machine/v1",
+    "modelsPath": "",
+    "defaultModel": "ray-flash-2",
+    "docsUrl": "https://lumalabs.ai/api/keys",
+    "note": "Video from a sentence.",
+    "capabilities": {
+      "video": {
+        "call": {
+          "path": "/generations",
+          "auth": "bearer",
+          "body": {
+            "prompt": "{{prompt}}",
+            "model": "{{model}}"
+          },
+          "pollUrlPath": "id",
+          "pollStatusPath": "state",
+          "pollDoneValues": [
+            "completed"
+          ],
+          "pollFailedValues": [
+            "failed"
+          ],
+          "resultPath": "assets.video",
+          "resultIsUrl": true,
+          "pollTimeoutMs": 900000,
+          "pollUrlTemplate": "/generations/{{poll}}"
+        },
+        "defaultModel": "ray-flash-2"
+      }
+    },
+    "needsCard": true,
+    "privacy": "unknown",
+    "strengths": [
+      "video"
+    ]
+  },
+  {
+    "id": "ollama",
+    "label": "Ollama (on this device or your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:11434/v1",
+    "modelsPath": "/models",
+    "defaultModel": "llama3.2",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://ollama.com",
+    "note": "Nothing leaves the machine it runs on.",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "llama3.2",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "lmstudio",
+    "label": "LM Studio (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:1234/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://lmstudio.ai",
+    "capabilities": {
+      "transcribe": {
+        "wire": "openai_audio",
+        "defaultModel": "whisper-1"
+      },
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}"
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    },
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
+  },
+  {
+    "id": "llamacpp",
+    "label": "llama.cpp server (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:8080/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://github.com/ggml-org/llama.cpp",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "vllm",
+    "label": "vLLM (your own server)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:8000/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://docs.vllm.ai",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ],
+    "capabilities": {
+      "complete": {
+        "call": {
+          "path": "/chat/completions",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "messages": [
+              {
+                "role": "user",
+                "content": "{{prompt}}"
+              }
+            ],
+            "stream": true,
+            "max_tokens": "{{maxTokens}}",
+            "temperature": "{{temperature}}",
+            "logprobs": true,
+            "top_logprobs": 1
+          },
+          "stream": true,
+          "streamTextPath": "choices[0].delta.content",
+          "streamDone": "[DONE]",
+          "streamLogProbPath": "choices[0].logprobs.content[0].logprob"
+        },
+        "defaultModel": "",
+        "notes": "Streams, so a continuation can be cut where it stops being sure."
+      }
+    }
+  },
+  {
+    "id": "jan",
+    "label": "Jan (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:1337/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://jan.ai",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
+  },
+  {
+    "id": "koboldcpp",
+    "label": "KoboldCpp (your own machine)",
+    "wire": "openai",
+    "baseUrl": "http://localhost:5001/v1",
+    "modelsPath": "/models",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "docsUrl": "https://github.com/LostRuins/koboldcpp",
+    "freeTier": true,
+    "privacy": "on_device",
+    "strengths": [
+      "private",
+      "offline",
+      "free"
+    ]
+  },
+  {
+    "id": "openai_compatible",
+    "label": "Anything else that speaks the OpenAI shape",
+    "wire": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "modelsPath": "/models",
+    "defaultModel": "gpt-4o-mini",
+    "needsKey": true,
+    "note": "Put in your own base URL. Most providers not listed here fit this."
+  }
+]

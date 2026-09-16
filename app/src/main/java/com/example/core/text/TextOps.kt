@@ -1,0 +1,269 @@
+package com.example.core.text
+
+
+/**
+ * Text manipulation that is correct for real text rather than for ASCII.
+ *
+ * The keyboard this replaced deleted one Java `char` per backspace. That splits
+ * surrogate pairs, so one press of backspace turned an emoji into half of an emoji,
+ * and it strips one combining mark at a time off an accented letter. Everything here
+ * works in user-perceived characters instead.
+ */
+object TextOps {
+
+    /**
+     * Length in `char`s of the last user-perceived character of [text], or 0 if empty.
+     *
+     * Written by hand rather than handed to `BreakIterator`, because the platform's
+     * grapheme rules are only as new as the device's ICU data: on Android 7 they
+     * predate skin-tone modifiers and most joined emoji entirely. Backspace has to
+     * behave the same everywhere, so the clustering that matters for text entry —
+     * combining marks, variation selectors, skin tones, keycaps, regional-indicator
+     * flags and zero-width-joiner sequences — is spelled out here.
+     */
+    fun lastGraphemeLength(text: CharSequence): Int {
+        if (text.isEmpty()) return 0
+        val s = text.toString()
+        var index = s.length
+
+        fun consumeClusterBackwards() {
+            while (index > 0) {
+                val cp = s.codePointBefore(index)
+                if (!isClusterExtender(cp)) break
+                index -= Character.charCount(cp)
+            }
+            if (index <= 0) return
+            val base = s.codePointBefore(index)
+            index -= Character.charCount(base)
+            // A flag is two regional indicators and deletes as one.
+            if (isRegionalIndicator(base) && index > 0) {
+                val previous = s.codePointBefore(index)
+                if (isRegionalIndicator(previous)) index -= Character.charCount(previous)
+            }
+        }
+
+        consumeClusterBackwards()
+        // A joined sequence — 👨‍👩‍👧 and friends — is one character to its reader.
+        while (index > 0 && s.codePointBefore(index) == ZWJ) {
+            index -= 1
+            consumeClusterBackwards()
+        }
+        if (index > 0 && s[index] == '\n' && s[index - 1] == '\r') index -= 1
+        return s.length - index
+    }
+
+    /** Length in `char`s of the first user-perceived character of [text]. */
+    fun firstGraphemeLength(text: CharSequence): Int {
+        if (text.isEmpty()) return 0
+        val s = text.toString()
+        var index = 0
+
+        fun consumeClusterForwards() {
+            if (index >= s.length) return
+            val base = s.codePointAt(index)
+            index += Character.charCount(base)
+            if (isRegionalIndicator(base) && index < s.length) {
+                val next = s.codePointAt(index)
+                if (isRegionalIndicator(next)) index += Character.charCount(next)
+            }
+            while (index < s.length) {
+                val cp = s.codePointAt(index)
+                if (!isClusterExtender(cp)) break
+                index += Character.charCount(cp)
+            }
+        }
+
+        consumeClusterForwards()
+        while (index < s.length && s.codePointAt(index) == ZWJ) {
+            index += 1
+            consumeClusterForwards()
+        }
+        return index
+    }
+
+
+    /**
+     * How many characters to remove to delete the word before the cursor.
+     *
+     * Deletes any run of trailing whitespace, then the word itself. Matches what
+     * Ctrl+Backspace does in a desktop editor rather than stopping at the space.
+     */
+    fun backwardWordLength(before: CharSequence): Int {
+        if (before.isEmpty()) return 0
+        var i = before.length
+        while (i > 0 && before[i - 1].isWhitespace()) i--
+        while (i > 0 && !before[i - 1].isWhitespace()) i--
+        return (before.length - i).coerceAtLeast(1)
+    }
+
+    fun forwardWordLength(after: CharSequence): Int {
+        if (after.isEmpty()) return 0
+        var i = 0
+        while (i < after.length && after[i].isWhitespace()) i++
+        while (i < after.length && !after[i].isWhitespace()) i++
+        return i.coerceAtLeast(1)
+    }
+
+    /** Characters back to the start of the current line (excluding the newline). */
+    fun toLineStartLength(before: CharSequence): Int {
+        val idx = before.lastIndexOf('\n')
+        return if (idx < 0) before.length else before.length - idx - 1
+    }
+
+    fun toLineEndLength(after: CharSequence): Int {
+        val idx = after.indexOf('\n')
+        return if (idx < 0) after.length else idx
+    }
+
+    /** The word immediately before the cursor, used for suggestions and learning. */
+    fun currentWord(before: CharSequence): String {
+        var i = before.length
+        while (i > 0 && isWordChar(before[i - 1])) i--
+        return before.substring(i, before.length)
+    }
+
+    fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '\'' || c == '-' || c == '_'
+
+    /** Splits a body of text into learnable words. */
+    fun words(text: CharSequence): List<String> =
+        Regex("[\\p{L}\\p{N}][\\p{L}\\p{N}'-]*").findAll(text).map { it.value }.toList()
+
+    // -----------------------------------------------------------------------
+    // Auto-capitalisation
+    // -----------------------------------------------------------------------
+
+    /**
+     * Whether the next letter should be capitalised, given the text before the cursor.
+     *
+     * True at the start of the field and after sentence-ending punctuation followed by
+     * whitespace. Deliberately conservative: it does not capitalise after every
+     * newline-free full stop inside an abbreviation like "e.g. ", because guessing
+     * wrong there is more annoying than missing a capital.
+     */
+    fun shouldCapitalise(before: CharSequence): Boolean {
+        if (before.isEmpty()) return true
+        var i = before.length
+        var sawSpace = false
+        while (i > 0 && before[i - 1].isWhitespace()) {
+            if (before[i - 1] == '\n') return true
+            sawSpace = true
+            i--
+        }
+        if (i == 0) return true
+        if (!sawSpace) return false
+        val prev = before[i - 1]
+        if (prev !in SENTENCE_END) return false
+        // "e.g. " — a single letter before the dot is almost always an abbreviation.
+        if (prev == '.' && i >= 2 && before[i - 2].isLetter()) {
+            val twoBack = if (i >= 3) before[i - 3] else ' '
+            if (!twoBack.isLetter()) return false
+        }
+        return true
+    }
+
+    private val SENTENCE_END = charArrayOf('.', '!', '?', '…')
+
+    /** Punctuation after which a space is conventional. */
+    fun wantsTrailingSpace(c: Char): Boolean = c in ",.;:!?"
+
+    // -----------------------------------------------------------------------
+    // Smart punctuation
+    // -----------------------------------------------------------------------
+
+    /** Directional quote for a straight quote, chosen from what precedes it. */
+    fun smartQuote(straight: Char, before: CharSequence): String {
+        val opening = before.isEmpty() || before.last().isWhitespace() ||
+            before.last() in "([{‘“"
+        return when (straight) {
+            '"' -> if (opening) "“" else "”"
+            '\'' -> if (opening) "‘" else "’"
+            else -> straight.toString()
+        }
+    }
+
+    /**
+     * Two spaces in a row become ". " when the preceding character can end a sentence.
+     * Returns the replacement, or null to leave the second space alone.
+     */
+    fun doubleSpaceReplacement(before: CharSequence): String? {
+        if (before.length < 2) return null
+        if (before.last() != ' ') return null
+        val prev = before[before.length - 2]
+        if (!prev.isLetterOrDigit() && prev !in ")]}\"'") return null
+        return ". "
+    }
+
+    // -----------------------------------------------------------------------
+    // Dead keys and compose sequences
+    // -----------------------------------------------------------------------
+
+    /**
+     * Applies a combining mark to a base letter and returns the precomposed form
+     * when one exists, so `´` + `e` gives a single `é` rather than `e` plus a mark.
+     */
+    fun applyDeadKey(combining: String, base: String): String {
+        if (base.isEmpty()) return combining
+        val composed = java.text.Normalizer.normalize(base + combining, java.text.Normalizer.Form.NFC)
+        // Normalisation leaves the mark standing when there is no precomposed glyph.
+        return composed
+    }
+
+    /** Dead keys most Latin users expect, as display glyph to combining mark. */
+    val DEAD_KEYS: List<Pair<String, String>> = listOf(
+        "´" to "́",   // acute
+        "`" to "̀",   // grave
+        "^" to "̂",   // circumflex
+        "¨" to "̈",   // diaeresis
+        "~" to "̃",   // tilde
+        "ˇ" to "̌",   // caron
+        "˘" to "̆",   // breve
+        "˚" to "̊",   // ring
+        "¸" to "̧",   // cedilla
+        "˛" to "̨",   // ogonek — ą, ę
+        "¯" to "̄",   // macron
+        "˙" to "̇",   // dot above — ż
+        "/" to "̸"    // stroke — ł is special-cased below
+    )
+
+    /** Stroke has no combining form for most letters; map the common ones directly. */
+    private val STROKE = mapOf(
+        "l" to "ł", "L" to "Ł", "o" to "ø", "O" to "Ø",
+        "d" to "đ", "D" to "Đ", "g" to "ǥ", "b" to "ƀ"
+    )
+
+    fun applyStroke(base: String): String = STROKE[base] ?: applyDeadKey("̸", base)
+
+    /** Parses a hex code point, tolerating `U+` and `\u` prefixes. */
+    fun codePointFromHex(raw: String): String? {
+        val cleaned = raw.trim().removePrefix("U+").removePrefix("u+")
+            .removePrefix("\\u").removePrefix("0x").removePrefix("0X")
+        val value = cleaned.toIntOrNull(16) ?: return null
+        if (value !in 0..0x10FFFF) return null
+        return try {
+            String(Character.toChars(value))
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    private const val ZWJ = 0x200D
+
+    /** Code points that attach to what precedes them rather than standing alone. */
+    private fun isClusterExtender(codePoint: Int): Boolean {
+        when (codePoint) {
+            0xFE0F, 0xFE0E -> return true          // variation selectors
+            0x20E3 -> return true                  // combining enclosing keycap
+        }
+        if (codePoint in 0x1F3FB..0x1F3FF) return true   // skin-tone modifiers
+        if (codePoint in 0xE0020..0xE007F) return true   // tag characters, for subdivision flags
+        return when (Character.getType(codePoint)) {
+            Character.NON_SPACING_MARK.toInt(),
+            Character.ENCLOSING_MARK.toInt(),
+            Character.COMBINING_SPACING_MARK.toInt() -> true
+            else -> false
+        }
+    }
+
+    private fun isRegionalIndicator(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF
+
+}
