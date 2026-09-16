@@ -64,10 +64,15 @@ Two rules, enforced in the code that could break them rather than at each call s
 No Gradle wrapper binary is committed. CI provisions Gradle through
 `gradle/actions/setup-gradle`; locally any Gradle 9.x works:
 
-```
+```bash
 gradle :app:assembleDebug
 gradle :app:testDebugUnitTest
 ```
+
+`debug.keystore` is intentionally versioned **only for debug builds**, so an APK built
+on another machine/CI run can be installed over the previous debug APK without losing
+local test state. It is not a release-signing credential and must never be reused for a
+production release.
 
 ## Documentation
 
@@ -82,3 +87,10 @@ word list to decode against; the bundled lists are a few hundred words, enough f
 suggestions and correction but far too small for a glide decoder. Shipping the gesture
 without the data behind it would produce a feature that feels broken. Importing a real
 word list is the groundwork; the decoder is not written.
+
+## Licensing
+
+This project is **source-available**, not OSI open-source. Noncommercial use is licensed
+under the PolyForm Noncommercial License 1.0.0; see `LICENSE`.
+
+Commercial use requires a separate written license; see `COMMERCIAL_LICENSE.md`.
