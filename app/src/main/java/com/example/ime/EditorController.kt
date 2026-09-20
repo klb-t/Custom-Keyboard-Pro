@@ -82,6 +82,9 @@ class EditorController(
         anchor = -1
         caret = -1
         expected = null
+        // A different field is a different document. Carrying edits across would offer
+        // to put text back into somewhere it was never taken from.
+        forgetHistory()
         val start = info?.initialSelStart ?: -1
         val end = info?.initialSelEnd ?: -1
         // Still -1 when the editor does not say, which is honest and is what the
@@ -179,6 +182,8 @@ class EditorController(
         val ic = connection() ?: return
         val s = settings()
         var text = raw
+        // Read before writing: once the commit lands there is nothing left to record.
+        val replaced = if (hasSelection) selectedText()?.toString().orEmpty() else ""
 
         if (applyConventions && text.isNotEmpty()) {
             val before = textBefore(4)
@@ -190,6 +195,8 @@ class EditorController(
                     ic.commitText(replacement, 1)
                     ic.endBatchEdit()
                     lastCommit = replacement
+                    // The character removed is the space the rule required.
+                    remember(removed = replaced + " ", inserted = replacement)
                     return
                 }
             }
@@ -223,19 +230,26 @@ class EditorController(
         ) {
             ic.commitText("$text ", 1)
             lastCommit = "$text "
+            remember(removed = replaced, inserted = "$text ")
             return
         }
 
         ic.commitText(text, 1)
+        remember(removed = replaced, inserted = text)
         lastCommit = text
     }
 
     fun commitRepeatLast() {
-        if (lastCommit.isNotEmpty()) connection()?.commitText(lastCommit, 1)
+        if (lastCommit.isEmpty()) return
+        connection()?.commitText(lastCommit, 1)
+        remember(removed = "", inserted = lastCommit)
     }
 
     fun setComposing(text: String) {
         connection()?.setComposingText(text, 1)
+        // A composing region is text in flux that the platform rewrites under us. What
+        // it settles as is not something this history can describe.
+        forgetHistory()
     }
 
     fun finishComposing() {
@@ -247,9 +261,11 @@ class EditorController(
         val ic = connection() ?: return
         val word = currentWord()
         ic.beginBatchEdit()
+        val added = replacement + if (addTrailingSpace) " " else ""
         if (word.isNotEmpty()) ic.deleteSurroundingText(word.length, 0)
-        ic.commitText(replacement + if (addTrailingSpace) " " else "", 1)
+        ic.commitText(added, 1)
         ic.endBatchEdit()
+        remember(removed = word, inserted = added)
         lastCommit = replacement
     }
 
@@ -257,11 +273,13 @@ class EditorController(
     fun commitCompletion(completion: String) {
         if (completion.isEmpty()) return
         connection()?.commitText(completion, 1)
+        remember(removed = "", inserted = completion)
         lastCommit = completion
     }
 
     fun replaceSelectionOrAll(replacement: String) {
         val ic = connection() ?: return
+        val replaced = if (hasSelection) selectedText()?.toString().orEmpty() else null
         ic.beginBatchEdit()
         if (hasSelection) {
             ic.commitText(replacement, 1)
@@ -270,6 +288,10 @@ class EditorController(
             ic.commitText(replacement, 1)
         }
         ic.endBatchEdit()
+        // Whole-field replacement goes through the platform's select-all, so what was
+        // there is never read. Rather than record a guess, the history is dropped.
+        if (replaced != null) remember(removed = replaced, inserted = replacement)
+        else forgetHistory()
     }
 
     // -----------------------------------------------------------------------
@@ -278,13 +300,18 @@ class EditorController(
 
     /** Deletes exactly [count] characters before the cursor, ignoring grapheme rules. */
     fun deleteExactly(count: Int) {
-        if (count > 0) connection()?.deleteSurroundingText(count, 0)
+        if (count <= 0) return
+        val removed = textBefore(count).toString()
+        connection()?.deleteSurroundingText(count, 0)
+        remember(removed = removed, inserted = "")
     }
 
     fun backspace(unit: TextUnit) {
         val ic = connection() ?: return
         if (hasSelection) {
+            val removed = selectedText()?.toString().orEmpty()
             ic.commitText("", 1)
+            remember(removed = removed, inserted = "")
             return
         }
         val count = when (unit) {
@@ -294,22 +321,30 @@ class EditorController(
             TextUnit.ALL -> {
                 selectAll()
                 ic.commitText("", 1)
+                // Never read, so never described. See [forgetHistory].
+                forgetHistory()
                 return
             }
         }
         if (count > 0) {
+            val removed = textBefore(count).toString()
             ic.deleteSurroundingText(count, 0)
+            remember(removed = removed, inserted = "")
         } else {
             // Empty field, or an editor that will not report surrounding text: let the
             // platform decide, which is also what makes backspace work in a terminal.
+            // What it deletes is its business, so nothing here can claim to know.
             sendKey(KeyEvent.KEYCODE_DEL, 0)
+            forgetHistory()
         }
     }
 
     fun forwardDelete(unit: TextUnit) {
         val ic = connection() ?: return
         if (hasSelection) {
+            val removed = selectedText()?.toString().orEmpty()
             ic.commitText("", 1)
+            remember(removed = removed, inserted = "")
             return
         }
         val count = when (unit) {
@@ -319,10 +354,20 @@ class EditorController(
             TextUnit.ALL -> {
                 selectAll()
                 ic.commitText("", 1)
+                forgetHistory()
                 return
             }
         }
-        if (count > 0) ic.deleteSurroundingText(0, count) else sendKey(KeyEvent.KEYCODE_FORWARD_DEL, 0)
+        if (count > 0) {
+            val removed = textAfter(count).toString()
+            ic.deleteSurroundingText(0, count)
+            // Recorded as a forward removal, so putting it back leaves the cursor in
+            // front of it rather than behind — which is where it was.
+            remember(removed = removed, inserted = "", forward = true)
+        } else {
+            sendKey(KeyEvent.KEYCODE_FORWARD_DEL, 0)
+            forgetHistory()
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -445,23 +490,167 @@ class EditorController(
     // Clipboard and history, via the editor so the app's own undo stack is used
     // -----------------------------------------------------------------------
 
-    fun contextMenu(id: Int): Boolean = connection()?.performContextMenuAction(id) ?: false
+    fun contextMenu(id: Int): Boolean {
+        val handled = connection()?.performContextMenuAction(id) ?: false
+        // Cut and paste change the text and the platform does not say how. Copy and
+        // select-all do not, but telling them apart here would be a list to maintain
+        // for the sake of keeping a few entries nobody is about to use.
+        if (handled) forgetHistory()
+        return handled
+    }
 
     fun copy() = contextMenu(android.R.id.copy)
     fun cut() = contextMenu(android.R.id.cut)
     fun paste() = contextMenu(android.R.id.paste)
 
-    fun undo() {
-        // No InputConnection API for undo; Ctrl+Z is what editors actually listen for.
+    /**
+     * Undo, done by the keyboard rather than asked of the app.
+     *
+     * Ctrl+Z is a request, not an API: there is no `InputConnection` call for undo, so
+     * a keyboard can only send the chord and hope. Plenty of modern text fields —
+     * Compose, Flutter, anything inside a web view — implement paste and never
+     * implement that chord, which is why Ctrl+V worked here and Ctrl+Z did nothing.
+     *
+     * So the keyboard keeps its own short history of the edits *it* made, and puts the
+     * last one back itself. The safety rule is the whole design: if the text no longer
+     * looks the way this edit left it, nothing is touched. Somebody else has been
+     * writing — the app's own autocomplete, a second keyboard, a paste from elsewhere
+     * — and our idea of where things are is worthless. Then, and only then, the chord
+     * is sent, because an app that does handle it is better placed than we are.
+     *
+     * Returns true when the keyboard undid something itself.
+     */
+    fun undo(): Boolean = step(undoStack, redoStack) {
         sendKey(KeyEvent.KEYCODE_Z, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
     }
 
-    fun redo() {
+    fun redo(): Boolean = step(redoStack, undoStack) {
         sendKey(
             KeyEvent.KEYCODE_Z,
             KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON or
                 KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
         )
+    }
+
+    /** True when there is something of the keyboard's own to undo, for an indicator. */
+    val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
+
+    private fun step(from: ArrayDeque<Edit>, onto: ArrayDeque<Edit>, fallback: () -> Unit): Boolean {
+        // Guarded, because the fallback sends a key event and sending one normally
+        // throws the history away — which would take the *other* stack with it, and
+        // undoing to the start should not make redo impossible.
+        fun handOver() {
+            inHistory = true
+            try { fallback() } finally { inHistory = false }
+        }
+
+        val edit = from.lastOrNull() ?: run { handOver(); return false }
+        if (textBefore(CONTEXT).toString() != edit.context) {
+            // Not where we left it. Everything we remember is about positions that
+            // have moved, so the history is not stale in part — it is worthless.
+            undoStack.clear()
+            redoStack.clear()
+            handOver()
+            return false
+        }
+        from.removeLast()
+
+        inHistory = true
+        try {
+            batch {
+                val ic = connection() ?: return@batch
+                if (edit.inserted.isNotEmpty()) {
+                    if (edit.forward) ic.deleteSurroundingText(0, edit.inserted.length)
+                    else ic.deleteSurroundingText(edit.inserted.length, 0)
+                }
+                // Cursor before the text when the edit had removed what was ahead of
+                // it, so a forward delete undoes to where the cursor actually was.
+                if (edit.removed.isNotEmpty()) ic.commitText(edit.removed, if (edit.forward) 0 else 1)
+            }
+        } finally {
+            inHistory = false
+        }
+
+        onto.addLast(
+            Edit(
+                removed = edit.inserted,
+                inserted = edit.removed,
+                forward = edit.forward,
+                context = textBefore(CONTEXT).toString()
+            )
+        )
+        return true
+    }
+
+    // -----------------------------------------------------------------------
+    // The history itself
+    // -----------------------------------------------------------------------
+
+    /**
+     * One edit the keyboard made: what it took out, what it put in, and what the text
+     * looked like immediately afterwards.
+     *
+     * [context] is the precondition rather than a position. Offsets go stale the
+     * moment anything else writes to the field; a window of the text as we left it
+     * either still matches or does not, and that is exactly the question worth asking.
+     */
+    private data class Edit(
+        val removed: String,
+        val inserted: String,
+        /** The removal was ahead of the cursor, as a forward delete. */
+        val forward: Boolean = false,
+        val context: String
+    )
+
+    private val undoStack = ArrayDeque<Edit>()
+    private val redoStack = ArrayDeque<Edit>()
+
+    /** True while undoing or redoing, so the edit that does it is not itself recorded. */
+    private var inHistory = false
+
+    /**
+     * Records an edit the keyboard just made. Call *after* the text has changed.
+     *
+     * Consecutive single characters are merged, so undo works by word rather than by
+     * keystroke — anything else means tapping undo eleven times to remove "Hello there".
+     * Whitespace breaks the run, which is what makes the word the unit.
+     */
+    private fun remember(removed: String, inserted: String, forward: Boolean = false) {
+        if (inHistory) return
+        if (removed.isEmpty() && inserted.isEmpty()) return
+        val context = textBefore(CONTEXT).toString()
+
+        val last = undoStack.lastOrNull()
+        // A letter joins whatever run precedes it; a space starts a new one. So
+        // "hello world" is two entries — "hello" and " world" — and undo works the way
+        // it does in an editor rather than one keystroke at a time.
+        val mergeable = last != null && !forward && !last.forward &&
+            last.removed.isEmpty() && removed.isEmpty() &&
+            last.inserted.isNotEmpty() &&
+            inserted.length == 1 && !inserted[0].isWhitespace()
+
+        if (mergeable) {
+            undoStack.removeLast()
+            undoStack.addLast(Edit(removed = "", inserted = last!!.inserted + inserted, context = context))
+        } else {
+            undoStack.addLast(Edit(removed, inserted, forward, context))
+        }
+        while (undoStack.size > HISTORY) undoStack.removeFirst()
+        // A new edit makes any redo path unreachable, which is what every editor does.
+        redoStack.clear()
+    }
+
+    /**
+     * Throws the history away, for a change the keyboard made and cannot describe.
+     *
+     * Honest rather than convenient: an edit we did not record leaves the entries
+     * beneath it describing a text that no longer exists, and undoing one of those
+     * would corrupt the field rather than fail.
+     */
+    private fun forgetHistory() {
+        undoStack.clear()
+        redoStack.clear()
     }
 
     // -----------------------------------------------------------------------
@@ -470,6 +659,10 @@ class EditorController(
 
     fun sendKey(keyCode: Int, metaState: Int) {
         val ic = connection() ?: return
+        // What a raw key event does is the app's business — it may insert, delete,
+        // move, or nothing at all. Anything we remember from before it is a claim
+        // about text we can no longer vouch for.
+        if (!inHistory && !isHarmless(keyCode)) forgetHistory()
         val now = android.os.SystemClock.uptimeMillis()
         ic.sendKeyEvent(
             KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, metaState, KeyEvent.KEYCODE_UNKNOWN, 0,
@@ -482,6 +675,9 @@ class EditorController(
     }
 
     /** Enter means "do what the field asked for", falling back to a newline. */
+    /** Keys that cannot change the text, so the history survives them. */
+    private fun isHarmless(keyCode: Int): Boolean = keyCode in HARMLESS_KEYS
+
     fun performEnter() {
         val ic = connection() ?: return
         val info = editorInfo()
@@ -489,20 +685,71 @@ class EditorController(
             val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
             if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
                 ic.performEditorAction(action)
+                // Send, search, next field — the app may clear the field entirely.
+                forgetHistory()
                 return
             }
         }
         ic.commitText("\n", 1)
+        remember(removed = "", inserted = "\n")
         lastCommit = "\n"
     }
 
+    /**
+     * Runs several edits as one, and records them as one.
+     *
+     * Auto-correction deletes a word and commits another; without coalescing that is
+     * two entries and takes two presses of undo to put right, which is not what anyone
+     * means by undoing a correction. The pair is collapsed by comparing the tail of
+     * the text before and after — which is precisely what these batches rewrite — and
+     * if the change reaches back further than the window can see, the history is
+     * dropped rather than described wrongly.
+     */
     fun batch(block: () -> Unit) {
         val ic = connection()
+        val outer = inHistory
+        val pre = if (outer) "" else textBefore(WINDOW).toString()
+        inHistory = true
         ic?.beginBatchEdit()
         try {
             block()
         } finally {
             ic?.endBatchEdit()
+            inHistory = outer
         }
+        if (outer) return
+
+        val post = textBefore(WINDOW).toString()
+        if (pre == post) return
+        val shared = pre.commonPrefixWith(post).length
+        if (shared == 0 && pre.isNotEmpty() && post.isNotEmpty()) {
+            // The edit reached further back than we can see. Anything we recorded
+            // would be a guess about text we never read.
+            forgetHistory()
+            return
+        }
+        remember(removed = pre.substring(shared), inserted = post.substring(shared))
+    }
+
+    private companion object {
+        /** How much text either side of an edit is kept as its precondition. */
+        const val CONTEXT = 24
+
+        /** How far back a batched edit is allowed to reach and still be described. */
+        const val WINDOW = 96
+
+        /** Edits kept. Far more than anyone taps back through, far less than a document. */
+        const val HISTORY = 50
+
+        /** Cursor movement and modifiers. Everything else may rewrite the field. */
+        val HARMLESS_KEYS = setOf(
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_MOVE_HOME, KeyEvent.KEYCODE_MOVE_END,
+            KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT,
+            KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT,
+            KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT
+        )
     }
 }

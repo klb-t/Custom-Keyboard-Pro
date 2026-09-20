@@ -534,6 +534,23 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 return true
             }
         }
+        // The same chord from a hardware keyboard, answered the same way. undo() sends
+        // it on when it has nothing of its own, so nothing is taken away from an app
+        // that already handled it.
+        if (event.action == KeyEvent.ACTION_DOWN && event.isCtrlPressed && !event.isAltPressed) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_Z -> {
+                    if (event.isShiftPressed) editor.redo() else editor.undo()
+                    refreshSuggestions()
+                    return true
+                }
+                KeyEvent.KEYCODE_Y -> {
+                    editor.redo()
+                    refreshSuggestions()
+                    return true
+                }
+            }
+        }
         if (SettingsStore.current.volumeKeysResize &&
             (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
             isInputViewShown
@@ -884,6 +901,27 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         if (state.wantsRawKeyEvents && raw.length == 1) {
             val code = KeyCodes.code(raw)
             if (code != null && code != 0) {
+                // Undo is the one chord the keyboard answers itself before passing on.
+                // There is no InputConnection call for it, so Ctrl+Z is a request that
+                // a great many modern text fields simply never implemented — which is
+                // why paste worked here and undo did nothing. The keyboard's own
+                // history is tried first and the chord is still sent when it has
+                // nothing to offer, so an app that does handle it is not cut off.
+                if (state.isActive(ModifierKind.CTRL)) {
+                    val shifted = state.isActive(ModifierKind.SHIFT)
+                    if (code == KeyEvent.KEYCODE_Z) {
+                        if (shifted) editor.redo() else editor.undo()
+                        state.consumeOneShots()
+                        refreshSuggestions()
+                        return
+                    }
+                    if (code == KeyEvent.KEYCODE_Y) {
+                        editor.redo()
+                        state.consumeOneShots()
+                        refreshSuggestions()
+                        return
+                    }
+                }
                 editor.sendKey(code, state.metaState())
                 state.consumeOneShots()
                 return
