@@ -26,6 +26,7 @@ import com.example.core.ai.AiTasks
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.ModelInfo
 import com.example.core.discovery.ApiKeys
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.discovery.ProviderProfile
@@ -218,8 +219,14 @@ fun AiSettingsScreen(settings: Settings) {
                                     problem = if (probe.usable) "" else probe.problem.orEmpty()
                                 )
                             }
+                            // The probe already asked for the model list, so the answer
+                            // is in hand: filling the picker here saves a second
+                            // identical request the user would otherwise have to make.
                             if (probe.usable && probe.models.isNotEmpty()) {
-                                ModelDiscovery.cache(spec.id, probe.models)
+                                ModelDiscovery.cache(
+                                    spec.id,
+                                    probe.models.map { ModelInfo(id = it, provider = spec.id) }
+                                )
                             }
                             checking = false
                         }
