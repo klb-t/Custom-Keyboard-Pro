@@ -196,6 +196,20 @@ class KeyboardState(
      * does not define one is left alone, and shifting is handled per key instead.
      */
     fun renderLayer(layout: LayoutDef): String {
+        // AltGr first, and it wins over shift rather than combining blindly: a layout
+        // that defines altgr_shift gets both, one that defines only altgr gets altgr,
+        // and one that defines neither falls through to the ordinary rules instead of
+        // showing a blank board. On a PC this is the third level of the same key, and
+        // treating it as a layer is what lets a language supply its own without any
+        // code here knowing which language it is.
+        if (isActive(ModifierKind.ALT_GR) && layer == LayoutDef.BASE_LAYER) {
+            if (isActive(ModifierKind.SHIFT) &&
+                layout.layers.containsKey(LayoutDef.ALTGR_SHIFT_LAYER)
+            ) {
+                return LayoutDef.ALTGR_SHIFT_LAYER
+            }
+            if (layout.layers.containsKey(LayoutDef.ALTGR_LAYER)) return LayoutDef.ALTGR_LAYER
+        }
         if (isActive(ModifierKind.SHIFT)) {
             when (layer) {
                 LayoutDef.BASE_LAYER ->

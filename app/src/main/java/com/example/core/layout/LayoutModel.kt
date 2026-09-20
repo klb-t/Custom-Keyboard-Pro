@@ -480,5 +480,17 @@ data class LayoutDef(
         const val SHIFT_LAYER = "shift"
         const val SYMBOL_LAYER = "symbols"
         const val SYMBOL_SHIFT_LAYER = "symbols_shift"
+
+        /**
+         * What AltGr shows, the way a PC layout does it.
+         *
+         * A layer rather than a rule in the key handler, because which character AltGr
+         * produces is precisely the sort of thing that differs per language and must
+         * therefore be data. Polish puts ą ć ę ł ń ó ś ź ż here; German puts @ € µ;
+         * a layout that defines no such layer simply has an AltGr that does nothing
+         * but set the meta bit, which is what a layout without one should do.
+         */
+        const val ALTGR_LAYER = "altgr"
+        const val ALTGR_SHIFT_LAYER = "altgr_shift"
     }
 }

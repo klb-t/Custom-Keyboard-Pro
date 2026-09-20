@@ -180,6 +180,20 @@ object BuiltinLayouts {
         "r" to listOf("ř")
     )
 
+    /**
+     * What AltGr produces, keyed by the letter it is held over.
+     *
+     * The Polish "programmer's" layout, which is the one every Polish PC has: the
+     * letter you want is on the letter it is made from, except ź which lives on x
+     * because ż already has z. Anyone who has typed Polish on a computer has this in
+     * their fingers, and a phone keyboard that ignores it is asking them to learn a
+     * second way of writing their own language.
+     */
+    private val PL_ALTGR: Map<String, String> = mapOf(
+        "a" to "ą", "c" to "ć", "e" to "ę", "l" to "ł",
+        "n" to "ń", "o" to "ó", "s" to "ś", "x" to "ź", "z" to "ż"
+    )
+
     /** The digit a letter flicks to, matching its column on a PC keyboard. */
     private val TOP_ROW_DIGITS = "1234567890"
 
@@ -192,6 +206,8 @@ object BuiltinLayouts {
         row3: String,
         numberRow: Boolean,
         popups: Map<String, List<String>> = LATIN_POPUPS,
+        /** What AltGr puts on each letter. Empty means this layout has no AltGr level. */
+        altGr: Map<String, String> = emptyMap(),
         description: String? = null
     ): LayoutDef {
         fun letters(src: String, flick: Boolean): List<KeyDef> =
@@ -205,16 +221,32 @@ object BuiltinLayouts {
                 )
             }
 
-        fun buildLayer(upper: Boolean): LayerDef {
+        fun buildLayer(upper: Boolean, level: String = LayoutDef.BASE_LAYER): LayerDef {
             fun cased(src: String, flick: Boolean) = letters(src, flick).map { k ->
-                if (!upper) k else {
-                    val up = k.id.uppercase()
-                    k.copy(
+                // The AltGr levels replace what the key types and what it shows, and
+                // leave every key AltGr says nothing about exactly as it was — so the
+                // board stays recognisable and only the nine letters that change, change.
+                val onAltGr =
+                    if (level == LayoutDef.ALTGR_LAYER || level == LayoutDef.ALTGR_SHIFT_LAYER) {
+                        altGr[k.id]
+                    } else null
+                val base = if (onAltGr == null) k else k.copy(
+                    label = if (upper) onAltGr.uppercase() else onAltGr,
+                    bindings = k.bindings.map { b ->
+                        if (b.trigger == KeyTrigger.Tap) {
+                            Binding(b.trigger, KeyAction.Text(if (upper) onAltGr.uppercase() else onAltGr))
+                        } else b
+                    },
+                    popup = emptyList()
+                )
+                if (!upper || onAltGr != null) base else {
+                    val up = base.id.uppercase()
+                    base.copy(
                         label = up,
-                        bindings = k.bindings.map { b ->
+                        bindings = base.bindings.map { b ->
                             if (b.trigger == KeyTrigger.Tap) Binding(b.trigger, KeyAction.Text(up)) else b
                         },
-                        popup = k.popup.map { it.uppercase() }
+                        popup = base.popup.map { it.uppercase() }
                     )
                 }
             }
@@ -233,7 +265,22 @@ object BuiltinLayouts {
             rows += RowDef(listOf(shiftKey()) + cased(row3, false) + listOf(backspace))
             rows += RowDef(
                 listOf(
-                    symbolsSwitch(),
+                    // A layout with an AltGr level needs a way in without a hardware
+                    // keyboard, and the board has no room for another key. A swipe up,
+                    // not a long press: this key's long press already switches layout,
+                    // and taking that would be fixing one complaint by causing another.
+                    // One-shot, so it reads as it does on a PC — AltGr, then the
+                    // letter — and the hint says so rather than leaving it to be found.
+                    if (altGr.isEmpty()) symbolsSwitch()
+                    else symbolsSwitch().let { k ->
+                        k.copy(
+                            hint = "AltGr",
+                            bindings = k.bindings + Binding(
+                                KeyTrigger.Swipe(SwipeDirection.UP),
+                                KeyAction.Modifier(ModifierKind.ALT_GR, ModifierMode.ONE_SHOT)
+                            )
+                        )
+                    },
                     emojiKey,
                     commaKey,
                     spaceKey(4f),
@@ -242,7 +289,7 @@ object BuiltinLayouts {
                     enterKey
                 )
             )
-            return LayerDef(if (upper) LayoutDef.SHIFT_LAYER else LayoutDef.BASE_LAYER, rows)
+            return LayerDef(level, rows)
         }
 
         return LayoutDef(
@@ -251,10 +298,18 @@ object BuiltinLayouts {
             locale = locale,
             layers = linkedMapOf(
                 LayoutDef.BASE_LAYER to buildLayer(false),
-                LayoutDef.SHIFT_LAYER to buildLayer(true),
+                LayoutDef.SHIFT_LAYER to buildLayer(true, LayoutDef.SHIFT_LAYER),
                 LayoutDef.SYMBOL_LAYER to symbolLayer(),
                 LayoutDef.SYMBOL_SHIFT_LAYER to symbolShiftLayer()
-            ),
+            ).apply {
+                // Only when the layout actually has an AltGr level. An empty one would
+                // make renderLayer switch to a board identical to the base, which looks
+                // like the key is broken rather than like it does nothing.
+                if (altGr.isNotEmpty()) {
+                    put(LayoutDef.ALTGR_LAYER, buildLayer(false, LayoutDef.ALTGR_LAYER))
+                    put(LayoutDef.ALTGR_SHIFT_LAYER, buildLayer(true, LayoutDef.ALTGR_SHIFT_LAYER))
+                }
+            },
             rowCountHint = if (numberRow) 5 else 4,
             description = description,
             builtIn = true
@@ -559,7 +614,10 @@ object BuiltinLayouts {
         id = "qwerty_pl", name = "Polski (QWERTY)", locale = "pl",
         row1 = "qwertyuiop", row2 = "asdfghjkl", row3 = "zxcvbnm",
         numberRow = false,
-        description = "Polish diacritics on long-press; flick a letter up for its digit."
+        altGr = PL_ALTGR,
+        description = "Polish letters on AltGr as on a PC — swipe the ?123 key up, " +
+            "or hold Right Alt on a hardware keyboard — and on long-press; " +
+            "flick a letter up for its digit."
     )
 
     val QWERTY_EN = alphaLayout(

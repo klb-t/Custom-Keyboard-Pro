@@ -68,6 +68,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -248,7 +249,13 @@ fun KeySurface(
                                 touch.consumed = true
                                 onKeyDown(key)
                             } else if (hasPopup) {
-                                popup = PopupState(touch.placed, key.popup, 0)
+                                val opened = PopupState(touch.placed, key.popup, 0)
+                                popup = opened.copy(
+                                    selected = popupIndexAt(
+                                        opened, touch.currentX, widthPx,
+                                        touch.placed.width.coerceAtLeast(1f)
+                                    )
+                                )
                                 touch.popupOpen = true
                                 onKeyDown(key)
                             } else if (longPressAction != null) {
@@ -343,10 +350,13 @@ fun KeySurface(
 
                         if (touch.popupOpen) {
                             val current = popup ?: return
-                            val cellWidth = touch.placed.width.coerceAtLeast(1f)
-                            val originX = popupOriginX(current, widthPx, cellWidth)
-                            val index = ((x - originX) / cellWidth).toInt()
-                            popup = current.copy(selected = index.coerceIn(0, current.items.lastIndex))
+                            // Same function as the strip was positioned with. Reading
+                            // the index off geometry computed a second time by hand is
+                            // how the two came apart in the first place.
+                            val index = popupIndexAt(
+                                current, x, widthPx, touch.placed.width.coerceAtLeast(1f)
+                            )
+                            if (index != current.selected) popup = current.copy(selected = index)
                             return
                         }
 
@@ -511,10 +521,38 @@ private class TapTracker {
     var atMillis: Long = 0L
 }
 
-private fun popupOriginX(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Float {
+/**
+ * Where the long-press strip starts, placed so its **first** item sits under the finger.
+ *
+ * It used to be centred on the key, which put the middle of the list under the finger
+ * while the selection still started at item 0 — the two disagreed. A finger held
+ * perfectly still committed the first item; a finger that twitched by a pixel produced
+ * a move event, the index was recomputed from position, and out came whatever was
+ * halfway along. On a Polish layout that is the difference between "ó" and "õ" for a
+ * gesture the user cannot perform any more carefully.
+ *
+ * The first alternate is the one people actually want — it is why it is first — so it
+ * belongs where the finger already is. Sliding right then walks the rest.
+ */
+internal fun popupOriginX(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Float {
     val total = cellWidth * popup.items.size
-    val wanted = popup.anchor.centerX - total / 2f
+    val wanted = popup.anchor.centerX - cellWidth / 2f
+    // Near the right edge the whole strip has to shift left to stay on screen, and the
+    // first item then is not under the finger. That is why the selected index is read
+    // back through [popupIndexAt] rather than assumed to be zero.
     return wanted.coerceIn(0f, (surfaceWidth - total).coerceAtLeast(0f))
+}
+
+/** Which item a finger at [x] is over, using the same geometry the strip was drawn with. */
+internal fun popupIndexAt(
+    popup: PopupState,
+    x: Float,
+    surfaceWidth: Float,
+    cellWidth: Float
+): Int {
+    val originX = popupOriginX(popup, surfaceWidth, cellWidth)
+    val index = floor((x - originX) / cellWidth).toInt()
+    return index.coerceIn(0, popup.items.lastIndex)
 }
 
 // ---------------------------------------------------------------------------

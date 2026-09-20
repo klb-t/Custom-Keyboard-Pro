@@ -533,6 +533,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Right Alt on a hardware keyboard is AltGr, and on a Polish layout that is
+        // how the language is written. The layer already exists and the soft board
+        // already reaches it; this is the same layer reached from the other kind of
+        // keyboard, so there is no second table of characters to keep in step.
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            (event.metaState and KeyEvent.META_ALT_RIGHT_ON) != 0 &&
+            (event.metaState and KeyEvent.META_CTRL_ON) == 0
+        ) {
+            altGrCharacter(keyCode, event.isShiftPressed)?.let { text ->
+                editor.commitText(text, applyConventions = false)
+                refreshSuggestions()
+                return true
+            }
+        }
         if (SettingsStore.current.volumeKeysResize &&
             (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
             isInputViewShown
@@ -549,6 +563,27 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * What the current layout's AltGr level puts on a hardware key, if anything.
+     *
+     * Read off the layout rather than from a table here, so a layout that defines its
+     * own AltGr level — a user's, or one that arrived as data — works with a hardware
+     * keyboard without anybody adding a case. Null means this layout has nothing to
+     * say about that key, and the event goes on to the app untouched.
+     */
+    private fun altGrCharacter(keyCode: Int, shifted: Boolean): String? {
+        val level = if (shifted) LayoutDef.ALTGR_SHIFT_LAYER else LayoutDef.ALTGR_LAYER
+        val layer = layout.layer(level) ?: layout.layer(LayoutDef.ALTGR_LAYER) ?: return null
+        val id = KeyCodes.label(keyCode).takeIf { it.length == 1 }?.lowercase() ?: return null
+        val key = layer.rows.asSequence().flatMap { it.keys.asSequence() }
+            .firstOrNull { it.id == id } ?: return null
+        val text = (key.tapAction as? KeyAction.Text)?.text ?: return null
+        // Only when the AltGr level actually changes this key. Otherwise Right Alt
+        // over a letter with no AltGr meaning would type the plain letter and swallow
+        // whatever shortcut the app had bound to it.
+        return text.takeIf { !it.equals(id, ignoreCase = true) }
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
