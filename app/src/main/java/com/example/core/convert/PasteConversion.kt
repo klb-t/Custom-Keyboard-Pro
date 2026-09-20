@@ -184,6 +184,9 @@ object PasteConversion {
                 input = CallInput(model = model, imageBase64 = base64, imageMime = mime),
                 apiKey = key
             ).getOrThrow().text
+                // Null is "the endpoint answered with no text at that path", which for
+                // a picture with no words in it is the right answer and not a failure.
+                .orEmpty()
         }
 
         return AiClient.complete(
