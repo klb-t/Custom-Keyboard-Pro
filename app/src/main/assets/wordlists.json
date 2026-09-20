@@ -1,0 +1,53 @@
+[
+  {
+    "id": "freqwords_pl_50k",
+    "language": "pl",
+    "label": "Polski — 50 000 najczęstszych słów",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/pl/pl_50k.txt",
+    "note": "The same list the app ships with. Here so it can be refreshed, and as a worked example of the format.",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave. Built from the OpenSubtitles corpus (OPUS).",
+    "words": 50000
+  },
+  {
+    "id": "freqwords_en_50k",
+    "language": "en",
+    "label": "English — 50,000 most common words",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/en/en_50k.txt",
+    "note": "The same list the app ships with.",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave. Built from the OpenSubtitles corpus (OPUS).",
+    "words": 50000
+  },
+  {
+    "id": "freqwords_de_50k",
+    "language": "de",
+    "label": "Deutsch — 50.000 häufigste Wörter",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/de/de_50k.txt",
+    "note": "A language the app ships no list for. Downloading one makes suggestions work in it.",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave.",
+    "words": 50000
+  },
+  {
+    "id": "freqwords_es_50k",
+    "language": "es",
+    "label": "Español — 50.000 palabras más frecuentes",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/es/es_50k.txt",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave.",
+    "words": 50000
+  },
+  {
+    "id": "freqwords_fr_50k",
+    "language": "fr",
+    "label": "Français — 50 000 mots les plus fréquents",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/fr/fr_50k.txt",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave.",
+    "words": 50000
+  },
+  {
+    "id": "freqwords_uk_50k",
+    "language": "uk",
+    "label": "Українська — 50 000 найчастіших слів",
+    "url": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/uk/uk_50k.txt",
+    "licence": "MIT — Copyright (c) 2016 Hermit Dave.",
+    "words": 50000
+  }
+]

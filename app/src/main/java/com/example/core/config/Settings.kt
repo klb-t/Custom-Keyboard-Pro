@@ -166,6 +166,16 @@ data class Settings(
      * contains these keys.
      */
     val providerProfilesJson: String = "",
+
+    /**
+     * Extra places a word list can be fetched from, beyond the ones bundled.
+     *
+     * Data for the same reason the provider catalogue is: which list is *good* is a
+     * judgement about a language, a register and a person. Somebody writing legal
+     * drafts, somebody writing Kotlin and somebody texting want three different lists
+     * and none of them is wrong.
+     */
+    val wordListSourcesJson: String = "",
     val doubleSpacePeriod: Boolean = true,
     val autoSpaceAfterPunctuation: Boolean = false,
     val smartQuotes: Boolean = false,

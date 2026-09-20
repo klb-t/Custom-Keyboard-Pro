@@ -32,6 +32,7 @@ import com.example.core.layout.LayoutRepository
 import com.example.core.config.SettingsSchema
 import com.example.core.discovery.ModelDiscovery
 import com.example.core.discovery.AiCapability
+import com.example.core.data.WordLists
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.panels.PanelGenerator
 import com.example.ui.settings.AboutScreen
@@ -103,6 +104,7 @@ class MainActivity : ComponentActivity() {
         SettingsStore.init(this)
         LayoutRepository.init(this)
         ProviderCatalog.init(this)
+        WordLists.init(this)
         registerDynamicOptions()
         enableEdgeToEdge()
         AppLogger.d("Settings", "onCreate stores ready")

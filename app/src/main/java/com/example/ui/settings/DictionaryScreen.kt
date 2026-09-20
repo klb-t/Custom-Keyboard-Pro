@@ -27,7 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.core.config.SettingsStore
+import com.example.core.data.BundledDictionary
 import com.example.core.data.KeyboardRepository
+import com.example.core.data.WordLists
 import com.example.core.data.ShortcutEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +53,9 @@ fun DictionaryScreen() {
 
     var newWord by remember { mutableStateOf("") }
     var importStatus by remember { mutableStateOf<String?>(null) }
+    var listStatus by remember { mutableStateOf<String?>(null) }
+    var downloading by remember { mutableStateOf<String?>(null) }
+    val settingsNow by SettingsStore.state.collectAsState()
 
     val importPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -115,13 +121,72 @@ fun DictionaryScreen() {
                 }
             }
             importStatus?.let { InfoRow(it) }
+
+            // The base lists, which are a different thing from the words this screen
+            // lists: these are not learned, are not the user's, and forgetting does not
+            // touch them. Shown here anyway because this is where somebody goes when
+            // the suggestions are wrong, and "there are only 575 words" is the answer
+            // they need rather than a setting buried elsewhere.
+            val locale = remember { java.util.Locale.getDefault().language }
+            val languages = remember(settingsNow.wordListSourcesJson) {
+                (BundledDictionary.BUNDLED + locale +
+                    WordLists.all(settingsNow).map { it.language }).distinct()
+            }
             InfoRow(
-                "Common English and Polish words are built in, so suggestions and " +
-                    "correction work from the first day — they are separate from this " +
-                    "list and are not affected by forgetting. Import accepts one word " +
+                "Base word lists, separate from the words above: built in for " +
+                    "English and Polish so suggestions and correction work offline on " +
+                    "day one, and replaceable for any language. Import accepts one word " +
                     "per line, optionally followed by a frequency count, which is the " +
                     "format published word lists already use."
             )
+            languages.forEach { language ->
+                val replaced = WordLists.isReplaced(context, language)
+                val count = BundledDictionary.size(context, language)
+                val sources = WordLists.forLanguage(language, settingsNow)
+                if (count > 0 || sources.isNotEmpty()) {
+                    InfoRow(
+                        buildString {
+                            append(language.uppercase())
+                            append(": ")
+                            append(if (count > 0) "$count words" else "nothing installed")
+                            if (replaced) append(" (downloaded)")
+                        }
+                    )
+                }
+                sources.forEach { source ->
+                    TextButton(
+                        onClick = {
+                            if (downloading == null) {
+                                downloading = source.id
+                                listStatus = null
+                                scope.launch {
+                                    WordLists.download(context, source).fold(
+                                        onSuccess = { n -> listStatus = "${source.label}: $n words installed." },
+                                        onFailure = { listStatus = "${source.label}: ${it.message}" }
+                                    )
+                                    downloading = null
+                                }
+                            }
+                        }
+                    ) {
+                        Text(
+                            if (downloading == source.id) "Downloading ${source.label}…"
+                            else "Download ${source.label}" +
+                                (if (source.words > 0) " (~${source.words / 1000}k)" else "")
+                        )
+                    }
+                    if (source.licence.isNotBlank()) InfoRow(source.licence)
+                }
+                if (replaced) {
+                    TextButton(
+                        onClick = {
+                            WordLists.revert(context, language)
+                            listStatus = "$language: back to the list in the app."
+                        }
+                    ) { Text("Use the built-in $language list again") }
+                }
+            }
+            listStatus?.let { InfoRow(it) }
             if (words.isEmpty()) {
                 InfoRow("Nothing learned yet. Words appear here as you type them.")
             }

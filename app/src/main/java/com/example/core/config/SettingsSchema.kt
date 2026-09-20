@@ -415,6 +415,14 @@ object SettingsSchema {
         ),
         "learnFromTyping" to Meta(group = GROUP_SUGGESTIONS, label = "Learn from what you type"),
         "personalDictionary" to Meta(group = GROUP_SUGGESTIONS, label = "Use the personal dictionary"),
+        "wordListSourcesJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_SUGGESTIONS, label = "Word list sources",
+            multiline = true,
+            help = "Addresses a word list can be downloaded from, added to the ones " +
+                "bundled. One word per line, most common first; a second column is " +
+                "ignored, so a published frequency list works as it is. A leading '!' " +
+                "means known but never suggested."
+        ),
 
         "aiEnabled" to Meta(group = GROUP_AI, label = "AI features"),
         "aiProvider" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Provider", options = AiProviders.ALL),
