@@ -69,9 +69,6 @@ object BuiltinLayouts {
     private fun key(code: Int, label: String, width: Float = 1f, repeatable: Boolean = false, style: String = "special") =
         fn("kc_$code", label, KeyAction.SendKey(code), width = width, style = style, repeatable = repeatable)
 
-    private fun modIndicator(kind: ModifierKind) =
-        IndicatorDef(IndicatorSource.Modifier(kind), IndicatorStyle.BAR_BOTTOM)
-
     private fun lockIndicator(runtimeKey: String) =
         IndicatorDef(IndicatorSource.Runtime(runtimeKey), IndicatorStyle.DOT_TOP_RIGHT)
 
@@ -497,8 +494,11 @@ object BuiltinLayouts {
             action = KeyAction.Modifier(kind, ModifierMode.ONE_SHOT),
             width = width, style = "modifier",
             longPress = KeyAction.Modifier(kind, ModifierMode.LOCK),
+            // Only the lock lamp, matching [shiftKey]. The bar beside it said "this
+            // modifier is on", which the key's own highlight already says — two marks
+            // for one fact, and on a PC layout that meant three lit keys and two green
+            // bars for the single fact that Shift was down.
             indicators = listOf(
-                modIndicator(kind),
                 IndicatorDef(IndicatorSource.ModifierLock(kind), IndicatorStyle.DOT_TOP_RIGHT)
             )
         )

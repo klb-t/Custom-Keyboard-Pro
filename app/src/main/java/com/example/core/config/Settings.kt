@@ -136,7 +136,16 @@ data class Settings(
     val swipeThresholdDp: Float = 22f,
 
     // --- typing behaviour -------------------------------------------------
-    val autoCapitalize: Boolean = true,
+    /**
+     * Whether the keyboard ever raises Shift by itself.
+     *
+     * Off by default. A keyboard guessing at capitals is wrong often enough to be
+     * noticed and quiet enough not to be, and the two errors are not the same size: a
+     * missing capital is one tap, an unwanted one is a word to delete and retype that
+     * is easy not to see until it has been sent. Whoever wants it can turn it on and
+     * shape it through [capitalisationRulesJson]; nobody has to discover it was on.
+     */
+    val autoCapitalize: Boolean = false,
     /**
      * How capitalisation actually behaves, as a list of rules.
      *

@@ -34,7 +34,17 @@ class KeyboardState(
         val active: Boolean = false,
         val locked: Boolean = false,
         val oneShot: Boolean = false,
-        val held: Boolean = false
+        val held: Boolean = false,
+        /**
+         * The keyboard raised this, not the user.
+         *
+         * Needed because "tap Shift" means two opposite things depending on how it got
+         * up. Tapping a Shift *you* raised is the second of two taps and locks it —
+         * the phone convention. Tapping a Shift the *keyboard* raised is somebody
+         * cancelling a capital they did not ask for, and locking caps in reply is the
+         * worst possible answer to that.
+         */
+        val auto: Boolean = false
     )
 
     private val modifiers = mutableStateMapOf<ModifierKind, ModifierState>()
@@ -66,6 +76,9 @@ class KeyboardState(
             ModifierMode.LOCK -> if (s.locked) ModifierState() else ModifierState(active = true, locked = true)
             ModifierMode.ONE_SHOT -> when {
                 s.locked -> ModifierState()
+                // Before the double-tap rule: this press is a correction, not a second
+                // tap. See [ModifierState.auto].
+                s.auto -> ModifierState()
                 s.oneShot -> ModifierState(active = true, locked = true)
                 s.active -> ModifierState()
                 else -> ModifierState(active = true, oneShot = true)
@@ -82,8 +95,30 @@ class KeyboardState(
         }
     }
 
-    fun setModifier(kind: ModifierKind, active: Boolean, locked: Boolean = false) {
-        modifiers[kind] = ModifierState(active = active || locked, locked = locked)
+    /**
+     * Turns a modifier on from outside a key press.
+     *
+     * [oneShot] is not a detail. A modifier set without it is set until something turns
+     * it off — and [consumeOneShots] only clears states that say they are one-shot, so
+     * nothing ever did. Auto-capitalisation used this to raise Shift for one letter and
+     * instead raised it for the rest of the session: every letter after it came out
+     * capital, in every field, until the user noticed and tapped Shift themselves.
+     * That is what "it puts allcaps everywhere" was.
+     */
+    fun setModifier(
+        kind: ModifierKind,
+        active: Boolean,
+        locked: Boolean = false,
+        oneShot: Boolean = false
+    ) {
+        modifiers[kind] = ModifierState(
+            active = active || locked,
+            locked = locked,
+            // A locked modifier is not a one-shot; saying both would have the next
+            // character clear a lock the user asked for.
+            oneShot = oneShot && !locked,
+            auto = !locked
+        )
         syncLockFlags()
     }
 

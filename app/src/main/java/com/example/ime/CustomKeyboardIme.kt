@@ -22,6 +22,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import com.example.MainActivity
 import com.example.core.ai.AiClient
 import com.example.core.ai.AiConfig
@@ -261,20 +264,58 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 )
             }
         }
+        // The navigation bar sits on top of us, and since targetSdk 35 nobody moves it.
+        //
+        // Android used to lay an input view out above the system bars. Apps targeting
+        // 35 and later are edge-to-edge whether they ask for it or not, and that now
+        // includes the input method's own window: the bottom row of keys ends up
+        // underneath the gesture handle or the three buttons, where every press goes to
+        // the navigation bar instead. Nothing in the app's own layout can see this,
+        // which is why it looked like a drawing bug.
+        //
+        // The inset is asked for rather than guessed — it is a handle on one phone, a
+        // button bar on another, zero in landscape on a third, and it changes while the
+        // keyboard is open when somebody rotates. It becomes bottom padding *and* extra
+        // height, so the keys keep the size the user chose and the space below them is
+        // added rather than taken.
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            if (bars.bottom != systemBottomInsetPx) {
+                systemBottomInsetPx = bars.bottom
+                v.updatePadding(bottom = bars.bottom)
+                // Re-apply the height so the padding is added to it rather than eaten
+                // out of the keys.
+                requestedHeightPx.value.takeIf { it > 0 }?.let { applyInputViewHeight(v, it, force = true) }
+            }
+            insets
+        }
+
         composeView = view
         AppLogger.d(tag, "done, view returned")
         return view
     }
+
+    /** How much of the bottom of our window the system bars are sitting on. */
+    private var systemBottomInsetPx: Int = 0
 
     /**
      * The input view's height is whatever the current settings and orientation work out
      * to, so changing the height slider resizes the live keyboard rather than needing it
      * to be dismissed and reopened.
      */
-    private fun applyInputViewHeight(view: View, heightPx: Int) {
-        if (heightPx <= 0 || requestedHeightPx.value == heightPx) return
+    private fun applyInputViewHeight(view: View, heightPx: Int, force: Boolean = false) {
+        if (heightPx <= 0) return
+        if (!force && requestedHeightPx.value == heightPx) return
         requestedHeightPx.value = heightPx
-        view.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, heightPx)
+        // The keyboard asked for this many pixels of keys; the system bar needs its own
+        // on top of that. Asking for the sum is what keeps a nav bar from costing the
+        // user a row of keys.
+        view.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            heightPx + systemBottomInsetPx
+        )
         view.requestLayout()
     }
 
@@ -984,7 +1025,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
         when (Capitalisation.decide(rules, before, atStart, moment)) {
             CapitalHow.NOTHING -> Unit
-            CapitalHow.SHIFT -> state.setModifier(ModifierKind.SHIFT, active = true)
+            // One shot: a capital is wanted for the next letter, not for the rest of
+            // the session. Without this the shift never came down again.
+            CapitalHow.SHIFT -> state.setModifier(ModifierKind.SHIFT, active = true, oneShot = true)
             CapitalHow.FIX_AFTER_WORD -> if (moment == CapitalMoment.TYPING) fixLastWordCase()
         }
     }
