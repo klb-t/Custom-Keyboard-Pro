@@ -88,7 +88,7 @@ class AbilitiesTest {
     }
 
     @Test
-    fun `a special access sends you to a screen; a permission does not`() {
+    fun `a special access sends you to a screen and a permission does not`() {
         // The difference is the whole reason the two are separate kinds: one can be
         // asked for in a dialog and the other can only be explained and navigated to.
         Abilities.ALL.forEach { ability ->
