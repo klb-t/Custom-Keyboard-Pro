@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import com.example.core.config.SettingsSchema
 import com.example.core.layout.LayoutDoctor
 import com.example.core.layout.LayoutRepository
+import com.example.core.caps.Abilities
+import com.example.core.caps.Availability
+import com.example.core.caps.Need
 import com.example.util.AppLogger
 
 /**
@@ -38,6 +41,47 @@ fun DiagnosticsScreen() {
     val logs: SnapshotStateList<String> = AppLogger.logs
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+
+        // The honest answer to "what does this app do?", which depends on what has
+        // been granted. Here rather than buried with the permissions themselves,
+        // because somebody reading this screen is somebody asking why something did
+        // not happen — and a line saying what it does instead is the answer.
+        SettingsSection(
+            title = "What this build can do",
+            subtitle = "The keyboard works with nothing granted. Each of these adds " +
+                "something, and each says what happens without it."
+        ) {
+            Abilities.ALL.forEach { ability ->
+                val availability = Abilities.availability(context, ability)
+                StatusRow(
+                    label = ability.label + when (availability) {
+                        Availability.ON -> ""
+                        Availability.OFF -> " — not granted"
+                        Availability.ABSENT -> " — not built yet"
+                    },
+                    ok = availability == Availability.ON
+                )
+                InfoRow(
+                    if (availability == Availability.ON) ability.gives
+                    else "Without it: " + ability.without
+                )
+                if (availability == Availability.OFF) {
+                    (ability.needs as? Need.SpecialAccess)?.let { need ->
+                        ActionRow(
+                            label = "Open the settings screen for this",
+                            description = need.where,
+                            onClick = {
+                                runCatching {
+                                    Abilities.settingsIntent(context, ability)
+                                        ?.let { context.startActivity(it) }
+                                }
+                            }
+                        )
+                    }
+                }
+                Divider()
+            }
+        }
 
         SettingsSection(
             title = "Diagnostics",
