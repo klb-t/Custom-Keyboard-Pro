@@ -6,23 +6,27 @@ import com.example.ui.kb.PopupState
 import com.example.ui.kb.popupIndexAt
 import com.example.ui.kb.popupOriginX
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Which alternate a held finger is actually over.
+ * Which alternate a held finger is actually on.
  *
  * Worth a test of its own because the failure was silent and looked like bad luck:
- * hold "o" on a Polish board, let go, and out comes "õ" instead of "ó" — with nothing
- * the user could do differently. The strip was drawn centred on the key while the
- * selection started at item 0, so the two disagreed, and a finger that held perfectly
- * still got the first item while a finger that twitched got whatever was halfway
- * along. Pure arithmetic, so it can be pinned down exactly.
+ * hold "o" on a Polish board, let go, and out comes something that is not "ó" — with
+ * nothing the user could do differently.
+ *
+ * The first attempt at fixing it anchored the strip's first item under the finger and
+ * read the index off that position. These tests rejected it, and were right to: a
+ * strip of eight alternates is wider than the space to the right of a key near the
+ * edge of the board, so it gets clamped back on screen and the finger that opened it
+ * ends up over the seventh item. Selection is now measured as displacement from where
+ * the strip opened, which is a fact about the gesture rather than about the screen.
  */
 class PopupGeometryTest {
 
     private val alternates = listOf("ó", "ö", "ô", "ò", "õ", "ø", "ō", "œ")
 
-    /** A key 100 wide whose centre is at [centerX], on a surface [surfaceWidth] across. */
     private fun popup(centerX: Float, items: List<String> = alternates) = PopupState(
         anchor = PlacedKey(
             key = KeyDef(id = "o"),
@@ -36,69 +40,89 @@ class PopupGeometryTest {
     private val surface = 1080f
 
     @Test
-    fun `the first alternate is the one under the finger`() {
-        // The whole point. The first alternate is first because it is the one people
-        // want — on a Polish layout it is the Polish letter — so it belongs where the
-        // finger already is, and holding still must produce it.
-        val p = popup(centerX = 400f)
-        assertEquals(0, popupIndexAt(p, 400f, surface, cell))
-    }
-
-    @Test
-    fun `a finger that has not moved stays on the first one`() {
-        // A real finger jitters, which produced a move event, which recomputed the
-        // index from position. With the strip centred that landed halfway along the
-        // list; with it anchored on the first item, a few pixels change nothing.
-        val p = popup(centerX = 400f)
-        listOf(-40f, -12f, -1f, 0f, 1f, 12f, 40f).forEach { wobble ->
+    fun `holding still gives the first alternate wherever the key is`() {
+        // Including the corners, which is the case that broke. A Polish "o" is the
+        // ninth key of ten: eight alternates do not fit to the right of it, the strip
+        // is pushed back on screen, and reading the index off its drawn position hands
+        // back whatever now sits under the finger. Displacement does not care.
+        listOf(60f, 400f, 540f, 900f, 1020f).forEach { centerX ->
+            val p = popup(centerX)
             assertEquals(
-                "a wobble of $wobble should not change the selection",
-                0, popupIndexAt(p, 400f + wobble, surface, cell)
+                "a key centred at $centerX should still commit its first alternate",
+                0, popupIndexAt(p, centerX, centerX, cell)
             )
         }
     }
 
     @Test
-    fun `sliding right walks the list one at a time`() {
+    fun `a finger that has not really moved stays on the first one`() {
+        // A real finger jitters, and a jitter produced a move event. Anything short of
+        // a whole key's width is not a slide.
+        val p = popup(centerX = 900f)
+        listOf(-99f, -40f, -1f, 0f, 1f, 40f, 99f).forEach { wobble ->
+            assertEquals(
+                "a wobble of $wobble should not change the selection",
+                0, popupIndexAt(p, 900f + wobble, 900f, cell)
+            )
+        }
+    }
+
+    @Test
+    fun `sliding right walks the list one key at a time`() {
         val p = popup(centerX = 400f)
-        assertEquals(1, popupIndexAt(p, 500f, surface, cell))
-        assertEquals(2, popupIndexAt(p, 600f, surface, cell))
-        assertEquals(7, popupIndexAt(p, 1100f, surface, cell))
+        assertEquals(1, popupIndexAt(p, 500f, 400f, cell))
+        assertEquals(2, popupIndexAt(p, 600f, 400f, cell))
+        assertEquals(7, popupIndexAt(p, 1100f, 400f, cell))
     }
 
     @Test
-    fun `sliding left of the strip stays on the first item`() {
-        // Not the last one. A truncating divide turns -0.5 into 0, but -1.5 into -1,
-        // so without flooring and clamping a finger dragged left of the strip jumped
-        // to the far end of the list.
+    fun `sliding past the end stays on the last one`() {
         val p = popup(centerX = 400f)
-        assertEquals(0, popupIndexAt(p, 300f, surface, cell))
-        assertEquals(0, popupIndexAt(p, 0f, surface, cell))
-        assertEquals(0, popupIndexAt(p, -500f, surface, cell))
+        assertEquals(7, popupIndexAt(p, 4000f, 400f, cell))
     }
 
     @Test
-    fun `a strip that would run off the right edge is pulled back on screen`() {
-        val p = popup(centerX = 1040f)
-        val origin = popupOriginX(p, surface, cell)
-        assertEquals(surface - cell * alternates.size, origin, 0.01f)
-        // And the index is then read back through the same geometry rather than
-        // assumed to be zero, so the selection still matches what is drawn.
-        assertEquals(7, popupIndexAt(p, 1040f, surface, cell))
-    }
-
-    @Test
-    fun `a strip narrower than the surface is not pushed off the left edge`() {
-        val p = popup(centerX = 20f)
-        assertEquals(0f, popupOriginX(p, surface, cell), 0.01f)
-        assertEquals(0, popupIndexAt(p, 20f, surface, cell))
+    fun `sliding back left returns to the first rather than wrapping`() {
+        // A truncating divide turns -0.5 into 0 but -1.5 into -1, so without flooring
+        // and clamping a finger dragged back past the start jumped to the far end.
+        val p = popup(centerX = 400f)
+        assertEquals(0, popupIndexAt(p, 300f, 400f, cell))
+        assertEquals(0, popupIndexAt(p, 0f, 400f, cell))
+        assertEquals(0, popupIndexAt(p, -500f, 400f, cell))
     }
 
     @Test
     fun `a single alternate is always the answer`() {
         val p = popup(centerX = 400f, items = listOf("ł"))
         listOf(-100f, 400f, 2000f).forEach {
-            assertEquals(0, popupIndexAt(p, it, surface, cell))
+            assertEquals(0, popupIndexAt(p, it, 400f, cell))
         }
+    }
+
+    @Test
+    fun `a zero-width key does not divide by zero`() {
+        val p = popup(centerX = 400f)
+        assertEquals(0, popupIndexAt(p, 400f, 400f, 0f))
+    }
+
+    // -----------------------------------------------------------------------
+    // Drawing, which is a separate question and is allowed to be clamped
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `the strip stays on screen at both edges`() {
+        assertEquals(0f, popupOriginX(popup(centerX = 20f), surface, cell), 0.01f)
+        assertEquals(
+            surface - cell * alternates.size,
+            popupOriginX(popup(centerX = 1040f), surface, cell), 0.01f
+        )
+    }
+
+    @Test
+    fun `a strip wider than the screen still starts on screen`() {
+        // Sixty symbols on a narrow phone. The clamp must not go negative and push the
+        // first item off the left edge where nothing can reach it.
+        val many = popup(centerX = 540f, items = (1..60).map { it.toString() })
+        assertTrue(popupOriginX(many, surface, cell) >= 0f)
     }
 }

@@ -249,13 +249,11 @@ fun KeySurface(
                                 touch.consumed = true
                                 onKeyDown(key)
                             } else if (hasPopup) {
-                                val opened = PopupState(touch.placed, key.popup, 0)
-                                popup = opened.copy(
-                                    selected = popupIndexAt(
-                                        opened, touch.currentX, widthPx,
-                                        touch.placed.width.coerceAtLeast(1f)
-                                    )
-                                )
+                                // Zero displacement, so the first alternate — the one
+                                // the list is ordered to put first — is what a finger
+                                // that does not move commits.
+                                popup = PopupState(touch.placed, key.popup, 0)
+                                touch.popupOpenX = touch.currentX
                                 touch.popupOpen = true
                                 onKeyDown(key)
                             } else if (longPressAction != null) {
@@ -354,7 +352,8 @@ fun KeySurface(
                             // the index off geometry computed a second time by hand is
                             // how the two came apart in the first place.
                             val index = popupIndexAt(
-                                current, x, widthPx, touch.placed.width.coerceAtLeast(1f)
+                                current, x, touch.popupOpenX,
+                                touch.placed.width.coerceAtLeast(1f)
                             )
                             if (index != current.selected) popup = current.copy(selected = index)
                             return
@@ -511,6 +510,15 @@ private class Touch(
     /** An action has already fired for this touch; releasing must not fire another. */
     var consumed: Boolean = false
     var popupOpen: Boolean = false
+
+    /**
+     * Where the finger was when the strip opened.
+     *
+     * Selection is measured from here rather than from the strip's left edge, so that
+     * holding still always means the first alternate no matter where on the board the
+     * key sits. See [popupIndexAt].
+     */
+    var popupOpenX: Float = 0f
 }
 
 data class PopupState(val anchor: PlacedKey, val items: List<String>, val selected: Int)
@@ -522,37 +530,36 @@ private class TapTracker {
 }
 
 /**
- * Where the long-press strip starts, placed so its **first** item sits under the finger.
+ * Where the long-press strip is drawn: first item under the finger where there is room.
  *
- * It used to be centred on the key, which put the middle of the list under the finger
- * while the selection still started at item 0 — the two disagreed. A finger held
- * perfectly still committed the first item; a finger that twitched by a pixel produced
- * a move event, the index was recomputed from position, and out came whatever was
- * halfway along. On a Polish layout that is the difference between "ó" and "õ" for a
- * gesture the user cannot perform any more carefully.
- *
- * The first alternate is the one people actually want — it is why it is first — so it
- * belongs where the finger already is. Sliding right then walks the rest.
+ * This is a question about *drawing only*. Selection deliberately does not go through
+ * it — see [popupIndexAt] — because a strip eight alternates wide does not fit beside
+ * a key near the edge of the screen, and clamping it back on screen moves every item
+ * out from under the finger that opened it.
  */
 internal fun popupOriginX(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Float {
     val total = cellWidth * popup.items.size
     val wanted = popup.anchor.centerX - cellWidth / 2f
-    // Near the right edge the whole strip has to shift left to stay on screen, and the
-    // first item then is not under the finger. That is why the selected index is read
-    // back through [popupIndexAt] rather than assumed to be zero.
     return wanted.coerceIn(0f, (surfaceWidth - total).coerceAtLeast(0f))
 }
 
-/** Which item a finger at [x] is over, using the same geometry the strip was drawn with. */
-internal fun popupIndexAt(
-    popup: PopupState,
-    x: Float,
-    surfaceWidth: Float,
-    cellWidth: Float
-): Int {
-    val originX = popupOriginX(popup, surfaceWidth, cellWidth)
-    val index = floor((x - originX) / cellWidth).toInt()
-    return index.coerceIn(0, popup.items.lastIndex)
+/**
+ * Which alternate the finger is on, measured from where the strip was opened.
+ *
+ * Displacement rather than absolute position, and this is the whole point. Reading the
+ * index off the strip's drawn position sounds obviously right and is wrong at the edges
+ * of the board: "o" is the ninth key of ten, its eight alternates are wider than the
+ * space to the right of it, so the strip gets clamped back on screen and the finger
+ * that opened it ends up sitting over the seventh item. Hold "o", let go, get "ō".
+ *
+ * Measured from the opening point, holding still is zero displacement and therefore the
+ * first alternate — by construction, at every position on the board, including the two
+ * corners. Sliding one key's width to the right is the next one along, which is the
+ * only thing the gesture ever meant.
+ */
+internal fun popupIndexAt(popup: PopupState, x: Float, openedAtX: Float, cellWidth: Float): Int {
+    val step = floor((x - openedAtX) / cellWidth.coerceAtLeast(1f)).toInt()
+    return step.coerceIn(0, popup.items.lastIndex)
 }
 
 // ---------------------------------------------------------------------------

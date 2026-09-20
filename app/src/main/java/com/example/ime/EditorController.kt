@@ -8,6 +8,9 @@ import android.view.inputmethod.InputConnection
 import com.example.core.config.Settings
 import com.example.core.layout.CursorDirection
 import com.example.core.layout.TextUnit
+import com.example.core.text.CapitalHow
+import com.example.core.text.CapitalMoment
+import com.example.core.text.Capitalisation
 import com.example.core.text.TextOps
 
 /**
@@ -195,10 +198,23 @@ class EditorController(
                 text = TextOps.smartQuote(text[0], before)
             }
 
-            if (s.autoCapitalize && !shiftActive && text.length == 1 && text[0].isLowerCase() &&
-                TextOps.shouldCapitalise(textBefore(64))
-            ) {
-                text = text.uppercase()
+            // The same rules the service consults, asked again here.
+            //
+            // This branch is what makes a capital appear when the shift flag was not
+            // set — after a paste, or when the state was cleared under the keyboard.
+            // It used to ask its own question with its own hardcoded condition, which
+            // meant capitalisation had two implementations that could disagree, and
+            // that turning the rules off would not have turned this one off. One
+            // policy, read from one place.
+            if (s.autoCapitalize && !shiftActive && text.length == 1 && text[0].isLowerCase()) {
+                val window = textBefore(200)
+                val wanted = Capitalisation.decide(
+                    rules = Capitalisation.fromJson(s.capitalisationRulesJson),
+                    before = window,
+                    atStartOfField = window.isEmpty() && selectionStart == 0,
+                    moment = CapitalMoment.TYPING
+                )
+                if (wanted == CapitalHow.SHIFT) text = text.uppercase()
             }
         }
 

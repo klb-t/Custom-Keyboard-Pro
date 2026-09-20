@@ -138,16 +138,20 @@ data class Settings(
     // --- typing behaviour -------------------------------------------------
     val autoCapitalize: Boolean = true,
     /**
-     * Whether opening the keyboard may turn shift on by itself.
+     * How capitalisation actually behaves, as a list of rules.
      *
-     * Separate from [autoCapitalize], which governs typing, because the two are asked
-     * at different moments and the evidence differs. While typing, a full stop has
-     * just been written and a capital is all but certain. On opening, the keyboard
-     * knows only that a field gained focus — and a field gains focus to be edited far
-     * more often than to be started. Even on, only a field known to be empty gets a
-     * capital; off, opening never touches shift.
+     * [autoCapitalize] stays as the master switch, because "off" should be one tap.
+     * Everything below it is data: which situations imply a capital (an empty field,
+     * the end of a sentence, a line break, a list bullet, a colon, or simply the start
+     * of any word), what the keyboard does about each (press shift, or leave the
+     * typing alone and fix the word once it ends, or deliberately nothing), and at
+     * which moment each rule applies — opening a field is a different question from
+     * finishing a word in one.
+     *
+     * Blank means [com.example.core.text.Capitalisation.DEFAULT]. An explicit empty
+     * list means no rules, which is not the same thing and is honoured.
      */
-    val autoCapitalizeOnOpen: Boolean = true,
+    val capitalisationRulesJson: String = "",
     val doubleSpacePeriod: Boolean = true,
     val autoSpaceAfterPunctuation: Boolean = false,
     val smartQuotes: Boolean = false,

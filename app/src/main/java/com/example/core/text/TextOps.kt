@@ -128,40 +128,10 @@ object TextOps {
     fun words(text: CharSequence): List<String> =
         Regex("[\\p{L}\\p{N}][\\p{L}\\p{N}'-]*").findAll(text).map { it.value }.toList()
 
-    // -----------------------------------------------------------------------
-    // Auto-capitalisation
-    // -----------------------------------------------------------------------
-
-    /**
-     * Whether the next letter should be capitalised, given the text before the cursor.
-     *
-     * True at the start of the field and after sentence-ending punctuation followed by
-     * whitespace. Deliberately conservative: it does not capitalise after every
-     * newline-free full stop inside an abbreviation like "e.g. ", because guessing
-     * wrong there is more annoying than missing a capital.
-     */
-    fun shouldCapitalise(before: CharSequence): Boolean {
-        if (before.isEmpty()) return true
-        var i = before.length
-        var sawSpace = false
-        while (i > 0 && before[i - 1].isWhitespace()) {
-            if (before[i - 1] == '\n') return true
-            sawSpace = true
-            i--
-        }
-        if (i == 0) return true
-        if (!sawSpace) return false
-        val prev = before[i - 1]
-        if (prev !in SENTENCE_END) return false
-        // "e.g. " — a single letter before the dot is almost always an abbreviation.
-        if (prev == '.' && i >= 2 && before[i - 2].isLetter()) {
-            val twoBack = if (i >= 3) before[i - 3] else ' '
-            if (!twoBack.isLetter()) return false
-        }
-        return true
-    }
-
-    private val SENTENCE_END = charArrayOf('.', '!', '?', '…')
+    // Auto-capitalisation used to live here and now lives in
+    // [com.example.core.text.Capitalisation], because it turned out to be four
+    // questions rather than one. Nothing is left behind on purpose: a second answer to
+    // the same question is a second answer that can drift out of step with the first.
 
     /** Punctuation after which a space is conventional. */
     fun wantsTrailingSpace(c: Char): Boolean = c in ",.;:!?"

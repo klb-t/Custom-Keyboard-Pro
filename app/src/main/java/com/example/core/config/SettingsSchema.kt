@@ -373,11 +373,15 @@ object SettingsSchema {
         "swipeThresholdDp" to Meta(group = GROUP_TIMING, label = "Swipe threshold", min = 4f, max = 80f),
 
         "autoCapitalize" to Meta(group = GROUP_TYPING, label = "Capitalise sentences"),
-        "autoCapitalizeOnOpen" to Meta(
-            group = GROUP_TYPING, label = "…and when the keyboard opens",
-            help = "Only ever on a field that is empty. A field you open with text " +
-                "already in it is one you are editing, and editing happens in the " +
-                "middle of sentences."
+        "capitalisationRulesJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_TYPING, label = "Capitalisation rules",
+            multiline = true,
+            help = "One rule per line of policy: \"on\" is the situation " +
+                "(field_start, sentence_end, line_start, list_item, after_colon, " +
+                "word_start), \"does\" is what happens (shift, fix_after_word, " +
+                "nothing), \"at\" is when it is asked (opening, typing). A rule " +
+                "that says nothing is a veto. Blank uses the built-in set; an empty " +
+                "list means no rules at all."
         ),
         "doubleSpacePeriod" to Meta(group = GROUP_TYPING, label = "Double space inserts a full stop"),
         "autoSpaceAfterPunctuation" to Meta(group = GROUP_TYPING, label = "Space after punctuation"),

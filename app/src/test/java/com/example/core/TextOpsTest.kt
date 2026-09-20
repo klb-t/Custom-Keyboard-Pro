@@ -93,20 +93,6 @@ class TextOpsTest {
     }
 
     @Test
-    fun `capitalises at the start and after a sentence`() {
-        assertTrue(TextOps.shouldCapitalise(""))
-        assertTrue(TextOps.shouldCapitalise("Done. "))
-        assertTrue(TextOps.shouldCapitalise("Line one\n"))
-    }
-
-    @Test
-    fun `does not capitalise mid-sentence or after an abbreviation`() {
-        assertFalse(TextOps.shouldCapitalise("hello "))
-        assertFalse(TextOps.shouldCapitalise("in the "))
-        assertFalse(TextOps.shouldCapitalise("e.g. "))
-    }
-
-    @Test
     fun `double space becomes a full stop only after something to end`() {
         assertEquals(". ", TextOps.doubleSpaceReplacement("word "))
         assertNull(TextOps.doubleSpaceReplacement("word  "))

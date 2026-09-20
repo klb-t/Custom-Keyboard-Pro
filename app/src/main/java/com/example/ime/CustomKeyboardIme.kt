@@ -37,6 +37,9 @@ import com.example.core.hitmap.TouchLearner
 import com.example.core.layout.ClipboardOp
 import com.example.core.layout.IndicatorKeys
 import com.example.core.layout.KeyAction
+import com.example.core.text.CapitalHow
+import com.example.core.text.CapitalMoment
+import com.example.core.text.Capitalisation
 import com.example.core.layout.KeyDef
 import com.example.core.layout.KeyCodes
 import com.example.core.layout.LayoutDef
@@ -314,23 +317,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
             AppLogger.d(tag, "> editor state read: sensitive=$sensitive")
 
-            // Opening the keyboard on text that already exists means editing it, not
-            // starting it — and editing happens mid-sentence far more often than at a
-            // sentence boundary. The old rule asked only "does a capital belong
-            // here?", which says yes on an unread field too, since no text before the
-            // cursor reads as the beginning of everything.
-            //
-            // The two errors are not the same size, which is what settles it. A
-            // missing capital is one tap on shift. An unwanted one is a word that has
-            // to be deleted and retyped, and is easy not to notice until it is sent.
-            // So on opening, only a field known to be empty gets a capital. The rule
-            // for typing is untouched: a full stop still capitalises what follows it.
-            if (SettingsStore.current.autoCapitalize &&
-                SettingsStore.current.autoCapitalizeOnOpen &&
-                !sensitive && editor.isKnownEmpty
-            ) {
-                state.setModifier(ModifierKind.SHIFT, active = true)
-            }
+            applyCapitalisation(CapitalMoment.OPENING, sensitive)
             refreshSuggestions()
             AppLogger.d(tag, "done")
         } catch (crash: Throwable) {
@@ -930,11 +917,78 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         }
         refreshSuggestions()
 
-        if (settings.autoCapitalize && endsWord) {
-            if (TextOps.shouldCapitalise(editor.textBefore(64))) {
-                state.setModifier(ModifierKind.SHIFT, active = true)
-            }
+        if (endsWord) applyCapitalisation(CapitalMoment.TYPING, editor.isSensitive)
+    }
+
+    /**
+     * Asks the capitalisation rules what to do here, and does it.
+     *
+     * One function for both moments, because the difference between them is a field on
+     * a rule rather than a branch in the code — which is the whole point of the rules
+     * being data. What used to be "and also, not when opening" hardcoded next to a
+     * boolean is now one word in one rule the user can edit.
+     */
+    private fun applyCapitalisation(moment: CapitalMoment, sensitive: Boolean) {
+        val settings = SettingsStore.current
+        if (!settings.autoCapitalize || sensitive) return
+
+        val rules = Capitalisation.fromJson(settings.capitalisationRulesJson)
+        val before = editor.textBefore(200)
+        // At the start of the field only when that is actually known — an unread field
+        // looks exactly like an empty one from here, and reading the second as the
+        // first is what made the keyboard capitalise mid-sentence.
+        val atStart = when (moment) {
+            CapitalMoment.OPENING -> editor.isKnownEmpty
+            CapitalMoment.TYPING -> before.isEmpty()
         }
+
+        when (Capitalisation.decide(rules, before, atStart, moment)) {
+            CapitalHow.NOTHING -> Unit
+            CapitalHow.SHIFT -> state.setModifier(ModifierKind.SHIFT, active = true)
+            CapitalHow.FIX_AFTER_WORD -> if (moment == CapitalMoment.TYPING) fixLastWordCase()
+        }
+    }
+
+    /**
+     * Capitalises the word that was just finished, after the fact.
+     *
+     * Registered as an auto-correction rather than done quietly, so backspace puts it
+     * back. This lane changes text the user already typed, and the rule this project
+     * holds to is that nothing of that kind is acceptable unless one press undoes it.
+     */
+    private fun fixLastWordCase() {
+        val committed = editor.lastCommit
+        if (committed.isEmpty()) return
+        val before = editor.textBefore(240)
+        val word = TextOps.currentWord(before.dropLast(committed.length))
+        if (word.isBlank()) return
+
+        val fixed = Capitalisation.capitalise(word)
+        if (fixed == word) return
+
+        // The situation has to have held where the word *started*, not where it ended.
+        val beforeWord = before.dropLast(committed.length + word.length)
+        val rules = Capitalisation.fromJson(SettingsStore.current.capitalisationRulesJson)
+        val here = Capitalisation.action(
+            rules,
+            Capitalisation.situations(beforeWord, atStartOfField = beforeWord.isEmpty()),
+            CapitalMoment.TYPING
+        )
+        if (here != CapitalHow.FIX_AFTER_WORD) return
+
+        // Spelling correction is the other rewrite that happens at a word boundary, and
+        // it runs off the input path. Both re-check that the text still ends the way
+        // they left it, so whichever lands first wins and the other stands down rather
+        // than corrupting anything — but they do not yet compose. Only reachable by
+        // choosing FIX_AFTER_WORD, which is not in the default rules; making the two
+        // cooperate is the next step if that stops being true.
+        val tail = word + committed
+        if (!editor.textBefore(tail.length + 2).endsWith(tail)) return
+        editor.batch {
+            editor.deleteExactly(tail.length)
+            editor.commitText(fixed + committed, applyConventions = false)
+        }
+        lastAutoCorrection = AutoCorrection(word, fixed, committed)
     }
 
     private fun learnCurrentWord() {
