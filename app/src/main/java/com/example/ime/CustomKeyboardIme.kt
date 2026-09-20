@@ -33,6 +33,7 @@ import com.example.core.asr.AsrState
 import com.example.core.asr.VoiceController
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.convert.PasteConversion
 import com.example.core.data.ClipboardEntity
 import com.example.core.data.KeyboardRepository
 import com.example.core.data.WordLists
@@ -183,7 +184,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 }
             }
             serviceScope.launch {
-                suggestions.aiBusy.collect { busy -> state.setFlag(IndicatorKeys.AI_BUSY, busy) }
+                suggestions.aiBusy.collect { busy ->
+                    suggestionsBusy = busy
+                    refreshBusyLamp()
+                }
             }
             serviceScope.launch {
                 repository.sweepClipboard(SettingsStore.current.clipboardRetentionDays)
@@ -1222,11 +1226,76 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         selectLayout(candidates[next].id)
     }
 
+    /**
+     * Paste, or read the thing being pasted.
+     *
+     * A picture or a recording on the clipboard is almost never wanted *as* a picture
+     * in a text field — there is nowhere for it to go. What the person wants is what is
+     * written in it, and paste is the moment they ask for it without knowing there was
+     * anything to ask.
+     *
+     * Everything about this is conditional on the setting being on and a provider being
+     * configured; with either missing this is an ordinary paste and nothing goes
+     * anywhere. When it does run, a failure falls back to the ordinary paste rather
+     * than leaving the user with a tap that did nothing.
+     */
+    private fun pasteOrConvert() {
+        val clip = clipboardManager?.primaryClip
+        if (!PasteConversion.canConvert(this, clip, SettingsStore.current)) {
+            editor.paste()
+            return
+        }
+        if (editor.isSensitive) {
+            // A password field is not somewhere a document gets uploaded on the way in.
+            editor.paste()
+            return
+        }
+
+        convertingPaste = true
+        refreshBusyLamp()
+        serviceScope.launch {
+            val result = PasteConversion.convert(
+                context = this@CustomKeyboardIme,
+                clip = clip,
+                settings = SettingsStore.current,
+                language = layout.locale.orEmpty()
+            )
+            convertingPaste = false
+            refreshBusyLamp()
+            result.fold(
+                onSuccess = { text ->
+                    val trimmed = text.trim()
+                    // Nothing found is an answer, not a failure: pasting the file's URI
+                    // instead would be worse than pasting nothing.
+                    if (trimmed.isNotEmpty()) {
+                        editor.commitText(trimmed, applyConventions = false)
+                        refreshSuggestions()
+                    }
+                },
+                onFailure = { editor.paste() }
+            )
+        }
+    }
+
+    /** True while a pasted file is being read. */
+    private var convertingPaste = false
+    private var suggestionsBusy = false
+
+    /**
+     * One lamp, two things that can light it.
+     *
+     * Set from either side alone and whichever finished last would turn it off while
+     * the other was still working.
+     */
+    private fun refreshBusyLamp() {
+        state.setFlag(IndicatorKeys.AI_BUSY, suggestionsBusy || convertingPaste)
+    }
+
     private fun performClipboard(op: ClipboardOp) {
         when (op) {
             ClipboardOp.COPY -> editor.copy()
             ClipboardOp.CUT -> editor.cut()
-            ClipboardOp.PASTE -> editor.paste()
+            ClipboardOp.PASTE -> pasteOrConvert()
             ClipboardOp.PASTE_PLAIN -> {
                 val clip = clipboardManager?.primaryClip
                 val text = if (clip != null && clip.itemCount > 0) {

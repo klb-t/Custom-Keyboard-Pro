@@ -308,6 +308,31 @@ data class Settings(
     val asrModel: String = "whisper-1",
     /** Empty means "follow the system locale". */
     val asrLanguage: String = "",
+
+    /**
+     * Turn a pasted picture or recording into its text.
+     *
+     * Off by default, and not because it is unfinished. The rule here is not "nothing
+     * useful by default", it is *nothing leaves the device unasked* — and reading a
+     * photographed document means sending that photograph to a provider. A
+     * photographed document is a payslip, a prescription, a contract. Turning this on
+     * is one tap; a keyboard that had uploaded one already is not something anybody
+     * can take back.
+     *
+     * There is no on-device converter to offer instead: Android has no
+     * text-recognition API, and its speech recogniser listens to a microphone rather
+     * than reading a file. Both would mean shipping a model.
+     */
+    val pasteConvert: Boolean = false,
+
+    /**
+     * Who reads a pasted picture. Blank means the first configured provider that can.
+     *
+     * Blank rather than a name, so the feature appears the moment somebody sets up a
+     * provider for something else instead of being a second setup waiting to be found.
+     */
+    val ocrProvider: String = "",
+    val ocrModel: String = "",
     val asrShowAlternatives: Boolean = true,
     val asrAlternativeCount: Int = 5,
     /** Off: the best guess is offered, the user commits it. */

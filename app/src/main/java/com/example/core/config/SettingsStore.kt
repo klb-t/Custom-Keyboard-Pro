@@ -220,6 +220,9 @@ object SettingsStore {
         put("asrApiKey", s.asrApiKey)
         put("asrModel", s.asrModel)
         put("asrLanguage", s.asrLanguage)
+        put("pasteConvert", s.pasteConvert)
+        put("ocrProvider", s.ocrProvider)
+        put("ocrModel", s.ocrModel)
         put("asrShowAlternatives", s.asrShowAlternatives)
         put("asrAlternativeCount", s.asrAlternativeCount)
         put("asrAutoCommitBest", s.asrAutoCommitBest)
@@ -381,6 +384,9 @@ object SettingsStore {
             asrApiKey = o.optString("asrApiKey", d.asrApiKey),
             asrModel = o.optString("asrModel", d.asrModel),
             asrLanguage = o.optString("asrLanguage", d.asrLanguage),
+            pasteConvert = o.optBoolean("pasteConvert", d.pasteConvert),
+            ocrProvider = o.optString("ocrProvider", d.ocrProvider),
+            ocrModel = o.optString("ocrModel", d.ocrModel),
             asrShowAlternatives = o.optBoolean("asrShowAlternatives", d.asrShowAlternatives),
             asrAlternativeCount = o.optInt("asrAlternativeCount", d.asrAlternativeCount),
             asrAutoCommitBest = o.optBoolean("asrAutoCommitBest", d.asrAutoCommitBest),

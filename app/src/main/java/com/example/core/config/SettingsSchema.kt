@@ -519,6 +519,19 @@ object SettingsSchema {
                 "endpoint is a URL you type yourself, including your own Whisper server.",
             options = AsrEngines.ALL
         ),
+        "pasteConvert" to Meta(
+            group = GROUP_CLIPBOARD, label = "Read a pasted picture or recording",
+            help = "Paste a photographed document and get its text; paste a voice note " +
+                "and get the transcript. Off by default because it sends the file to " +
+                "the provider that reads it, and a photographed document is a payslip " +
+                "or a contract. There is no on-device reader to use instead."
+        ),
+        "ocrProvider" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_CLIPBOARD, label = "Who reads pictures",
+            help = "Blank uses the first provider you have set up that can."
+        ),
+        "ocrModel" to Meta(group = GROUP_CLIPBOARD, label = "Model for reading pictures"),
+
         "asrProvider" to Meta(
             kind = SettingKind.ENUM, group = GROUP_VOICE, label = "Dictation provider",
             help = "Everything in the catalogue that can take dictation, including " +
