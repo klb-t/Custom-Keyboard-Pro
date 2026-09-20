@@ -100,7 +100,8 @@
       "images",
       "speech",
       "well-known"
-    ]
+    ],
+    "keyPattern": "^sk-(?!ant-|or-)[A-Za-z0-9_\\-]{20,}$"
   },
   {
     "id": "anthropic",
@@ -125,7 +126,8 @@
       "rewriting",
       "long-context",
       "handwriting"
-    ]
+    ],
+    "keyPattern": "^sk-ant-[A-Za-z0-9_\\-]{20,}$"
   },
   {
     "id": "gemini",
@@ -188,7 +190,8 @@
       "long-context",
       "video"
     ],
-    "signupUrl": "https://aistudio.google.com/app/apikey"
+    "signupUrl": "https://aistudio.google.com/app/apikey",
+    "keyPattern": "^AIza[A-Za-z0-9_\\-]{30,}$"
   },
   {
     "id": "mistral",
@@ -315,7 +318,8 @@
       "fast",
       "cheap",
       "dictation"
-    ]
+    ],
+    "keyPattern": "^gsk_[A-Za-z0-9]{20,}$"
   },
   {
     "id": "deepseek",
@@ -386,7 +390,8 @@
     "strengths": [
       "general",
       "images"
-    ]
+    ],
+    "keyPattern": "^xai-[A-Za-z0-9]{20,}$"
   },
   {
     "id": "cohere",
@@ -505,7 +510,8 @@
     "strengths": [
       "open-weights",
       "dictation"
-    ]
+    ],
+    "keyPattern": "^fw_[A-Za-z0-9]{20,}$"
   },
   {
     "id": "cerebras",
@@ -548,7 +554,8 @@
         "defaultModel": "llama3.3-70b",
         "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
-    }
+    },
+    "keyPattern": "^csk-[A-Za-z0-9_\\-]{20,}$"
   },
   {
     "id": "perplexity",
@@ -564,7 +571,8 @@
     "strengths": [
       "search",
       "sources"
-    ]
+    ],
+    "keyPattern": "^pplx-[A-Za-z0-9]{20,}$"
   },
   {
     "id": "moonshot",
@@ -696,7 +704,8 @@
         "defaultModel": "openai/gpt-4o-mini",
         "notes": "Streams, so a continuation can be cut where it stops being sure."
       }
-    }
+    },
+    "keyPattern": "^sk-or-v1-[A-Za-z0-9]{32,}$"
   },
   {
     "id": "requesty",

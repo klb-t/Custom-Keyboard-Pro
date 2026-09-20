@@ -8,6 +8,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.core.ai.AiClient
 import com.example.core.ai.AiConfig
@@ -22,9 +26,11 @@ import com.example.core.ai.AiTasks
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.discovery.ModelDiscovery
+import com.example.core.discovery.ApiKeys
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.discovery.ProviderProfile
 import com.example.core.discovery.ProviderProfiles
+import com.example.core.setup.ProviderProbe
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +53,11 @@ fun AiSettingsScreen(settings: Settings) {
     // setup would find the box empty, and "my key vanished" is a worse failure than
     // the one profiles exist to fix.
     LaunchedEffect(Unit) { ProviderProfiles.adoptLooseKey() }
+
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var checking by remember { mutableStateOf(false) }
+    var checkResult by remember { mutableStateOf<String?>(null) }
 
     val profiles = remember(settings.providerProfilesJson) { ProviderProfiles.all(settings) }
     val profile = profiles[settings.aiProvider] ?: ProviderProfile(settings.aiProvider)
@@ -137,6 +148,85 @@ fun AiSettingsScreen(settings: Settings) {
                 secret = true,
                 onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(apiKey = v) } }
             )
+
+            // Getting a key means leaving the app, signing in, pressing "create" and
+            // copying a long opaque string. Sending somebody to a home page to find
+            // that themselves is the difference between two taps and ten minutes.
+            val keyPage = spec?.signupUrl?.ifBlank { spec.docsUrl }.orEmpty()
+            if (keyPage.isNotBlank() && spec?.needsKey == true) {
+                ActionRow(
+                    label = "Get a key from ${spec.label}",
+                    description = keyPage,
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(keyPage))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                )
+            }
+
+            // Copying the key is the last thing that happens over there, so by the time
+            // somebody is back here it is already on the clipboard. Asking them to
+            // paste it is asking them to do the one step the app could do itself.
+            val pasted = clipboard.getText()?.text?.trim().orEmpty()
+            if (pasted.isNotBlank() && pasted != profile.apiKey && ApiKeys.looksLikeKey(pasted)) {
+                val owner = ApiKeys.whoseKey(pasted, providers)
+                val mine = owner == null || owner.id == settings.aiProvider
+                if (mine) {
+                    ActionRow(
+                        label = "Use the key you just copied (${ApiKeys.masked(pasted)})",
+                        description = "Read from the clipboard, and only while this screen " +
+                            "is open. Nothing is stored until you tap.",
+                        onClick = {
+                            ProviderProfiles.update(settings.aiProvider) { it.copy(apiKey = pasted, problem = "") }
+                            checkResult = null
+                        }
+                    )
+                } else {
+                    // A key pasted into the wrong provider's box is the failure that
+                    // started all of this. It costs nothing to notice.
+                    InfoRow(
+                        "The key on your clipboard looks like a ${owner.label} key, not a " +
+                            "${spec?.label ?: settings.aiProvider} one. Switch provider above to use it."
+                    )
+                }
+            }
+
+            ActionRow(
+                label = if (checking) "Checking…" else "Check this key",
+                description = "Asks the provider for its model list — the cheapest question " +
+                    "there is — and says exactly what came back.",
+                onClick = {
+                    if (!checking && spec != null) {
+                        checking = true
+                        checkResult = null
+                        scope.launch {
+                            val probe = ProviderProbe.probe(spec, ProviderProfiles.keyFor(spec.id, settings))
+                            checkResult = when {
+                                probe.usable ->
+                                    "Works. ${spec.label} answered" +
+                                        (if (probe.models.isNotEmpty()) " and listed ${probe.models.size} models." else ".")
+                                probe.problem != null -> probe.problem
+                                else -> "No answer from ${spec.label}."
+                            }
+                            ProviderProfiles.update(spec.id) {
+                                it.copy(
+                                    verifiedAt = if (probe.usable) System.currentTimeMillis() else it.verifiedAt,
+                                    problem = if (probe.usable) "" else probe.problem.orEmpty()
+                                )
+                            }
+                            if (probe.usable && probe.models.isNotEmpty()) {
+                                ModelDiscovery.cache(spec.id, probe.models)
+                            }
+                            checking = false
+                        }
+                    }
+                }
+            )
+            checkResult?.let { InfoRow(it) }
 
             // The point of profiles, made visible: what is already set up and can be
             // switched to without typing anything.

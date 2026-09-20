@@ -126,7 +126,16 @@ data class ProviderSpec(
     /** What becomes of the text sent here. See [Privacy]. */
     val privacy: String = Privacy.UNKNOWN,
     /** Short tags the advisor matches against what the user says they want. */
-    val strengths: List<String> = emptyList()
+    val strengths: List<String> = emptyList(),
+    /**
+     * What this provider's keys look like, as a regular expression.
+     *
+     * Optional and expected to be absent for most: prefixes change and nobody updates
+     * a keyboard when they do, so [ApiKeys] falls back to the shape of the thing. It
+     * earns its place where it disambiguates — telling an OpenRouter key from an
+     * Anthropic one when both have been on the clipboard.
+     */
+    val keyPattern: String = ""
 ) : Discoverable {
 
     /**
@@ -165,6 +174,7 @@ data class ProviderSpec(
         if (signupUrl.isNotBlank()) put("signupUrl", signupUrl)
         if (privacy != Privacy.UNKNOWN) put("privacy", privacy)
         if (strengths.isNotEmpty()) put("strengths", JSONArray(strengths))
+        if (keyPattern.isNotBlank()) put("keyPattern", keyPattern)
         if (capabilities.isNotEmpty()) {
             put("capabilities", JSONObject().apply {
                 capabilities.forEach { (id, spec) -> put(id, spec.toJson()) }
@@ -198,6 +208,7 @@ data class ProviderSpec(
                 needsCard = o.optBoolean("needsCard", false),
                 signupUrl = o.optString("signupUrl"),
                 privacy = o.optString("privacy").ifBlank { Privacy.UNKNOWN }.lowercase(),
+                keyPattern = o.optString("keyPattern"),
                 strengths = o.optJSONArray("strengths").toStringList()
             )
         }
