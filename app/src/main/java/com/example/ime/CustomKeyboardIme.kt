@@ -283,6 +283,12 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // (wrong capitalisation, a stale suggestion). Logged in full either way.
         try {
             currentPackage = info?.packageName
+            // Before anything reads the cursor. The editor declares where it is when
+            // it opens, and a keyboard that does not listen starts every field
+            // believing the position is unknown — which is not a neutral state: it
+            // makes an empty field indistinguishable from one whose text has simply
+            // not been read yet, and sends every cursor movement down the blind path.
+            editor.seedSelection(info)
             restoreLayoutForApp()
             AppLogger.d(tag, "> layout for app resolved: ${layout.id}")
             panelState.value = null
@@ -308,10 +314,22 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
             AppLogger.d(tag, "> editor state read: sensitive=$sensitive")
 
-            if (SettingsStore.current.autoCapitalize && !sensitive) {
-                if (TextOps.shouldCapitalise(editor.textBefore(64))) {
-                    state.setModifier(ModifierKind.SHIFT, active = true)
-                }
+            // Opening the keyboard on text that already exists means editing it, not
+            // starting it — and editing happens mid-sentence far more often than at a
+            // sentence boundary. The old rule asked only "does a capital belong
+            // here?", which says yes on an unread field too, since no text before the
+            // cursor reads as the beginning of everything.
+            //
+            // The two errors are not the same size, which is what settles it. A
+            // missing capital is one tap on shift. An unwanted one is a word that has
+            // to be deleted and retyped, and is easy not to notice until it is sent.
+            // So on opening, only a field known to be empty gets a capital. The rule
+            // for typing is untouched: a full stop still capitalises what follows it.
+            if (SettingsStore.current.autoCapitalize &&
+                SettingsStore.current.autoCapitalizeOnOpen &&
+                !sensitive && editor.isKnownEmpty
+            ) {
+                state.setModifier(ModifierKind.SHIFT, active = true)
             }
             refreshSuggestions()
             AppLogger.d(tag, "done")
@@ -742,7 +760,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             is KeyAction.Space -> commitText(" ", settings)
 
             is KeyAction.MoveCursor -> {
-                editor.moveCursor(action.direction, action.unit, action.extendSelection)
+                // Shift and an arrow selects. It is what every physical keyboard does
+                // and what the cursor panel has always looked like it should do; until
+                // now only a long press could extend, which is undiscoverable and
+                // cannot be repeated to grow a selection.
+                //
+                // Shift is deliberately not consumed here, so a run of arrows keeps
+                // extending rather than stopping after the first — which is what
+                // holding shift does on a keyboard with a shift to hold.
+                val extend = action.extendSelection || state.isActive(ModifierKind.SHIFT)
+                editor.moveCursor(action.direction, action.unit, extend)
                 state.consumeOneShotLayer()
             }
 

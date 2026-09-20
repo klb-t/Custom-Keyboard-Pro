@@ -137,6 +137,17 @@ data class Settings(
 
     // --- typing behaviour -------------------------------------------------
     val autoCapitalize: Boolean = true,
+    /**
+     * Whether opening the keyboard may turn shift on by itself.
+     *
+     * Separate from [autoCapitalize], which governs typing, because the two are asked
+     * at different moments and the evidence differs. While typing, a full stop has
+     * just been written and a capital is all but certain. On opening, the keyboard
+     * knows only that a field gained focus — and a field gains focus to be edited far
+     * more often than to be started. Even on, only a field known to be empty gets a
+     * capital; off, opening never touches shift.
+     */
+    val autoCapitalizeOnOpen: Boolean = true,
     val doubleSpacePeriod: Boolean = true,
     val autoSpaceAfterPunctuation: Boolean = false,
     val smartQuotes: Boolean = false,

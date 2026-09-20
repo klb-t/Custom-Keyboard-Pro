@@ -29,10 +29,69 @@ class EditorController(
     var selectionEnd: Int = -1
         private set
 
+    /**
+     * Where an extend-selection run started, and where its moving end is.
+     *
+     * Kept here rather than derived from the selection on each press, because the
+     * selection does not say which end the caret is. Extend left once and the platform
+     * reports the range normalised — start below end — so the next press reads the
+     * left edge as the anchor and walks the *right* edge inwards, shrinking the
+     * selection it was asked to grow. Two presses left and the thing is smaller than
+     * after one. Remembering both ends is the only way shift-and-arrow can keep going
+     * in the direction it was going.
+     */
+    private var anchor: Int = -1
+    private var caret: Int = -1
+
+    /** What we last asked the platform for, so a selection we did not cause is noticed. */
+    private var expected: Pair<Int, Int>? = null
+
     fun onSelectionUpdate(start: Int, end: Int) {
         selectionStart = start
         selectionEnd = end
+        // A selection that is not the one we asked for came from somewhere else — a
+        // tap, a drag, the app itself — and whatever run we were in is over. Keeping
+        // the old anchor would make the next shift-and-arrow leap back to wherever
+        // the user was selecting several taps ago.
+        val mine = expected?.let { (a, b) ->
+            (a == start && b == end) || (a == end && b == start)
+        } ?: false
+        if (!mine) {
+            anchor = -1
+            caret = -1
+        }
+        // Deliberately kept rather than cleared once matched. The platform is free to
+        // report the same selection twice — a composing-region change reports one —
+        // and a second identical report arriving against a cleared expectation would
+        // read as "somebody else moved the cursor" and break a run mid-selection.
     }
+
+    /**
+     * Seeds the cursor position from what the editor declared when it opened.
+     *
+     * Without this the keyboard begins every field not knowing where the cursor is,
+     * and -1 is not a harmless "unknown": it makes an empty field and a field whose
+     * text is simply not readable yet look identical, and it sends cursor movement
+     * down the blind path of raw key events. Android hands these over in [EditorInfo]
+     * precisely so a keyboard need not guess before the first edit.
+     */
+    fun seedSelection(info: EditorInfo?) {
+        anchor = -1
+        caret = -1
+        expected = null
+        val start = info?.initialSelStart ?: -1
+        val end = info?.initialSelEnd ?: -1
+        // Still -1 when the editor does not say, which is honest and is what the
+        // callers already handle. Guessing 0 here would claim the cursor is at the
+        // start of every field that declines to answer.
+        selectionStart = start
+        selectionEnd = end
+    }
+
+    /** True when the field is empty and the cursor is known to be in it at all. */
+    val isKnownEmpty: Boolean
+        get() = selectionStart == 0 && selectionEnd == 0 &&
+            textBefore(1).isEmpty() && textAfter(1).isEmpty()
 
     val hasSelection: Boolean
         get() = selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd
@@ -285,29 +344,54 @@ class EditorController(
             return
         }
 
-        val anchor = if (extend) selectionStart else selectionEnd.coerceAtLeast(selectionStart)
-        val caret = selectionEnd
+        // A run in progress keeps its own anchor and caret; a new one takes them from
+        // wherever the cursor is now. Without the first half, every press after the
+        // first reads the normalised range and walks the wrong end.
+        if (!extend) {
+            anchor = -1
+            caret = -1
+        }
+        val runAnchor = if (extend && anchor >= 0) anchor else selectionStart
+        val from = if (extend && caret >= 0) caret else selectionEnd
+        // Known limit, stated rather than hidden: the text window below is read around
+        // the platform's idea of the cursor, which during a selection is its lower
+        // edge. That is the caret in every run that is still going the way it started,
+        // so character steps are exact either way. A run that reverses *and* asks for
+        // a word or a line — extend right, then left by word — measures from the far
+        // edge and can land on the wrong boundary. Fixing it needs the whole field
+        // text on every press, which is not worth it until somebody hits it.
         val target = when (direction) {
             CursorDirection.LEFT -> when (unit) {
-                TextUnit.WORD -> caret - TextOps.backwardWordLength(textBefore(128))
-                TextUnit.LINE, TextUnit.PARAGRAPH -> caret - TextOps.toLineStartLength(textBefore(4096))
+                TextUnit.WORD -> from - TextOps.backwardWordLength(textBefore(128))
+                TextUnit.LINE, TextUnit.PARAGRAPH -> from - TextOps.toLineStartLength(textBefore(4096))
                 TextUnit.ALL -> 0
-                TextUnit.CHARACTER -> caret - TextOps.lastGraphemeLength(textBefore(8)).coerceAtLeast(1)
+                TextUnit.CHARACTER -> from - TextOps.lastGraphemeLength(textBefore(8)).coerceAtLeast(1)
             }
             CursorDirection.RIGHT -> when (unit) {
-                TextUnit.WORD -> caret + TextOps.forwardWordLength(textAfter(128))
-                TextUnit.LINE, TextUnit.PARAGRAPH -> caret + TextOps.toLineEndLength(textAfter(4096))
-                TextUnit.ALL -> caret + textAfter(100_000).length
-                TextUnit.CHARACTER -> caret + TextOps.firstGraphemeLength(textAfter(8)).coerceAtLeast(1)
+                TextUnit.WORD -> from + TextOps.forwardWordLength(textAfter(128))
+                TextUnit.LINE, TextUnit.PARAGRAPH -> from + TextOps.toLineEndLength(textAfter(4096))
+                TextUnit.ALL -> from + textAfter(100_000).length
+                TextUnit.CHARACTER -> from + TextOps.firstGraphemeLength(textAfter(8)).coerceAtLeast(1)
             }
-            CursorDirection.LINE_START -> caret - TextOps.toLineStartLength(textBefore(4096))
-            CursorDirection.LINE_END -> caret + TextOps.toLineEndLength(textAfter(4096))
+            CursorDirection.LINE_START -> from - TextOps.toLineStartLength(textBefore(4096))
+            CursorDirection.LINE_END -> from + TextOps.toLineEndLength(textAfter(4096))
             CursorDirection.DOC_START -> 0
-            CursorDirection.DOC_END -> caret + textAfter(1_000_000).length
-            else -> caret
+            CursorDirection.DOC_END -> from + textAfter(1_000_000).length
+            else -> from
         }.coerceAtLeast(0)
 
-        if (extend) ic.setSelection(anchor, target) else ic.setSelection(target, target)
+        if (extend) {
+            // Deliberately not normalised. A reversed range is how the platform itself
+            // represents a selection whose caret is at the left end, and handing it
+            // back sorted would lose the one fact the next press needs.
+            anchor = runAnchor
+            caret = target
+            expected = runAnchor to target
+            ic.setSelection(runAnchor, target)
+        } else {
+            expected = target to target
+            ic.setSelection(target, target)
+        }
     }
 
     fun selectAll() {

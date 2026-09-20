@@ -373,6 +373,12 @@ object SettingsSchema {
         "swipeThresholdDp" to Meta(group = GROUP_TIMING, label = "Swipe threshold", min = 4f, max = 80f),
 
         "autoCapitalize" to Meta(group = GROUP_TYPING, label = "Capitalise sentences"),
+        "autoCapitalizeOnOpen" to Meta(
+            group = GROUP_TYPING, label = "…and when the keyboard opens",
+            help = "Only ever on a field that is empty. A field you open with text " +
+                "already in it is one you are editing, and editing happens in the " +
+                "middle of sentences."
+        ),
         "doubleSpacePeriod" to Meta(group = GROUP_TYPING, label = "Double space inserts a full stop"),
         "autoSpaceAfterPunctuation" to Meta(group = GROUP_TYPING, label = "Space after punctuation"),
         "smartQuotes" to Meta(group = GROUP_TYPING, label = "Curly quotes"),

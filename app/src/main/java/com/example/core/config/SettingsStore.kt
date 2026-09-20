@@ -155,6 +155,7 @@ object SettingsStore {
         put("swipeThresholdDp", s.swipeThresholdDp.toDouble())
 
         put("autoCapitalize", s.autoCapitalize)
+        put("autoCapitalizeOnOpen", s.autoCapitalizeOnOpen)
         put("doubleSpacePeriod", s.doubleSpacePeriod)
         put("autoSpaceAfterPunctuation", s.autoSpaceAfterPunctuation)
         put("smartQuotes", s.smartQuotes)
@@ -313,6 +314,7 @@ object SettingsStore {
             swipeThresholdDp = o.optDouble("swipeThresholdDp", d.swipeThresholdDp.toDouble()).toFloat(),
 
             autoCapitalize = o.optBoolean("autoCapitalize", d.autoCapitalize),
+            autoCapitalizeOnOpen = o.optBoolean("autoCapitalizeOnOpen", d.autoCapitalizeOnOpen),
             doubleSpacePeriod = o.optBoolean("doubleSpacePeriod", d.doubleSpacePeriod),
             autoSpaceAfterPunctuation = o.optBoolean("autoSpaceAfterPunctuation", d.autoSpaceAfterPunctuation),
             smartQuotes = o.optBoolean("smartQuotes", d.smartQuotes),
