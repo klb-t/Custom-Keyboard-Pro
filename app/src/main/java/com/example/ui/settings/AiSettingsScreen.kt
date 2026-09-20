@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,8 @@ import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.discovery.ModelDiscovery
 import com.example.core.discovery.ProviderCatalog
+import com.example.core.discovery.ProviderProfile
+import com.example.core.discovery.ProviderProfiles
 import kotlinx.coroutines.launch
 
 /**
@@ -38,6 +41,15 @@ fun AiSettingsScreen(settings: Settings) {
     var testing by remember { mutableStateOf(false) }
     var discovering by remember { mutableStateOf(false) }
     var discoveryResult by remember { mutableStateOf<String?>(null) }
+
+    // A key set before profiles existed is moved into the selected provider's profile
+    // the first time this screen is opened. Without it somebody who had a working
+    // setup would find the box empty, and "my key vanished" is a worse failure than
+    // the one profiles exist to fix.
+    LaunchedEffect(Unit) { ProviderProfiles.adoptLooseKey() }
+
+    val profiles = remember(settings.providerProfilesJson) { ProviderProfiles.all(settings) }
+    val profile = profiles[settings.aiProvider] ?: ProviderProfile(settings.aiProvider)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
 
@@ -110,17 +122,34 @@ fun AiSettingsScreen(settings: Settings) {
                 label = "Base URL",
                 description = "For a local server this is usually something like " +
                     "http://192.168.1.10:11434/v1 — the phone has to be able to reach it.",
-                value = settings.aiBaseUrl,
+                value = profile.baseUrl.ifBlank { settings.aiBaseUrl },
                 placeholder = spec?.baseUrl.orEmpty(),
-                onChange = { v -> SettingsStore.update { it.copy(aiBaseUrl = v) } }
+                onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(baseUrl = v) } }
             )
             TextRow(
-                label = "API key",
-                description = "Stored on this device only. A local server usually needs no key.",
-                value = settings.aiApiKey,
+                label = "API key for ${spec?.label ?: settings.aiProvider}",
+                description = "Kept against this provider, so switching provider switches " +
+                    "key with it and nothing has to be retyped. On this device only; an " +
+                    "exported settings file carries it.",
+                value = profile.apiKey.ifBlank {
+                    if (settings.aiApiKey.isNotBlank()) settings.aiApiKey else ""
+                },
                 secret = true,
-                onChange = { v -> SettingsStore.update { it.copy(aiApiKey = v) } }
+                onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(apiKey = v) } }
             )
+
+            // The point of profiles, made visible: what is already set up and can be
+            // switched to without typing anything.
+            val configured = profiles.values.filter { it.hasKey }
+            if (configured.isNotEmpty()) {
+                InfoRow(
+                    "Keys stored for " + configured
+                        .sortedBy { it.id }
+                        .joinToString(", ") { p ->
+                            ProviderCatalog.byId(p.id, settings)?.label ?: p.id
+                        } + ". Switching provider uses that provider's key."
+                )
+            }
 
             val discovered = remember(settings.discoveredModelsJson, settings.aiProvider) {
                 ModelDiscovery.cachedModels(settings)
@@ -128,23 +157,23 @@ fun AiSettingsScreen(settings: Settings) {
             if (discovered.isEmpty()) {
                 TextRow(
                     label = "Model",
-                    value = settings.aiModel,
+                    value = profile.model.ifBlank { settings.aiModel },
                     placeholder = spec?.defaultModel.orEmpty(),
-                    onChange = { v -> SettingsStore.update { it.copy(aiModel = v) } }
+                    onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(model = v) } }
                 )
             } else {
                 ChoiceRow(
                     label = "Model",
                     description = "${discovered.size} models this provider says it serves.",
                     options = discovered,
-                    selected = settings.aiModel.ifBlank { discovered.first() },
+                    selected = profile.model.ifBlank { settings.aiModel }.ifBlank { discovered.first() },
                     optionLabel = { it },
-                    onSelect = { m -> SettingsStore.update { it.copy(aiModel = m) } }
+                    onSelect = { m -> ProviderProfiles.update(settings.aiProvider) { it.copy(model = m) } }
                 )
                 TextRow(
                     label = "…or type one",
-                    value = settings.aiModel,
-                    onChange = { v -> SettingsStore.update { it.copy(aiModel = v) } }
+                    value = profile.model.ifBlank { settings.aiModel },
+                    onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(model = v) } }
                 )
             }
             ActionRow(
@@ -155,7 +184,7 @@ fun AiSettingsScreen(settings: Settings) {
                         discovering = true
                         discoveryResult = null
                         scope.launch {
-                            ModelDiscovery.fetch(spec, settings.aiApiKey).fold(
+                            ModelDiscovery.fetch(spec, ProviderProfiles.keyFor(spec.id, settings)).fold(
                                 onSuccess = { models ->
                                     ModelDiscovery.cache(spec.id, models)
                                     discoveryResult = if (models.isEmpty()) {

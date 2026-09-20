@@ -419,7 +419,19 @@ object SettingsSchema {
         "aiEnabled" to Meta(group = GROUP_AI, label = "AI features"),
         "aiProvider" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Provider", options = AiProviders.ALL),
         "aiBaseUrl" to Meta(group = GROUP_AI, label = "Base URL"),
-        "aiApiKey" to Meta(group = GROUP_AI, label = "API key", secret = true),
+        "aiApiKey" to Meta(
+            group = GROUP_AI, label = "API key", secret = true,
+            help = "Kept so a setup made before per-provider profiles keeps working. " +
+                "It answers for the selected provider only. New keys go in the " +
+                "provider's own profile."
+        ),
+        "providerProfilesJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_AI, label = "Provider profiles",
+            multiline = true, secret = true,
+            help = "Key, base URL, model and parameters for each provider you have set " +
+                "up, keyed by provider id. Contains your API keys: anything you export " +
+                "from here carries them with it."
+        ),
         "aiModel" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Model"),
         "aiCompletionEnabled" to Meta(group = GROUP_AI, label = "Inline completion"),
         "aiCompletionMinChars" to Meta(group = GROUP_AI, label = "Complete after", min = 0f, max = 20f),

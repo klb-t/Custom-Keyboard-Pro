@@ -7,6 +7,7 @@ import com.example.core.config.AsrEngines
 import com.example.core.discovery.AiCapability
 import com.example.core.discovery.AiWire
 import com.example.core.discovery.ProviderCatalog
+import com.example.core.discovery.ProviderProfiles
 import com.example.util.AppLogger
 import com.example.core.config.Settings
 import kotlinx.coroutines.CoroutineScope
@@ -80,7 +81,14 @@ class VoiceController(
                     context = context,
                     scope = scope,
                     provider = { ProviderCatalog.byId(settings().asrProvider, settings()) },
-                    apiKey = { settings().asrApiKey },
+                    // The dictation provider's own key, with the capability-specific
+                    // one as an override for anybody who deliberately set a separate
+                    // key for transcription.
+                    apiKey = {
+                        settings().asrApiKey.ifBlank {
+                            ProviderProfiles.keyFor(settings().asrProvider, settings())
+                        }
+                    },
                     model = { settings().asrModel }
                 )
             }
@@ -94,6 +102,10 @@ class VoiceController(
                 context = context,
                 scope = scope,
                 endpoint = { settings().asrRemoteUrl },
+                // A URL the user typed is not a catalogue provider, so there is no
+                // profile it belongs to. Borrowing the selected provider's key here
+                // would send somebody's credential to an address they typed for
+                // something else entirely.
                 apiKey = { settings().asrApiKey },
                 model = { settings().asrModel }
             )

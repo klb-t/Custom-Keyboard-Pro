@@ -152,6 +152,20 @@ data class Settings(
      * list means no rules, which is not the same thing and is honoured.
      */
     val capitalisationRulesJson: String = "",
+
+    /**
+     * Per-provider setup: key, base URL, model and parameters, keyed by provider id.
+     *
+     * A key belongs to a provider, not to the app and not to a feature. Keeping one
+     * key for everything meant that anybody with accounts at more than one provider —
+     * which is anybody comparing them — retyped it on every switch, and the times they
+     * forgot produced a 401 that is indistinguishable from a bad key.
+     *
+     * Stored in app-private storage like the rest of the settings, which keeps it from
+     * other apps and is not a hardware-backed keystore. An exported settings file
+     * contains these keys.
+     */
+    val providerProfilesJson: String = "",
     val doubleSpacePeriod: Boolean = true,
     val autoSpaceAfterPunctuation: Boolean = false,
     val smartQuotes: Boolean = false,
@@ -194,6 +208,14 @@ data class Settings(
     val aiEnabled: Boolean = false,
     val aiProvider: String = AiProviders.OPENAI_COMPATIBLE,
     val aiBaseUrl: String = "",
+    /**
+     * The app-wide key, kept only so a setup made before profiles existed keeps working.
+     *
+     * New keys go into [providerProfilesJson] against the provider they belong to. This
+     * one answers for the selected provider and for no other, because a key that
+     * answers for whichever provider happens to be selected is how a request goes out
+     * to one company carrying another's credential.
+     */
     val aiApiKey: String = "",
     val aiModel: String = "",
     /** Inline next-word / next-phrase completion in the suggestion strip. */

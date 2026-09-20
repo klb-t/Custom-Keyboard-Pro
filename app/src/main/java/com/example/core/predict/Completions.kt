@@ -6,6 +6,7 @@ import com.example.core.discovery.AiCapability
 import com.example.core.discovery.CallEngine
 import com.example.core.discovery.CallInput
 import com.example.core.discovery.ProviderCatalog
+import com.example.core.discovery.ProviderProfiles
 import com.example.core.discovery.ProviderSpec
 import com.example.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
@@ -187,7 +188,9 @@ class CompletionEngine(
                         "temperature" to s.completionTemperature.toString()
                     )
                 ),
-                apiKey = s.completionApiKey.ifBlank { s.aiApiKey },
+                // The completion provider's own key. The capability-specific one
+                // overrides it, for a separate key kept for this traffic alone.
+                apiKey = s.completionApiKey.ifBlank { ProviderProfiles.keyFor(provider.id, s) },
                 condition = condition
             ) { token ->
                 builder.append(token)

@@ -156,6 +156,7 @@ object SettingsStore {
 
         put("autoCapitalize", s.autoCapitalize)
         put("capitalisationRulesJson", s.capitalisationRulesJson)
+        put("providerProfilesJson", s.providerProfilesJson)
         put("doubleSpacePeriod", s.doubleSpacePeriod)
         put("autoSpaceAfterPunctuation", s.autoSpaceAfterPunctuation)
         put("smartQuotes", s.smartQuotes)
@@ -315,6 +316,7 @@ object SettingsStore {
 
             autoCapitalize = o.optBoolean("autoCapitalize", d.autoCapitalize),
             capitalisationRulesJson = o.optString("capitalisationRulesJson", d.capitalisationRulesJson),
+            providerProfilesJson = o.optString("providerProfilesJson", d.providerProfilesJson),
             doubleSpacePeriod = o.optBoolean("doubleSpacePeriod", d.doubleSpacePeriod),
             autoSpaceAfterPunctuation = o.optBoolean("autoSpaceAfterPunctuation", d.autoSpaceAfterPunctuation),
             smartQuotes = o.optBoolean("smartQuotes", d.smartQuotes),

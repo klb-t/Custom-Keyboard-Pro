@@ -16,6 +16,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Only what the release step needs. The default would do, but saying it here means
+    # the token cannot quietly gain more when GitHub changes its defaults.
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -92,6 +97,43 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
+
+      # An Actions artifact is a zip behind a login wall, and the section it appears in
+      # does not render on a phone at all — which for a project developed entirely on
+      # one makes every green build undeliverable. A release asset is a plain .apk on a
+      # plain page: one tap to install, no account, no unzipping.
+      #
+      # Rolling rather than versioned: the tag is the branch, deleted and recreated each
+      # time, so the link never changes and never points at a stale build. Marked as a
+      # prerelease because that is what a debug build is.
+      - name: Publish the APK somewhere a phone can reach it
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA::7}"
+          apk="custom-keyboard-${short}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$apk"
+
+          tag="build-$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')"
+          subject="$(git log -1 --pretty=%s)"
+
+          # Deleted first so the tag follows the build rather than staying pinned to
+          # whichever commit happened to create the release.
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" "$apk" \
+            --title "Latest build — $GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --notes "Debug build of \`$short\`, tests green.
+
+          $subject
+
+          Install: tap the .apk below. Android will ask you to allow installing from
+          this browser the first time. Debug builds are signed with a throwaway key, so
+          this will not upgrade a copy installed from anywhere else — uninstall first if
+          one is already there."
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4

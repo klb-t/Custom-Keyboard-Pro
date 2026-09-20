@@ -4,6 +4,7 @@ import com.example.core.config.AiProviders
 import com.example.core.config.Settings
 import com.example.core.discovery.AiWire
 import com.example.core.discovery.ProviderCatalog
+import com.example.core.discovery.ProviderProfiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -49,11 +50,14 @@ data class AiConfig(
     companion object {
         fun from(s: Settings, maxTokens: Int = s.aiMaxTokens): AiConfig {
             val spec = ProviderCatalog.byId(s.aiProvider, s)
+            // Read against the provider rather than off the top level, so switching
+            // provider switches credential too. The loose top-level key is still
+            // honoured for the provider it was entered against — see [ProviderProfiles].
             return AiConfig(
                 provider = s.aiProvider,
-                baseUrl = s.aiBaseUrl,
-                apiKey = s.aiApiKey,
-                model = s.aiModel
+                baseUrl = ProviderProfiles.baseUrlFor(s.aiProvider, s),
+                apiKey = ProviderProfiles.keyFor(s.aiProvider, s),
+                model = ProviderProfiles.modelFor(s.aiProvider, s)
                     .ifBlank { spec?.defaultModel.orEmpty() }
                     .ifBlank { AiProviders.defaultModel(s.aiProvider) },
                 temperature = s.aiTemperature,
