@@ -101,6 +101,59 @@ object LayerTransforms {
      * Applies a layer's shift by uppercasing character keys, for layouts that do not
      * define a `shift` layer of their own. Means a one-layer user layout still shifts.
      */
+    /**
+     * Puts a language's own letters first in every key's alternates.
+     *
+     * A transform rather than a variant of each layout, because which letters belong to
+     * a language is a fact about the language. The scientific board keeps every Greek
+     * letter and every operator it had; "ę" simply stops being the sixth thing offered
+     * under "e" to somebody writing Polish.
+     */
+    fun localised(layer: LayerDef, locale: String?): LayerDef {
+        if (LanguageKeys.tag(locale).isEmpty()) return layer
+        fun transform(key: KeyDef): KeyDef {
+            val reordered = LanguageKeys.preferredFor(locale, key)
+            return if (reordered == key.popup) key else key.copy(popup = reordered)
+        }
+        return layer.copy(
+            rows = layer.rows.map { row -> row.copy(keys = row.keys.map(::transform)) },
+            freeKeys = layer.freeKeys.map(::transform)
+        )
+    }
+
+    /**
+     * What AltGr types, applied to whatever board is on screen.
+     *
+     * Matched by the letter a key *types* rather than by its id, because ids differ
+     * between layouts and the letter does not — so the scientific board, the plain
+     * one, and a layout somebody drew themselves all get AltGr from the same map,
+     * without any of them declaring a layer for it.
+     *
+     * Keys the map says nothing about are left exactly as they were, so the board stays
+     * recognisable and only the letters that change, change.
+     */
+    fun altGr(layer: LayerDef, mapping: Map<String, String>, upper: Boolean = false): LayerDef {
+        if (mapping.isEmpty()) return layer
+        fun transform(key: KeyDef): KeyDef {
+            val typed = LanguageKeys.typedBy(key) ?: return key
+            val replacement = mapping[typed] ?: return key
+            val text = if (upper) replacement.uppercase() else replacement
+            return key.copy(
+                label = text,
+                bindings = key.bindings.map { binding ->
+                    if (binding.trigger == KeyTrigger.Tap) Binding(binding.trigger, KeyAction.Text(text))
+                    else binding
+                },
+                popup = emptyList(),
+                popupGroups = emptyList()
+            )
+        }
+        return layer.copy(
+            rows = layer.rows.map { row -> row.copy(keys = row.keys.map(::transform)) },
+            freeKeys = layer.freeKeys.map(::transform)
+        )
+    }
+
     fun uppercased(layer: LayerDef): LayerDef {
         fun transform(key: KeyDef): KeyDef {
             val tap = key.tapAction

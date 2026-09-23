@@ -3,9 +3,11 @@ package com.example.core
 import com.example.core.layout.KeyDef
 import com.example.core.layout.PlacedKey
 import com.example.ui.kb.PopupState
+import com.example.ui.kb.popupGrowsLeft
 import com.example.ui.kb.popupIndexAt
 import com.example.ui.kb.popupOriginX
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -110,18 +112,43 @@ class PopupGeometryTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `the strip stays on screen at both edges`() {
-        assertEquals(0f, popupOriginX(popup(centerX = 20f), surface, cell), 0.01f)
+    fun `near the right edge the strip grows the other way instead of being pushed back`() {
+        // The bug this replaced: pushing the strip back on screen moved every item out
+        // from under the finger, so the keyboard highlighted one letter and typed
+        // another. Growing leftwards keeps the first item on the key that opened it.
+        val atEdge = popup(centerX = 1040f)
+        assertTrue(popupGrowsLeft(atEdge, surface, cell))
+        // The first item still sits on the key; the rest run away to the left.
         assertEquals(
-            surface - cell * alternates.size,
-            popupOriginX(popup(centerX = 1040f), surface, cell), 0.01f
+            1040f - cell / 2f - cell * (alternates.size - 1),
+            popupOriginX(atEdge, surface, cell), 0.01f
         )
     }
 
     @Test
+    fun `with room to the right it grows right, as normal`() {
+        val roomy = popup(centerX = 60f)
+        assertFalse(popupGrowsLeft(roomy, surface, cell))
+        assertEquals(60f - cell / 2f, popupOriginX(roomy, surface, cell), 0.01f)
+    }
+
+    @Test
+    fun `a strip that grew leftwards is walked leftwards`() {
+        // The gesture mirrors with the drawing, so what is highlighted is what is
+        // committed at either edge of the board.
+        val atEdge = popup(centerX = 1040f)
+        assertTrue(popupGrowsLeft(atEdge, surface, cell))
+        assertEquals(0, popupIndexAt(atEdge, 1040f, 1040f, cell, growsLeft = true))
+        assertEquals(1, popupIndexAt(atEdge, 940f, 1040f, cell, growsLeft = true))
+        assertEquals(7, popupIndexAt(atEdge, 300f, 1040f, cell, growsLeft = true))
+        // Sliding the wrong way stays on the first, rather than wrapping.
+        assertEquals(0, popupIndexAt(atEdge, 1070f, 1040f, cell, growsLeft = true))
+    }
+
+    @Test
     fun `a strip wider than the screen still starts on screen`() {
-        // Sixty symbols on a narrow phone. The clamp must not go negative and push the
-        // first item off the left edge where nothing can reach it.
+        // Sixty symbols on a narrow phone. The origin must not go negative and push the
+        // first items off the left edge where nothing can reach them.
         val many = popup(centerX = 540f, items = (1..60).map { it.toString() })
         assertTrue(popupOriginX(many, surface, cell) >= 0f)
     }

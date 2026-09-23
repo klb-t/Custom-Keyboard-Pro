@@ -89,21 +89,46 @@ class AndroidAsr(private val context: Context) : AsrEngine {
                 // Kept rather than destroyed and rebuilt. destroy() unbinds the
                 // recognition service asynchronously; building a new one and starting
                 // it in the same breath races that unbind, and the new instance is the
-                // one that gets told the server disconnected. Reusing the instance
-                // removes the race rather than timing around it.
+                // one that gets told the server disconnected.
                 val active = recognizer ?: SpeechRecognizer.createSpeechRecognizer(context)
                     .also {
                         it.setRecognitionListener(recognitionListener)
                         recognizer = it
                     }
-                active.cancel()
-                runGeneration = mine
-                active.startListening(intent)
-                onState(AsrState.Listening())
+
+                // Only cancel something that is actually running, and never start in
+                // the same breath as a cancel. cancel() is asynchronous too: it posts
+                // to the service and returns, so calling startListening immediately
+                // walks into a session that is still closing. That is a busy or a
+                // client error on the *first* run — which is how fixing the second run
+                // broke the first one.
+                if (listening) {
+                    active.cancel()
+                    listening = false
+                    main.post { begin(mine, active, intent, onState) }
+                } else {
+                    begin(mine, active, intent, onState)
+                }
             } catch (e: Exception) {
                 onState(AsrState.Error(e.message ?: "Could not start the recogniser."))
             }
         }
+    }
+
+    /** True between startListening and whatever ends that run. */
+    private var listening = false
+
+    private fun begin(
+        mine: Int,
+        active: SpeechRecognizer,
+        intent: Intent,
+        onState: (AsrState) -> Unit
+    ) {
+        if (mine != generation) return
+        runGeneration = mine
+        listening = true
+        active.startListening(intent)
+        onState(AsrState.Listening())
     }
 
     /** The last request, so a disconnect can be retried without the caller noticing. */
@@ -128,6 +153,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
                 // Destroying something already gone is not worth reporting.
             }
             recognizer = null
+            listening = false
             // A beat, so the unbind completes before the rebind. Without it the new
             // instance walks into the same disconnect that caused the retry.
             main.postDelayed({
@@ -138,6 +164,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
                     }
                     recognizer = fresh
                     runGeneration = mine
+                    listening = true
                     fresh.startListening(intent)
                     listener?.invoke(AsrState.Listening())
                 } catch (e: Exception) {
@@ -168,6 +195,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
             } catch (e: Exception) {
                 // Same.
             }
+            listening = false
             listener?.invoke(AsrState.Idle)
         }
     }
@@ -214,7 +242,11 @@ class AndroidAsr(private val context: Context) : AsrEngine {
             // means the recognition service went away between runs, which is exactly
             // what "start dictating a second time" used to produce. One retry, once
             // per run, and only then does the user hear about it.
-            if (!retried && (error == ERROR_SERVER_DISCONNECTED || error == ERROR_CLIENT_SIDE)) {
+            listening = false
+            // Only the disconnect. ERROR_CLIENT is what an ordinary cancel produces,
+            // so retrying on it turns every stop into a restart — and on the first run
+            // of a session, into a failure the user sees.
+            if (!retried && error == ERROR_SERVER_DISCONNECTED) {
                 retried = true
                 retrySilently()
                 return
@@ -252,6 +284,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
         }
 
         override fun onResults(results: Bundle?) {
+            listening = false
             if (!live) return
             val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
             val scores = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
@@ -273,11 +306,9 @@ class AndroidAsr(private val context: Context) : AsrEngine {
          *
          * ERROR_SERVER_DISCONNECTED was added in API 31 and the constant is not on the
          * compile target this app supports; the numeric value is part of the platform's
-         * published contract and does not move. ERROR_CLIENT is the generic one the
-         * framework raises when an instance has been torn down under it.
+         * published contract and does not move.
          */
         const val ERROR_SERVER_DISCONNECTED = 11
-        const val ERROR_CLIENT_SIDE = SpeechRecognizer.ERROR_CLIENT
 
         /** Long enough for the unbind to finish; short enough not to feel like a stall. */
         const val RETRY_DELAY_MS = 250L

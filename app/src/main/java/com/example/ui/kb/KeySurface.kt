@@ -241,20 +241,40 @@ fun KeySurface(
 
                         touch.longPressJob = scope.launch {
                             delay(settings.longPressMs)
-                            if (hasBoard) {
-                                // The board outlives the gesture, so the touch is
-                                // finished here rather than left half-open waiting for
-                                // a finger that has already done its job.
-                                board = touch.placed
-                                touch.consumed = true
-                                onKeyDown(key)
-                            } else if (hasPopup) {
+                            // The quick strip first whenever there is one, even on a key
+                            // that also has a board. On a scientific layout the accents
+                            // live in the board's first tab, so a language that promotes
+                            // its own letters into the strip turns "ę" from a board, a
+                            // tab and a tap into one hold — and the mathematics stays
+                            // exactly where it was, one beat further down.
+                            if (hasPopup) {
                                 // Zero displacement, so the first alternate — the one
                                 // the list is ordered to put first — is what a finger
                                 // that does not move commits.
                                 popup = PopupState(touch.placed, key.popup, 0)
                                 touch.popupOpenX = touch.currentX
                                 touch.popupOpen = true
+
+                                if (hasBoard) {
+                                    delay(settings.longPressBoardMs)
+                                    // Only a finger that has neither moved nor let go:
+                                    // sliding along the strip is somebody choosing from
+                                    // it, and taking the strip away mid-choice would be
+                                    // the keyboard changing its mind under them.
+                                    if (touch.popupOpen && popup?.selected == 0) {
+                                        popup = null
+                                        touch.popupOpen = false
+                                        board = touch.placed
+                                        touch.consumed = true
+                                        onKeyDown(key)
+                                    }
+                                }
+                            } else if (hasBoard) {
+                                // The board outlives the gesture, so the touch is
+                                // finished here rather than left half-open waiting for
+                                // a finger that has already done its job.
+                                board = touch.placed
+                                touch.consumed = true
                                 onKeyDown(key)
                             } else if (longPressAction != null) {
                                 onAction(key, longPressAction)
@@ -351,9 +371,10 @@ fun KeySurface(
                             // Same function as the strip was positioned with. Reading
                             // the index off geometry computed a second time by hand is
                             // how the two came apart in the first place.
+                            val cell = touch.placed.width.coerceAtLeast(1f)
                             val index = popupIndexAt(
-                                current, x, touch.popupOpenX,
-                                touch.placed.width.coerceAtLeast(1f)
+                                current, x, touch.popupOpenX, cell,
+                                growsLeft = popupGrowsLeft(current, widthPx, cell)
                             )
                             if (index != current.selected) popup = current.copy(selected = index)
                             return
@@ -530,35 +551,62 @@ private class TapTracker {
 }
 
 /**
- * Where the long-press strip is drawn: first item under the finger where there is room.
+ * Which way the long-press strip is laid out from the key that opened it.
  *
- * This is a question about *drawing only*. Selection deliberately does not go through
- * it — see [popupIndexAt] — because a strip eight alternates wide does not fit beside
- * a key near the edge of the screen, and clamping it back on screen moves every item
- * out from under the finger that opened it.
+ * The first alternate always sits under the finger — it is first because it is the one
+ * people want, and on a Polish board it is the Polish letter. When there is no room to
+ * its right the strip grows **left** instead of being pushed back on screen, because
+ * pushing it back moves every item out from under the finger that opened it. That was
+ * the bug: the highlight was drawn from the pushed-back strip while the selection was
+ * measured from the finger, so the keyboard lit one letter and typed another.
+ *
+ * One function answers it, and both the drawing and the selection ask.
  */
-internal fun popupOriginX(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Float {
-    val total = cellWidth * popup.items.size
-    val wanted = popup.anchor.centerX - cellWidth / 2f
-    return wanted.coerceIn(0f, (surfaceWidth - total).coerceAtLeast(0f))
+internal fun popupGrowsLeft(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Boolean {
+    val needed = cellWidth * (popup.items.size - 1)
+    val roomRight = surfaceWidth - (popup.anchor.centerX + cellWidth / 2f)
+    if (needed <= roomRight) return false
+    // Only when the other side is genuinely roomier; otherwise stay right and let the
+    // far end clip rather than flipping for one item's worth of difference.
+    val roomLeft = popup.anchor.centerX - cellWidth / 2f
+    return roomLeft > roomRight
 }
+
+/** Where the strip's leftmost cell starts, for drawing. */
+internal fun popupOriginX(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Float {
+    val firstCellLeft = popup.anchor.centerX - cellWidth / 2f
+    val origin = if (popupGrowsLeft(popup, surfaceWidth, cellWidth)) {
+        // The first item still sits on the key; the rest run away to the left, so the
+        // leftmost drawn cell is the last item.
+        firstCellLeft - cellWidth * (popup.items.size - 1)
+    } else {
+        firstCellLeft
+    }
+    return origin.coerceAtLeast(0f)
+}
+
+/** True when the items are drawn last-to-first, which is what growing left means. */
+internal fun popupReversed(popup: PopupState, surfaceWidth: Float, cellWidth: Float): Boolean =
+    popupGrowsLeft(popup, surfaceWidth, cellWidth)
 
 /**
  * Which alternate the finger is on, measured from where the strip was opened.
  *
- * Displacement rather than absolute position, and this is the whole point. Reading the
- * index off the strip's drawn position sounds obviously right and is wrong at the edges
- * of the board: "o" is the ninth key of ten, its eight alternates are wider than the
- * space to the right of it, so the strip gets clamped back on screen and the finger
- * that opened it ends up sitting over the seventh item. Hold "o", let go, get "ō".
- *
- * Measured from the opening point, holding still is zero displacement and therefore the
- * first alternate — by construction, at every position on the board, including the two
- * corners. Sliding one key's width to the right is the next one along, which is the
- * only thing the gesture ever meant.
+ * Displacement rather than absolute position: holding still is zero displacement and
+ * therefore the first alternate, by construction, at every position on the board
+ * including both corners. Sliding one key's width picks the next one — to the right
+ * normally, to the left when the strip grew that way, which is the same gesture
+ * mirrored and matches what is drawn.
  */
-internal fun popupIndexAt(popup: PopupState, x: Float, openedAtX: Float, cellWidth: Float): Int {
-    val step = floor((x - openedAtX) / cellWidth.coerceAtLeast(1f)).toInt()
+internal fun popupIndexAt(
+    popup: PopupState,
+    x: Float,
+    openedAtX: Float,
+    cellWidth: Float,
+    growsLeft: Boolean = false
+): Int {
+    val travelled = if (growsLeft) openedAtX - x else x - openedAtX
+    val step = floor(travelled / cellWidth.coerceAtLeast(1f)).toInt()
     return step.coerceIn(0, popup.items.lastIndex)
 }
 
@@ -808,7 +856,16 @@ private fun LongPressPopup(popup: PopupState, surfaceWidthPx: Float, theme: Keyb
         Row(
             modifier = Modifier.background(theme.popupBackground, RoundedCornerShape(10.dp))
         ) {
-            popup.items.forEachIndexed { index, item ->
+            // Drawn last-to-first when the strip grew leftwards, so the item under
+            // the finger is the first one either way and the highlight lands on the
+            // cell the finger is actually over.
+            val order = if (popupReversed(popup, surfaceWidthPx, cellWidth)) {
+                popup.items.indices.reversed().toList()
+            } else {
+                popup.items.indices.toList()
+            }
+            order.forEach { index ->
+                val item = popup.items[index]
                 Box(
                     modifier = Modifier
                         .size(

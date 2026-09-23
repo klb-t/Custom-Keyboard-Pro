@@ -129,7 +129,29 @@ data class Settings(
     val rememberLayoutPerApp: Boolean = false,
 
     // --- timing -----------------------------------------------------------
-    val longPressMs: Long = 300L,
+    /**
+     * How long a key must be held before its alternates appear.
+     *
+     * 130 ms rather than the 300 that phone keyboards conventionally use, because on a
+     * board where the language's own letters live in the popup, a long press is not an
+     * occasional flourish — it is how "ę" is typed, fifty times a message. At 300 ms
+     * that is a third of a second of waiting per Polish letter.
+     *
+     * The floor is what it costs to tell a hold from a tap: below about 100 ms an
+     * ordinary press starts opening popups by itself.
+     */
+    val longPressMs: Long = 130L,
+
+    /**
+     * How much longer a key with both a strip and a board must be held for the board.
+     *
+     * Only keys that have both: the scientific layout's letters carry their accents in
+     * the first tab of a board, so once a language promotes its own letters into the
+     * quick strip, the two have to share one gesture. Short hold gives the letters,
+     * keeping hold gives everything — and sliding along the strip cancels the upgrade,
+     * because that is somebody already choosing.
+     */
+    val longPressBoardMs: Long = 320L,
     val repeatStartMs: Long = 400L,
     val repeatIntervalMs: Long = 55L,
     val doubleTapMs: Long = 280L,

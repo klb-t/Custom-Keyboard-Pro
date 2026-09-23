@@ -366,7 +366,16 @@ object SettingsSchema {
         "activeLayoutId" to Meta(kind = SettingKind.ENUM, group = GROUP_LAYOUTS, label = "Active layout"),
         "rememberLayoutPerApp" to Meta(group = GROUP_LAYOUTS, label = "Remember a layout per app"),
 
-        "longPressMs" to Meta(group = GROUP_TIMING, label = "Long press", min = 100f, max = 1000f),
+        "longPressMs" to Meta(
+            group = GROUP_TIMING, label = "Long press", min = 100f, max = 1000f,
+            help = "How long before a key's alternates appear. Low, because on a board " +
+                "where your language lives in the popup this is how letters are typed."
+        ),
+        "longPressBoardMs" to Meta(
+            group = GROUP_TIMING, label = "…and then the full board", min = 120f, max = 2000f,
+            help = "Only on keys that have both. Keep holding past the strip and the " +
+                "tabbed board opens instead; sliding along the strip cancels it."
+        ),
         "repeatStartMs" to Meta(group = GROUP_TIMING, label = "Repeat starts after", min = 150f, max = 1500f),
         "repeatIntervalMs" to Meta(group = GROUP_TIMING, label = "Repeat interval", min = 10f, max = 300f),
         "doubleTapMs" to Meta(group = GROUP_TIMING, label = "Double tap window", min = 100f, max = 800f),

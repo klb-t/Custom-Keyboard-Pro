@@ -44,6 +44,7 @@ import com.example.core.layout.ElementPlacement
 import com.example.core.layout.FreeKeyPins
 import com.example.core.layout.NormRect
 import com.example.core.layout.LayerTransforms
+import com.example.core.layout.LanguageKeys
 import com.example.core.layout.LayoutDef
 import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
@@ -344,12 +345,18 @@ private fun KeyArea(
         layerName == layout.defaultLayer &&
         !layout.layers.containsKey(LayoutDef.SHIFT_LAYER)
 
+    // AltGr is asked for by the layout's language rather than by a layer it declares,
+    // so a board that never heard of Polish still types Polish when the user is.
+    val altGrActive = state.isActive(ModifierKind.ALT_GR)
+    val altGrMap = if (altGrActive) LanguageKeys.altGrFor(layout.locale) else emptyMap()
+
     val effectiveLayer = remember(
-        rawLayer, shifted, settings.presentation, settings.splitGapFraction,
+        rawLayer, shifted, altGrMap, layout.locale,
+        settings.presentation, settings.splitGapFraction,
         settings.flickInput, settings.backspaceSwipeDeletesWord,
         settings.freeKeyScale, settings.freeSpreadX, settings.freeSpreadY,
         settings.freeOriginXDp, settings.freeOriginYDp, settings.freeKeyPinsJson
-    ) { effectiveLayerOf(rawLayer, shifted, settings) }
+    ) { effectiveLayerOf(rawLayer, shifted, settings, layout.locale, altGrMap) }
 
     val background: ImageBitmap? = remember(layout.background?.imageFile) {
         LayoutRepository.loadAsset(layout.background?.imageFile)?.asImageBitmap()
@@ -604,9 +611,17 @@ private fun FloatingShell(
 private fun effectiveLayerOf(
     rawLayer: com.example.core.layout.LayerDef,
     shifted: Boolean,
-    settings: Settings
+    settings: Settings,
+    locale: String?,
+    altGr: Map<String, String>
 ): com.example.core.layout.LayerDef {
     var result = if (shifted) LayerTransforms.uppercased(rawLayer) else rawLayer
+    // The language's own letters first, on whatever board is on screen. A scientific
+    // layout keeps all its Greek; "ę" simply stops being the sixth thing under "e".
+    result = LayerTransforms.localised(result, locale)
+    // AltGr as a transform rather than a layer each layout has to declare, so every
+    // board gets it — including one somebody drew themselves.
+    if (altGr.isNotEmpty()) result = LayerTransforms.altGr(result, altGr, upper = shifted)
     result = LayerTransforms.applyPreferences(
         layer = result,
         allowFlick = settings.flickInput,
