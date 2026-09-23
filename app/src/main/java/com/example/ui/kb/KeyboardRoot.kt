@@ -694,7 +694,12 @@ private fun ArrangeOverlay(settings: Settings, theme: KeyboardTheme) {
     val layout = host.layout
     val layerName = host.state.renderLayer(layout)
     val rawLayer = layout.layer(layerName) ?: layout.base
-    val layer = remember(rawLayer, settings) { effectiveLayerOf(rawLayer, false, settings) }
+    // Arranging free keys is about where they sit, not about what they type, so the
+    // language and AltGr transforms are deliberately not applied: the board being
+    // dragged around should look like the board, not like one modifier's level of it.
+    val layer = remember(rawLayer, settings) {
+        effectiveLayerOf(rawLayer, false, settings, locale = null, altGr = emptyMap())
+    }
 
     var dragging by remember { mutableStateOf<String?>(null) }
 
