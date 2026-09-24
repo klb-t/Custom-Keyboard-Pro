@@ -55,6 +55,8 @@ API for it.
 | "the long-press delay should adapt to me" | a tuner kept clear of plain taps, nudged by deleted alternates and retried presses |
 | "capitals at names and surnames" | `proper_noun`: a situation learned from what the user capitalises mid-sentence |
 | "shake / flip / tilt / volume keys should do things" | the engine's inputs: wires from any input to anything a key can do |
+| "show it once, have it repeat" | macros: recorded as performed, pauses kept only around actions on other apps |
+| "lock touch, screen and buttons so a talking app can go in a pocket" | pocket lock: overlay + key filter + proximity guard; quick settings tile, `do:pocket_lock` |
 
 ## The outputs engine, first half
 
@@ -93,6 +95,10 @@ The ways that do exist all leave the keyboard behind: a receiver on the host tha
 creates a virtual pad (real analog, needs software on the PC), or Bluetooth HID (real
 analog, only to a machine in the room). Both say the same thing — this is a **different
 surface of the same app**, not another keyboard mode.
+
+**Locking the power button.** The system handles it before any app sees it. The
+pocket lock takes touch and the volume keys; the power button still switches the
+screen off, which for most talking apps is harmless.
 
 **Capturing audio that is playing.** `MediaProjection` exists, and apps are free to
 refuse capture. Most do.

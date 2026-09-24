@@ -54,6 +54,7 @@ private data class Preset(val line: String, val label: String) {
  * Every one of them is also bindable to any key as `do:<line>`.
  */
 private val PRESETS = listOf(
+    Preset("pocket_lock on", "Pocket lock"),
     Preset("record toggle", "Record / stop"),
     Preset("play", "Play recording"),
     Preset("back", "Back"),

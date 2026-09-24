@@ -50,6 +50,9 @@ interface PerformerHost {
 
     /** Plays the macro called [name], [times] times. */
     fun play(name: String, times: Int)
+
+    /** Puts the keyboard away, for actions that are about the app rather than the field. */
+    fun dismissKeyboard()
 }
 
 /**
@@ -121,6 +124,22 @@ class Performer(private val host: PerformerHost) {
                 "on", "show" -> service!!.pointer.show()
                 "off", "hide" -> service!!.pointer.hide()
                 else -> service!!.pointer.toggle()
+            }
+
+            "pocket_lock" -> {
+                val mode = com.example.core.io.PocketMode.parse(command.arg("mode"))
+                    ?: com.example.core.config.SettingsStore.current.pocketMode
+                val pocket = service!!.pocket
+                val state = command.arg("state")?.lowercase()
+                if (state == "off" || (state != "on" && pocket.locked)) {
+                    pocket.unlock("asked")
+                } else if (!pocket.locked) {
+                    // The keyboard goes first: what is being locked is the app, and a
+                    // keyboard left open under the lock is a keyboard left in the pocket.
+                    host.dismissKeyboard()
+                    android.os.Handler(android.os.Looper.getMainLooper())
+                        .postDelayed({ pocket.lock(mode) }, 300)
+                }
             }
 
             "click", "long_click" -> {

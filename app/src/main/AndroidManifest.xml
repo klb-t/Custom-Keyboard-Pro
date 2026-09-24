@@ -80,6 +80,22 @@
         </service>
 
         <!--
+          The pocket lock from the quick settings shade: starts it with no keyboard open,
+          which is when a talking app is running. Does nothing on its own; the lock
+          itself lives in the accessibility service above.
+        -->
+        <service
+            android:name=".io.PocketLockTile"
+            android:exported="true"
+            android:icon="@drawable/ic_pocket_lock"
+            android:label="@string/pocket_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!--
           Hands clipboard files to whatever app is being pasted into.
 
           Needed because our files are ours: an app receiving a paste cannot read a

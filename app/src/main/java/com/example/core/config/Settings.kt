@@ -122,6 +122,23 @@ data class Settings(
      */
     val macrosJson: String = "",
 
+    // --- pocket lock: touch, screen and keys locked while an app keeps running ----
+    /** TOUCH keeps the screen as it is; SCREEN turns it black at the lowest brightness. */
+    val pocketMode: com.example.core.io.PocketMode = com.example.core.io.PocketMode.SCREEN,
+    /** Volume keys (and any others the system passes on) are taken while locked. */
+    val pocketBlockKeys: Boolean = true,
+    /** The key sequence that unlocks: "up, down, up" is volume +, −, +. Blank: none. */
+    val pocketUnlockKeys: String = "up, down, up",
+    /** Fingers held on the screen to unlock; 0 turns the hold off. */
+    val pocketUnlockFingers: Int = 2,
+    val pocketUnlockHoldMs: Long = 2000L,
+    /** Refuse to unlock while the proximity sensor is covered — in a pocket. */
+    val pocketIgnoreWhenCovered: Boolean = true,
+    /** Keep the screen awake while black, for apps that stop talking when it sleeps. */
+    val pocketKeepAwake: Boolean = true,
+    /** Bring the locked app back if something else reaches the front. */
+    val pocketRestoreApp: Boolean = true,
+
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
     /**

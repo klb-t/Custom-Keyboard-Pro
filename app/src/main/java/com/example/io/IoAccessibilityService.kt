@@ -76,8 +76,13 @@ class IoAccessibilityService : AccessibilityService() {
 
     val pointer: PointerOverlay by lazy { PointerOverlay(this) }
 
+    val pocket: PocketLockOverlay by lazy { PocketLockOverlay(this) }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // The service can start before anything else in the process has read the
+        // settings — at boot, with the keyboard not yet opened.
+        com.example.core.config.SettingsStore.init(this)
         instance = this
         _running.value = true
         AppLogger.d(TAG, "connected")
@@ -97,6 +102,8 @@ class IoAccessibilityService : AccessibilityService() {
         if (instance === this) instance = null
         _running.value = false
         runCatching { pointer.hide() }
+        // A lock that outlived its service would have no way out. It goes first.
+        runCatching { pocket.unlock("service stopped") }
         AppLogger.d(TAG, "disconnected")
     }
 
@@ -104,7 +111,18 @@ class IoAccessibilityService : AccessibilityService() {
         val e = event ?: return
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = e.packageName?.toString() ?: return
-        if (pkg != packageName) foregroundPackage = pkg
+        // The shade is not "the app in front": locking from a quick settings tile
+        // must lock over the app underneath it.
+        if (pkg != packageName && pkg != "com.android.systemui") {
+            foregroundPackage = pkg
+            pocket.onForeground(pkg)
+        }
+    }
+
+    /** Only asked for while the pocket lock is up; see [PocketLockOverlay]. */
+    override fun onKeyEvent(event: android.view.KeyEvent?): Boolean {
+        val e = event ?: return false
+        return runCatching { pocket.onKey(e) }.getOrDefault(false)
     }
 
     override fun onInterrupt() = Unit

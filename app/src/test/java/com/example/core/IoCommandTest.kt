@@ -175,6 +175,7 @@ class IoCommandTest {
         override fun play(name: String, times: Int) {
             notices += "play $name $times"
         }
+        override fun dismissKeyboard() = Unit
     }
 
     @Test

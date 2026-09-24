@@ -28,7 +28,8 @@ data class VerbSpec(
     val needsAccessibility: Boolean
         get() = ability == Abilities.ACT_IN_OTHER_APPS ||
             ability == Abilities.READ_OTHER_APPS ||
-            ability == Abilities.POINTER
+            ability == Abilities.POINTER ||
+            ability == Abilities.POCKET_LOCK
 }
 
 /**
@@ -237,6 +238,18 @@ object Verbs {
             params = listOf(Param("text", "What to share.", "")),
             group = GROUP_OPEN,
             without = "Needs nothing."
+        ),
+        VerbSpec(
+            id = "pocket_lock", glyph = "🔐", label = "Pocket lock",
+            help = "Lock touch and the volume keys while the app in front keeps running — " +
+                "to put a talking app in a pocket. Unlocks with volume +, −, + or two " +
+                "fingers held for two seconds (both changeable), never while covered.",
+            params = listOf(
+                Param("state", "on, off or toggle.", "toggle"),
+                Param("mode", "touch (screen stays) or screen (goes black).", "screen")
+            ),
+            ability = Abilities.POCKET_LOCK, group = GROUP_SYSTEM,
+            without = "Says it needs accessibility and offers to switch it on."
         ),
         VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",

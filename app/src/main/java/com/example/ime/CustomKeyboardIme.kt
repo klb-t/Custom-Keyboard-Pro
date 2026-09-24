@@ -1122,6 +1122,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             override fun record(state: String, name: String) = recordMacro(state, name)
 
             override fun play(name: String, times: Int) = playMacro(name, times)
+
+            override fun dismissKeyboard() = hideKeyboard()
         })
     }
 

@@ -140,6 +140,14 @@ object SettingsStore {
         put("elementPosesJson", s.elementPosesJson)
         put("engineWiresJson", s.engineWiresJson)
         put("macrosJson", s.macrosJson)
+        put("pocketMode", s.pocketMode.name)
+        put("pocketBlockKeys", s.pocketBlockKeys)
+        put("pocketUnlockKeys", s.pocketUnlockKeys)
+        put("pocketUnlockFingers", s.pocketUnlockFingers)
+        put("pocketUnlockHoldMs", s.pocketUnlockHoldMs)
+        put("pocketIgnoreWhenCovered", s.pocketIgnoreWhenCovered)
+        put("pocketKeepAwake", s.pocketKeepAwake)
+        put("pocketRestoreApp", s.pocketRestoreApp)
 
         put("insetsMode", s.insetsMode.name)
         put("avoidCoveringCursor", s.avoidCoveringCursor)
@@ -313,6 +321,14 @@ object SettingsStore {
             elementPosesJson = o.optString("elementPosesJson", d.elementPosesJson),
             engineWiresJson = o.optString("engineWiresJson", d.engineWiresJson),
             macrosJson = o.optString("macrosJson", d.macrosJson),
+            pocketMode = enumOf(o.optString("pocketMode", d.pocketMode.name), d.pocketMode),
+            pocketBlockKeys = o.optBoolean("pocketBlockKeys", d.pocketBlockKeys),
+            pocketUnlockKeys = o.optString("pocketUnlockKeys", d.pocketUnlockKeys),
+            pocketUnlockFingers = o.optInt("pocketUnlockFingers", d.pocketUnlockFingers),
+            pocketUnlockHoldMs = o.optLong("pocketUnlockHoldMs", d.pocketUnlockHoldMs),
+            pocketIgnoreWhenCovered = o.optBoolean("pocketIgnoreWhenCovered", d.pocketIgnoreWhenCovered),
+            pocketKeepAwake = o.optBoolean("pocketKeepAwake", d.pocketKeepAwake),
+            pocketRestoreApp = o.optBoolean("pocketRestoreApp", d.pocketRestoreApp),
 
             insetsMode = enumOf(o.optString("insetsMode", d.insetsMode.name), d.insetsMode),
             avoidCoveringCursor = o.optBoolean("avoidCoveringCursor", d.avoidCoveringCursor),

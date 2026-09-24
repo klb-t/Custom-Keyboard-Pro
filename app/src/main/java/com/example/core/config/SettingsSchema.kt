@@ -244,12 +244,13 @@ object SettingsSchema {
     const val GROUP_GESTURES = "Whole-keyboard gestures"
     const val GROUP_PRIVACY = "Privacy & diagnostics"
     const val GROUP_DATA = "Stored data"
+    const val GROUP_POCKET = "Pocket lock"
 
     private val GROUP_ORDER = listOf(
         GROUP_APPEARANCE, GROUP_FREE, GROUP_COVERAGE, GROUP_LAYOUTS, GROUP_TYPING,
         GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_CLIPBOARD,
-        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_PRIVACY,
-        GROUP_DATA
+        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_POCKET,
+        GROUP_PRIVACY, GROUP_DATA
     )
 
     /** Only what JSON cannot tell us. Everything absent here still gets a control. */
@@ -347,6 +348,39 @@ object SettingsSchema {
                 "volume_down, keyboard_shown, keyboard_hidden. Do: anything a key can do, e.g. " +
                 "\"cursor:left\", \"do:torch toggle\", \"layout:science\". Sensors are switched on " +
                 "only for the wires that need them, and only while the keyboard is open."
+        ),
+        "pocketMode" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_POCKET, label = "What the lock does to the screen",
+            help = "Locks touch and keys while an app keeps running, to put a talking app in a " +
+                "pocket. TOUCH leaves the screen as it is; SCREEN turns it black at the lowest " +
+                "brightness. Start it from the quick settings tile, the app icon's shortcut, or " +
+                "any key or wire with do:pocket_lock. Needs the accessibility service. The power " +
+                "button cannot be locked by any app.",
+            options = com.example.core.io.PocketMode.entries.map { it.name }
+        ),
+        "pocketBlockKeys" to Meta(group = GROUP_POCKET, label = "Lock the volume keys too"),
+        "pocketUnlockKeys" to Meta(
+            group = GROUP_POCKET, label = "Unlock with the volume keys",
+            help = "In order, within three seconds: up, down, up is +, −, +. Blank turns it off."
+        ),
+        "pocketUnlockFingers" to Meta(
+            group = GROUP_POCKET, label = "…or hold this many fingers on the screen", min = 0f, max = 4f,
+            help = "0 turns the hold off. Two still fingers for two seconds is something a pocket does not do."
+        ),
+        "pocketUnlockHoldMs" to Meta(group = GROUP_POCKET, label = "…for this long", min = 500f, max = 6000f),
+        "pocketIgnoreWhenCovered" to Meta(
+            group = GROUP_POCKET, label = "Never unlock while covered",
+            help = "The proximity sensor says whether something is right over the screen. " +
+                "Covered means pocket, and nothing unlocks there."
+        ),
+        "pocketKeepAwake" to Meta(
+            group = GROUP_POCKET, label = "Keep the screen awake while black",
+            help = "For apps that stop talking when the screen sleeps. Off lets the phone sleep as usual."
+        ),
+        "pocketRestoreApp" to Meta(
+            group = GROUP_POCKET, label = "Bring the app back if something gets past",
+            help = "Navigation gestures from the screen edge can reach past any window. If another " +
+                "app comes to the front while locked, the locked one is reopened."
         ),
         "macrosJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Recorded macros",

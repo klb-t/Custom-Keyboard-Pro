@@ -84,6 +84,7 @@ object Abilities {
     const val ACT_IN_OTHER_APPS = "act_in_other_apps"
     const val POINTER = "pointer"
     const val CAPTURE_PLAYBACK = "capture_playback"
+    const val POCKET_LOCK = "pocket_lock"
 
     val ALL: List<Ability> = listOf(
         Ability(
@@ -157,6 +158,19 @@ object Abilities {
                 "session where the mouse is the thing you are missing.",
             without = "The trackpad panel moves the text cursor instead, arrow keys still " +
                 "arrive, and the remote desktop client's own touch mode still works.",
+            needs = Need.SpecialAccess(
+                AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
+                "Settings › Accessibility"
+            )
+        ),
+        Ability(
+            id = POCKET_LOCK,
+            label = "Pocket lock",
+            gives = "Touch and volume keys locked, screen black if you like, while a talking " +
+                "app keeps running — so it can go in a pocket.",
+            without = "The power button still switches the screen off, and apps that keep " +
+                "talking with the screen off need nothing more. Those that stop cannot be " +
+                "kept going with touch locked.",
             needs = Need.SpecialAccess(
                 AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
                 "Settings › Accessibility"

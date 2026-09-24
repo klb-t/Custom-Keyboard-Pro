@@ -8,6 +8,8 @@
   split-screen apps too, and so a list item can be told from its neighbour.
   Gestures: taps, swipes and the pointer's clicks.
   Screenshots: reserved for reading text drawn as pictures; not used yet.
+  Key events: only ever requested while the pocket lock is up, to hold the volume
+  keys and to hear the sequence that unlocks it.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/access_description"
@@ -17,4 +19,5 @@
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
     android:canTakeScreenshot="true"
+    android:canRequestFilterKeyEvents="true"
     android:notificationTimeout="100" />
