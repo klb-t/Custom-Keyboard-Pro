@@ -231,6 +231,10 @@ class MainActivity : ComponentActivity() {
         SettingsSchema.dynamicOptions["themeId"] = { ThemeStore.allThemes().map { it.id } }
         SettingsSchema.dynamicOptions["activeLayoutId"] = { LayoutRepository.all().map { it.id } }
         SettingsSchema.dynamicOptions["fieldlessLayoutId"] = { listOf("") + LayoutRepository.all().map { it.id } }
+        // Engines and voices are only known once the speech engine has started.
+        com.example.io.Speaker.warmUp(this)
+        SettingsSchema.dynamicOptions["ttsEngine"] = { listOf("") + com.example.io.Speaker.engines() }
+        SettingsSchema.dynamicOptions["ttsVoice"] = { listOf("") + com.example.io.Speaker.voices() }
         SettingsSchema.dynamicOptions["aiModel"] = {
             ModelDiscovery.cachedModels(SettingsStore.current)
         }

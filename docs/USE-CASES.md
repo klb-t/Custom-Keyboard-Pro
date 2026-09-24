@@ -63,6 +63,8 @@ API for it.
 | "the keyboard from quick settings with no field, for shortcuts" | a tile that asks the keyboard to show itself; keys go to the app as key presses |
 | "shortcuts in the suggestion pool, by context and statistics" | ActionStats (per situation / app / anywhere, with defaults) and `/name` commands |
 | "everything a user might want different, in settings" | knobs: every hardcoded number declared once and shown as an expert setting |
+| "a keyboard that writes could also read aloud" | Speaker: one per process, pause as stop-and-resume-at-the-word, headset control via a media session |
+| "read the article while the phone is in my pocket" | PageReader: read, scroll, read only the new lines; composes with the pocket lock |
 
 ## The outputs engine, first half
 

@@ -56,6 +56,11 @@ private data class Preset(val line: String, val label: String) {
  */
 private val PRESETS = listOf(
     Preset("pocket_lock on", "Pocket lock"),
+    Preset("read_aloud", "Read aloud"),
+    Preset("read_control toggle", "Pause / resume reading"),
+    Preset("read_control stop", "Stop reading"),
+    Preset("read_aloud source=page", "Read the page"),
+    Preset("read_aloud source=clipboard", "Read clipboard"),
     Preset("record toggle", "Record / stop"),
     Preset("play", "Play recording"),
     Preset("back", "Back"),

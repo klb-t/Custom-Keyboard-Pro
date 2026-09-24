@@ -54,7 +54,16 @@ interface PerformerHost {
 
     /** Puts the keyboard away, for actions that are about the app rather than the field. */
     fun dismissKeyboard()
+
+    /**
+     * Text to read aloud from [source] (selection, field, before, sentence, word,
+     * clipboard, auto), and where it starts in the field when it came from there.
+     */
+    fun readable(source: String): Readable? = null
 }
+
+/** Something to read, and its position in the field when it has one. */
+data class Readable(val text: String, val origin: Int? = null)
 
 /**
  * Carries out a [Command]: the only place a verb touches the platform.
@@ -133,6 +142,14 @@ class Performer(private val host: PerformerHost) {
 
             "pocket_lock" -> pocketLock(command)
 
+            "read_aloud" -> readAloud(command)
+            "read_control" -> when (command.arg("action")?.lowercase() ?: "toggle") {
+                "stop" -> Speaker.stop()
+                "pause" -> Speaker.pause()
+                "resume" -> Speaker.resume(context)
+                else -> if (!Speaker.toggle(context)) host.notice("Nothing is being read")
+            }
+
             "click", "long_click" -> {
                 val query = NodeQuery.from(command)
                 if (query.isEmpty) {
@@ -185,6 +202,38 @@ class Performer(private val host: PerformerHost) {
             "wait" -> Unit
 
             else -> host.notice("“${spec.id}” is listed but not wired up yet")
+        }
+    }
+
+    private fun readAloud(command: Command) {
+        val literal = command.arg("text")?.takeIf { it.isNotBlank() }
+        val source = command.arg("source")?.lowercase() ?: if (literal != null) "text" else "auto"
+        when (source) {
+            "text" -> {
+                if (literal == null) host.notice("Read aloud: nothing given to read") else Speaker.speak(context, literal)
+            }
+            "screen", "page" -> {
+                val service = IoAccessibilityService.instance
+                if (service == null) {
+                    askForAccess(Verbs.byId("read_screen") ?: return)
+                    return
+                }
+                if (source == "page") {
+                    host.dismissKeyboard()
+                    PageReader(service) { host.notice(it) }.start()
+                } else {
+                    val text = service.screenText()
+                    if (text.isBlank()) host.notice("Nothing readable on screen") else Speaker.speak(context, text)
+                }
+            }
+            else -> {
+                val what = host.readable(source)
+                if (what == null || what.text.isBlank()) {
+                    host.notice("Nothing to read here")
+                } else {
+                    Speaker.speak(context, what.text, what.origin)
+                }
+            }
         }
     }
 

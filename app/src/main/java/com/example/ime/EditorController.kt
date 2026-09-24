@@ -470,6 +470,17 @@ class EditorController(
         ic.setSelection(target, target)
     }
 
+    /** Selects [start]..[end] — used to show which word is being read aloud. */
+    fun selectRange(start: Int, end: Int) {
+        val ic = connection() ?: return
+        val a = start.coerceAtLeast(0)
+        val b = end.coerceAtLeast(a)
+        anchor = -1
+        caret = -1
+        expected = a to b
+        ic.setSelection(a, b)
+    }
+
     fun selectAll() {
         connection()?.performContextMenuAction(android.R.id.selectAll)
     }

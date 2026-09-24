@@ -252,6 +252,24 @@ object Verbs {
                 "neither, says so and offers the screen that grants it."
         ),
         VerbSpec(
+            id = "read_aloud", glyph = "🗣", label = "Read aloud",
+            help = "Read text out loud with the phone's own voice: the selection, the whole field, " +
+                "what was just written, the clipboard, the screen, or a whole page scrolled as it goes.",
+            params = listOf(
+                Param("source", "auto, selection, field, before, sentence, word, clipboard, screen, page or text.", "auto"),
+                Param("text", "With source=text: what to say.", "")
+            ),
+            group = GROUP_MEDIA,
+            without = "Needs nothing; the screen and a page need accessibility, and say so."
+        ),
+        VerbSpec(
+            id = "read_control", glyph = "⏯", label = "Reading: pause, resume, stop",
+            help = "Controls whatever is being read aloud. A headset button does the same.",
+            params = listOf(Param("action", "toggle, pause, resume or stop.", "toggle")),
+            group = GROUP_MEDIA,
+            without = "Needs nothing; with nothing being read, says so."
+        ),
+        VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",
             help = "Start or stop recording everything pressed on the keyboard — keys, " +
                 "actions, pauses between actions on other apps — under a name, to play back later.",

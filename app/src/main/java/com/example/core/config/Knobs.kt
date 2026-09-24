@@ -134,6 +134,14 @@ object Knobs {
     val SCREEN_CONTEXT_CHARS = k("screenContextChars", 6000.0, 200.0, 50000.0, SettingsSchema.GROUP_AI, "Screen text given to the AI (characters)", "")
     val ASR_RETRY_MS = k("asrRetryMs", 250.0, 0.0, 5000.0, SettingsSchema.GROUP_VOICE, "Dictation: retry after a dropped connection (ms)", "")
 
+    // --- reading aloud -------------------------------------------------------------
+    val READ_CHUNK_CHARS = k("readChunkChars", 3000.0, 100.0, 3900.0, SettingsSchema.GROUP_SPEECH, "Reading: longest piece (characters)",
+        "Long text is cut at sentence ends into pieces no longer than this; the engine's limit is about 4000.")
+    val READ_PAGE_WAIT_MS = k("readPageWaitMs", 900.0, 100.0, 10000.0, SettingsSchema.GROUP_SPEECH, "Reading a page: wait after scrolling (ms)",
+        "Time for the next part of the page to appear before it is read.")
+    val READ_PAGE_MAX = k("readPageMax", 60.0, 1.0, 1000.0, SettingsSchema.GROUP_SPEECH, "Reading a page: most screens",
+        "Stops after this many screens, so a feed without end is not read forever.")
+
     // --- notices ---------------------------------------------------------------
     val NOTICE_MS = k("noticeMs", 3500.0, 500.0, 30000.0, TIMING, "News in the strip stays (ms)",
         "Twice as long when it has something to tap.")

@@ -173,6 +173,22 @@ data class Settings(
     /** Typed at the start of a word, calls shortcuts up by name: "/copy". Blank: off. */
     val actionCommandPrefix: String = "/",
 
+    // --- reading aloud ---------------------------------------------------------------
+    /** Speech engine package; blank is the phone's default. */
+    val ttsEngine: String = "",
+    /** Language tag; blank follows the current layout. */
+    val ttsLanguage: String = "",
+    /** A voice by name; blank lets the language choose. */
+    val ttsVoice: String = "",
+    val ttsRate: Float = 1.0f,
+    val ttsPitch: Float = 1.0f,
+    /** Which volume and audio behaviour reading uses: MEDIA, ACCESSIBILITY, ASSISTANT, NOTIFICATION. */
+    val ttsUsage: String = "MEDIA",
+    /** Reading back what is typed: OFF, CHARACTERS, WORDS, SENTENCES. */
+    val ttsEcho: com.example.core.speech.SpeechText.Echo = com.example.core.speech.SpeechText.Echo.OFF,
+    /** Select the word being read, when reading from the field. */
+    val ttsFollowAlong: Boolean = false,
+
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
     /**

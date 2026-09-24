@@ -424,6 +424,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             // The engine hears more with the keyboard open (its own volume keys, text
             // actions it can carry out), so it is told, and its news comes here.
             com.example.engine.EngineRuntime.noticeSink = { text, label, action -> notices.post(text, label, action) }
+            // Reading follows the language being typed, and can show where it is.
+            com.example.io.Speaker.currentLanguage = layout.locale
+            com.example.io.Speaker.onWord = { start, end ->
+                if (SettingsStore.current.ttsFollowAlong && isInputViewShown) editor.selectRange(start, end)
+            }
             if (!restarting) {
                 com.example.engine.EngineRuntime.keyboardShown(this, currentPackage) { perform(it) }
             }
@@ -1109,7 +1114,63 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             }
 
             override fun dismissKeyboard() = hideKeyboard()
+
+            override fun readable(source: String): com.example.io.Readable? = readableText(source)
         })
+    }
+
+    // -----------------------------------------------------------------------
+    // Reading aloud — see Speaker; here only what the field can offer it
+    // -----------------------------------------------------------------------
+
+    /**
+     * Text from the field to read, with where it starts, so the words can be followed.
+     * Never from a private field: reading a password aloud is a leak with a speaker.
+     */
+    private fun readableText(source: String): com.example.io.Readable? {
+        val selStart = editor.selectionStart
+        val selEnd = editor.selectionEnd
+        val selected = editor.selectedText()?.toString().orEmpty()
+        if (source == "clipboard") {
+            val clip = runCatching { clipboardManager?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }
+                .getOrNull()
+            return clip?.takeIf { it.isNotBlank() }?.let { com.example.io.Readable(it) }
+        }
+        if (editor.isSensitive) return null
+        val before = editor.textBefore(100_000).toString()
+        val after = editor.textAfter(100_000).toString()
+        val cursor = if (selEnd >= 0) selEnd else before.length
+        val beforeStart = cursor - before.length
+        return when (source) {
+            "selection" -> selected.takeIf { it.isNotBlank() }?.let { com.example.io.Readable(it, minOf(selStart, selEnd)) }
+            "before" -> com.example.io.Readable(before, beforeStart)
+            "sentence" -> com.example.core.speech.SpeechText.lastSentence(before).takeIf { it.isNotBlank() }?.let {
+                com.example.io.Readable(it, beforeStart + before.lastIndexOf(it).coerceAtLeast(0))
+            }
+            "word" -> com.example.core.speech.SpeechText.lastWord(before).takeIf { it.isNotBlank() }?.let {
+                com.example.io.Readable(it, beforeStart + before.lastIndexOf(it).coerceAtLeast(0))
+            }
+            "field" -> com.example.io.Readable(before + selected + after, beforeStart)
+            // Auto: what is selected if anything is, otherwise the whole field.
+            else -> if (selected.isNotBlank()) com.example.io.Readable(selected, minOf(selStart, selEnd))
+            else com.example.io.Readable(before + after, beforeStart).takeIf { it.text.isNotBlank() }
+        }
+    }
+
+    /** Reading back what is typed, as the user asked: characters, words or sentences. */
+    private fun echoTyping(committed: String, endsWord: Boolean, completed: String, settings: Settings) {
+        val echo = settings.ttsEcho
+        if (echo == com.example.core.speech.SpeechText.Echo.OFF || editor.isSensitive) return
+        val say = when (echo) {
+            com.example.core.speech.SpeechText.Echo.CHARACTERS -> committed.trim()
+            com.example.core.speech.SpeechText.Echo.WORDS -> if (endsWord) completed else ""
+            com.example.core.speech.SpeechText.Echo.SENTENCES ->
+                if (committed.any { it == '.' || it == '!' || it == '?' || it == '…' || it == '\n' }) {
+                    com.example.core.speech.SpeechText.lastSentence(editor.textBefore(2000).toString())
+                } else ""
+            com.example.core.speech.SpeechText.Echo.OFF -> ""
+        }
+        if (say.isNotBlank()) com.example.io.Speaker.say(this, say)
     }
 
     // -----------------------------------------------------------------------
@@ -1437,9 +1498,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // curly quote, punctuation with a space appended — so measure against that.
         val committed = editor.lastCommit.ifEmpty { text }
         val endsWord = committed.isNotEmpty() && !TextOps.isWordChar(committed.trimEnd().lastOrNull() ?: ' ')
+        if (!endsWord) echoTyping(committed, false, "", settings)
         if (endsWord) {
             val window = editor.textBefore(200)
             val completed = TextOps.currentWord(window.dropLast(committed.length))
+            echoTyping(committed, true, completed, settings)
             observeCase(completed, window.dropLast(committed.length + completed.length), settings)
             learnCurrentWordBefore(committed)
             if (settings.autoCorrect && !editor.isSensitive && completed.isNotBlank()) {

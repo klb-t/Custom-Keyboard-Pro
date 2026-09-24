@@ -91,6 +91,7 @@ object Abilities {
     const val POINTER = "pointer"
     const val CAPTURE_PLAYBACK = "capture_playback"
     const val POCKET_LOCK = "pocket_lock"
+    const val READ_ALOUD = "read_aloud"
 
     val ALL: List<Ability> = listOf(
         Ability(
@@ -168,6 +169,15 @@ object Abilities {
                 AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
                 "Settings › Accessibility"
             )
+        ),
+        Ability(
+            id = READ_ALOUD,
+            label = "Reading aloud",
+            gives = "The keyboard reads text out loud — what you wrote, the selection, the " +
+                "clipboard, and with accessibility the screen or a whole page.",
+            without = "Needs nothing but a voice for the language, installed in the phone's " +
+                "text-to-speech settings; without one, the engine reads in whatever voice it has.",
+            needs = Need.Nothing
         ),
         Ability(
             id = POCKET_LOCK,

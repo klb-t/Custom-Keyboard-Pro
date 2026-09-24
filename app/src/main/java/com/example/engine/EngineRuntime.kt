@@ -116,6 +116,7 @@ object EngineRuntime {
     private fun attach(ctx: Context) {
         if (context == null) context = ctx.applicationContext
         SettingsStore.init(ctx)
+        com.example.io.Speaker.tell = { tell(it) }
         if (!watching) {
             watching = true
             volume = VolumeGestures(
@@ -449,6 +450,16 @@ object EngineRuntime {
             override fun play(name: String, times: Int) = playMacro(name, times)
 
             override fun dismissKeyboard() = Unit
+
+            override fun readable(source: String): com.example.io.Readable? {
+                // With the keyboard closed there is no field; the clipboard is all that is
+                // left, and Android lets only the keyboard in use read it — so this may
+                // come back empty, and the caller says so.
+                if (source != "clipboard" && source != "auto") return null
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+                val text = runCatching { cm.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString() }.getOrNull()
+                return text?.takeIf { it.isNotBlank() }?.let { com.example.io.Readable(it) }
+            }
         }).also { backgroundPerformer = it }
     }
 }

@@ -251,10 +251,11 @@ object SettingsSchema {
     const val GROUP_DATA = "Stored data"
     const val GROUP_POCKET = "Pocket lock"
     const val GROUP_ENGINE = "Engine: inputs and wires"
+    const val GROUP_SPEECH = "Reading aloud"
 
     private val GROUP_ORDER = listOf(
         GROUP_APPEARANCE, GROUP_FREE, GROUP_COVERAGE, GROUP_LAYOUTS, GROUP_TYPING,
-        GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_CLIPBOARD,
+        GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_SPEECH, GROUP_CLIPBOARD,
         GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_ENGINE, GROUP_POCKET,
         GROUP_PRIVACY, GROUP_DATA
     )
@@ -392,6 +393,37 @@ object SettingsSchema {
             kind = SettingKind.ENUM, group = GROUP_LAYOUTS, label = "Layout for the keyboard without a field",
             help = "What the quick settings tile \"Keyboard\" opens with: keys and shortcuts sent to the " +
                 "app in front. Blank keeps whatever layout is current."
+        ),
+        "ttsEngine" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_SPEECH, label = "Speech engine",
+            help = "Blank uses the phone's default. The list fills in once reading has been used."
+        ),
+        "ttsLanguage" to Meta(
+            group = GROUP_SPEECH, label = "Language",
+            help = "Blank follows the keyboard's current layout. Otherwise a tag such as pl, en-GB. " +
+                "A voice for it must be installed in the phone's text-to-speech settings."
+        ),
+        "ttsVoice" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_SPEECH, label = "Voice",
+            help = "Blank lets the language choose. Overrides the language when set."
+        ),
+        "ttsRate" to Meta(group = GROUP_SPEECH, label = "Speed", min = 0.25f, max = 4f),
+        "ttsPitch" to Meta(group = GROUP_SPEECH, label = "Pitch", min = 0.5f, max = 2f),
+        "ttsUsage" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_SPEECH, label = "Plays as",
+            help = "MEDIA uses the media volume and pauses other audio politely; ACCESSIBILITY uses the " +
+                "accessibility volume; ASSISTANT and NOTIFICATION as named.",
+            options = listOf("MEDIA", "ACCESSIBILITY", "ASSISTANT", "NOTIFICATION")
+        ),
+        "ttsEcho" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_SPEECH, label = "Read back what I type",
+            help = "Each character, each word or each sentence as it is finished. Never in password or " +
+                "private fields.",
+            options = com.example.core.speech.SpeechText.Echo.entries.map { it.name }
+        ),
+        "ttsFollowAlong" to Meta(
+            group = GROUP_SPEECH, label = "Follow along in the field",
+            help = "While reading text from the field, the word being read is selected, so you can see where it is."
         ),
         "actionSuggestions" to Meta(
             group = GROUP_SUGGESTIONS, label = "Offer shortcuts in the strip",

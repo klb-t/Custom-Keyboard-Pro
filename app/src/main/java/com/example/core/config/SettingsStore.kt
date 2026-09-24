@@ -153,6 +153,14 @@ object SettingsStore {
         put("actionSuggestionCount", s.actionSuggestionCount)
         put("learnActions", s.learnActions)
         put("actionCommandPrefix", s.actionCommandPrefix)
+        put("ttsEngine", s.ttsEngine)
+        put("ttsLanguage", s.ttsLanguage)
+        put("ttsVoice", s.ttsVoice)
+        put("ttsRate", s.ttsRate.toDouble())
+        put("ttsPitch", s.ttsPitch.toDouble())
+        put("ttsUsage", s.ttsUsage)
+        put("ttsEcho", s.ttsEcho.name)
+        put("ttsFollowAlong", s.ttsFollowAlong)
         put("pocketUnlockPhrase", s.pocketUnlockPhrase)
         put("pocketLockPhrase", s.pocketLockPhrase)
         put("pocketLockPhraseApps", JSONArray(s.pocketLockPhraseApps))
@@ -346,6 +354,14 @@ object SettingsStore {
             actionSuggestionCount = o.optInt("actionSuggestionCount", d.actionSuggestionCount),
             learnActions = o.optBoolean("learnActions", d.learnActions),
             actionCommandPrefix = o.optString("actionCommandPrefix", d.actionCommandPrefix),
+            ttsEngine = o.optString("ttsEngine", d.ttsEngine),
+            ttsLanguage = o.optString("ttsLanguage", d.ttsLanguage),
+            ttsVoice = o.optString("ttsVoice", d.ttsVoice),
+            ttsRate = o.optDouble("ttsRate", d.ttsRate.toDouble()).toFloat(),
+            ttsPitch = o.optDouble("ttsPitch", d.ttsPitch.toDouble()).toFloat(),
+            ttsUsage = o.optString("ttsUsage", d.ttsUsage),
+            ttsEcho = enumOf(o.optString("ttsEcho", d.ttsEcho.name), d.ttsEcho),
+            ttsFollowAlong = o.optBoolean("ttsFollowAlong", d.ttsFollowAlong),
             pocketUnlockPhrase = o.optString("pocketUnlockPhrase", d.pocketUnlockPhrase),
             pocketLockPhrase = o.optString("pocketLockPhrase", d.pocketLockPhrase),
             pocketLockPhraseApps = o.optJSONArray("pocketLockPhraseApps")?.let { arr ->
