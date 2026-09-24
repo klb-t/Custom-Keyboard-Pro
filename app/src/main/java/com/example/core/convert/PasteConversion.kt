@@ -160,6 +160,34 @@ object PasteConversion {
     }
 
     /**
+     * Text out of a picture's bytes, with whichever provider would read a pasted one —
+     * the same step the converter uses as "picture → text".
+     */
+    suspend fun pictureToText(
+        context: Context,
+        bytes: ByteArray,
+        mime: String,
+        settings: Settings = SettingsStore.current
+    ): String = withContext(Dispatchers.IO) {
+        val provider = providerFor(Convertible.PICTURE, settings) ?: error("Nothing is set up that reads pictures yet.")
+        val key = ProviderProfiles.keyFor(provider.id, settings)
+        readPicture(provider, key, bytes, mime, settings)
+    }
+
+    /** Text out of a recording's bytes — the converter's "sound → text". */
+    suspend fun recordingToText(
+        context: Context,
+        bytes: ByteArray,
+        mime: String,
+        settings: Settings = SettingsStore.current,
+        language: String = ""
+    ): String = withContext(Dispatchers.IO) {
+        val provider = providerFor(Convertible.RECORDING, settings) ?: error("Nothing is set up that transcribes yet.")
+        val key = ProviderProfiles.keyFor(provider.id, settings)
+        readRecording(context, provider, key, bytes, mime, settings, language)
+    }
+
+    /**
      * Two shapes, and which one is used is a fact about the provider rather than a
      * branch anybody has to maintain. A described call — Mistral's OCR endpoint,
      * OCR.space — goes through the engine. A coded wire means the provider reads

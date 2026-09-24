@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
+import kotlin.coroutines.resume
 
 /**
  * Reading aloud: the keyboard's other direction.
@@ -318,6 +319,31 @@ object Speaker {
         Phase.IDLE -> false
     }
 
+    private val fileWaiters = java.util.concurrent.ConcurrentHashMap<String, (Boolean) -> Unit>()
+
+    /**
+     * [what] spoken into [file] instead of the speaker — the converter's "text → sound".
+     * The phone's engine decides the format; it is a WAV on every engine seen so far.
+     */
+    suspend fun synthesize(ctx: Context, what: String, file: java.io.File): Boolean =
+        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            ensure(ctx) {
+                val t = tts
+                if (t == null) {
+                    if (cont.isActive) cont.resume(false)
+                    return@ensure
+                }
+                configure(t)
+                val id = "f" + System.nanoTime()
+                fileWaiters[id] = { ok -> if (cont.isActive) cont.resume(ok) }
+                val max = TextToSpeech.getMaxSpeechInputLength()
+                if (t.synthesizeToFile(what.take(max), Bundle(), file, id) != TextToSpeech.SUCCESS) {
+                    fileWaiters.remove(id)
+                    if (cont.isActive) cont.resume(false)
+                }
+            }
+        }
+
     /** Installed engines, by package — for the settings list. */
     fun engines(): List<String> = runCatching { tts?.engines?.map { it.name } }.getOrNull().orEmpty()
 
@@ -355,6 +381,7 @@ object Speaker {
         }
 
         override fun onDone(utteranceId: String?) {
+            utteranceId?.let { fileWaiters.remove(it)?.invoke(true) }
             val (gen, i, _) = parse(utteranceId) ?: return
             main.post {
                 if (gen != generation) return@post
@@ -364,6 +391,7 @@ object Speaker {
 
         @Deprecated("Deprecated in Java")
         override fun onError(utteranceId: String?) {
+            utteranceId?.let { fileWaiters.remove(it)?.invoke(false) }
             val (gen, _, _) = parse(utteranceId) ?: return
             main.post {
                 if (gen != generation) return@post

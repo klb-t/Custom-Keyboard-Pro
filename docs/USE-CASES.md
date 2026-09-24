@@ -68,6 +68,7 @@ API for it.
 | "read with a better voice" | the catalogue's speech capability; placeholders get defaults and known choices |
 | "floating controls, potentiometers" | controls as elements: slider, knob, pad, switch — an action with `{v}` in it, and an engine input |
 | "any setting from a key, a knob or a wire" | the `set` and `toggle_setting` verbs, through the settings schema's own checks |
+| "a converter of everything into everything — a waterfall spectrogram JPEG into MIDI, a vocal with its words" | `convert`: a graph of small steps (`core/convert/ConvertGraph.kt`) and a planner that finds the cheapest path through the ones that can run now |
 
 ## The outputs engine, first half
 
@@ -93,6 +94,56 @@ written yet. Sensors nobody wired are never switched on.
 Still to come on the same wires: floating controls (sliders, knobs, pads), timers,
 network ports and known services, and listening with the keyboard closed (through
 the accessibility service).
+
+## The converter
+
+"Everything into everything" is kept finite by not writing conversions at all. There
+are **kinds** (text, image, audio, MIDI, video) and **steps** between two kinds, each
+saying where it runs: in the app's own arithmetic, in the phone's services, or at a
+provider. A conversion is a path, found by a cheapest-path search over the steps that
+can run right now — so one new step makes every path through it possible at once.
+
+| step | from → to | where |
+|---|---|---|
+| read the picture as a spectrogram of notes | image → MIDI | here |
+| play the picture as a spectrogram (a sine per row) | image → audio | here |
+| draw its spectrogram | audio → image | here |
+| the melody in the sound | audio → MIDI | here |
+| draw the notes as a spectrogram | MIDI → image | here |
+| play the notes / the notes' names / notes from names | MIDI ↔ audio, text | here |
+| set the text as a picture | text → image | here |
+| take the sound / a frame out of a video | video → audio, image | here |
+| read aloud to a file | text → audio | the phone's speech engine |
+| read the text in the picture, write down what is said | image, audio → text | a provider |
+| a provider's voice, a picture or a video of what it describes | text → audio, image, video | a provider |
+
+Things that are not obvious:
+
+- **A spectrogram picture has no single layout.** Time may run right, left, down (a
+  waterfall read from the top) or up (as radios draw it, newest at the top); the
+  frequency axis may be logarithmic or linear, over any range, and flipped. All of it
+  is a parameter (`time=`, `scale=`, `low=`, `high=`, `flip=`, `seconds=`), as is the
+  part of the picture that is the spectrogram (`area=`, to leave out axes and labels)
+  and whether dark means loud (`invert=`, by itself for mostly light pictures).
+- **Each pixel row belongs to the nearest semitone and to no other.** On a linear
+  axis low semitones are closer together than one row, so some get no row at all —
+  that is what the picture can tell, and reading it as two notes would be worse.
+- **A sung note is a stack of lines.** The note, its octave, its twelfth… The melody
+  step folds the overtones into the note they belong to and keeps the loudest line
+  at each moment (`harmonics=`, `voices=` to change either), at the price of real
+  octaves played together.
+- **"Vocal with its words"** is a MIDI file with lyric events: the melody from the
+  spectrogram, the words from transcription laid over the notes' starts
+  (`lyrics=on`, which needs a transcription provider, because it sends the recording).
+- **Some steps reinterpret rather than convert.** Text read as note names is only
+  used when the text *is* notes, and notes written out as names only when the input
+  was a MIDI file or `to=notes` asks for it — so a recording into text is its words,
+  never the names of the notes in it.
+- **The phone is preferred to a provider**, and the plan — with where it sends things
+  — is told before it runs. `use=` goes through given steps (`use=draw` for an AI
+  picture rather than typeset text), `avoid=` leaves some out.
+- **Text hidden in sound** is text set in one line as a picture, then played as a
+  spectrogram on a linear axis, which is what a spectrogram app shows by default.
 
 ## Not absorbable, and why
 

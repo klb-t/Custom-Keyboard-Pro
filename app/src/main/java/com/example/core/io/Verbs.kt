@@ -302,6 +302,44 @@ object Verbs {
             without = "Needs nothing; with nothing being read, says so."
         ),
         VerbSpec(
+            id = "convert", glyph = "⇄", label = "Convert",
+            help = "Turn what is selected or copied into something else: a picture into text, text " +
+                "into speech, a spectrogram picture into MIDI, a song into its melody with the words, " +
+                "notes into sound, a video into its soundtrack — any path through the steps the phone " +
+                "can do, and the ones a provider can when one is set up. The result goes into the " +
+                "field or onto the clipboard as a file.",
+            params = listOf(
+                Param("to", "text, notes (their names), image, audio, midi, video — or wav, png, jpg, webp.", "midi"),
+                Param("source", "auto (selection, then clipboard), clipboard, field, selection, screen…", "auto"),
+                Param("from", "What the input is, when a file does not say: image, audio, midi, video.", ""),
+                Param("use", "Steps to go through, in order: ocr, transcribe, speak, typeset, draw, sonify, pitch…", ""),
+                Param("avoid", "Steps not to use.", ""),
+                Param("time", "Spectrograms: which way time runs — right, left, down (waterfall) or up.", "right"),
+                Param("scale", "Spectrograms: log (musical) or linear frequency axis.", "log"),
+                Param("flip", "Spectrograms: low frequencies at the top (or right) instead.", "off"),
+                Param("low", "Spectrograms: lowest frequency shown, Hz.", "55"),
+                Param("high", "Spectrograms: highest frequency shown, Hz.", "4186"),
+                Param("seconds", "How long a picture lasts as sound.", "10"),
+                Param("threshold", "How bright counts as a note, 0–1.", "0.5"),
+                Param("min_note", "Shortest note kept, seconds.", "0.05"),
+                Param("voices", "Most notes at once, the loudest; 0 for any number.", "0"),
+                Param("harmonics", "keep overtones as notes of their own, or off to fold them away.", "keep"),
+                Param("area", "The part of the picture that is the spectrogram: left,top,right,bottom in %.", "10,5,95,90"),
+                Param("invert", "Dark means loud: on, off, or auto for mostly-light pictures.", "auto"),
+                Param("bpm", "Tempo written into MIDI and used for note names.", "120"),
+                Param("lyrics", "With a melody from a recording: on adds the words sung (needs transcription).", "off"),
+                Param("language", "Language of what is said, for transcription.", ""),
+                Param("ink", "Text set as a picture: light or dark letters.", "dark"),
+                Param("size", "Text set as a picture: letter size in pixels.", "44"),
+                Param("at", "Video: which moment to take a frame from, seconds.", ""),
+                Param("width", "Pictures made: width in pixels.", "1200"),
+                Param("height", "Pictures made: height in pixels.", "600")
+            ),
+            group = GROUP_OPEN,
+            without = "Needs nothing for what the phone can do itself; reading pictures, transcribing " +
+                "and generating need a provider, and say which."
+        ),
+        VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",
             help = "Start or stop recording everything pressed on the keyboard — keys, " +
                 "actions, pauses between actions on other apps — under a name, to play back later.",
