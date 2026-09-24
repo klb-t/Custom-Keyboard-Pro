@@ -33,6 +33,8 @@ import com.example.core.asr.AsrState
 import com.example.core.asr.VoiceController
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.config.knob
+import com.example.core.config.knobLong
 import com.example.core.convert.PasteConversion
 import com.example.core.data.BundledDictionary
 import com.example.core.data.ClipboardEntity
@@ -47,7 +49,6 @@ import com.example.core.text.CapitalHow
 import com.example.core.text.CapitalMoment
 import com.example.core.text.Capitalisation
 import com.example.core.text.CursorMagnet
-import com.example.core.engine.Inputs
 import com.example.core.text.CapitalWhen
 import com.example.core.text.ProperNouns
 import com.example.core.layout.KeyDef
@@ -217,6 +218,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onDestroy() {
+        com.example.engine.EngineRuntime.keyboardDestroyed()
+        com.example.engine.EngineRuntime.noticeSink = null
         clipboardManager?.removePrimaryClipChangedListener(clipboardListener)
         voice.release()
         serviceScope.cancel()
@@ -415,9 +418,12 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
             applyCapitalisation(CapitalMoment.OPENING, sensitive)
             refreshSuggestions()
-            val wires = currentWires()
-            sensorHub.listen(Inputs.sourcesNeeded(wires))
-            if (!restarting) fireInput("keyboard_shown")
+            // The engine hears more with the keyboard open (its own volume keys, text
+            // actions it can carry out), so it is told, and its news comes here.
+            com.example.engine.EngineRuntime.noticeSink = { text, label, action -> notices.post(text, label, action) }
+            if (!restarting) {
+                com.example.engine.EngineRuntime.keyboardShown(this, currentPackage) { perform(it) }
+            }
             AppLogger.d(tag, "done")
         } catch (crash: Throwable) {
             AppLogger.e(tag, "failed partway through — keyboard may be in a stale state", crash)
@@ -426,8 +432,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         saveProperNouns()
-        sensorHub.stop()
-        fireInput("keyboard_hidden")
+        com.example.engine.EngineRuntime.keyboardHidden()
         super.onFinishInputView(finishingInput)
         voice.cancel()
         suggestions.clear()
@@ -679,14 +684,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // Wired volume keys first: a wire is a more specific wish than the general
         // "volume keys resize" setting, and nobody wants both from one press.
-        volumeInput(keyCode)?.let { input ->
-            if (isInputViewShown && hasWire(input)) {
-                // Held, the key repeats and so does the wire — which is what makes
-                // "volume down moves the cursor left" feel like an arrow key.
-                fireInput(input)
-                return true
-            }
-        }
+        if (isInputViewShown && com.example.engine.EngineRuntime.onVolumeKey(event)) return true
         // Right Alt on a hardware keyboard is AltGr, and on a Polish layout that is
         // how the language is written. The layer already exists and the soft board
         // already reaches it; this is the same layer reached from the other kind of
@@ -758,7 +756,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        volumeInput(keyCode)?.let { input -> if (isInputViewShown && hasWire(input)) return true }
+        if (isInputViewShown && com.example.engine.EngineRuntime.onVolumeKey(event)) return true
         if (SettingsStore.current.volumeKeysResize &&
             (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
             isInputViewShown
@@ -877,49 +875,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val notices = com.example.ui.kb.NoticeBoard()
 
     // -----------------------------------------------------------------------
-    // The engine's inputs: sensors, side keys, the keyboard's own comings and goings
-    // -----------------------------------------------------------------------
-
-    private val sensorHub: com.example.engine.SensorHub by lazy {
-        com.example.engine.SensorHub(this) { fireInput(it) }
-    }
-
-    private var wiresSource: String? = null
-    private var wiresCache: List<com.example.core.engine.Wire> = emptyList()
-
-    private fun currentWires(): List<com.example.core.engine.Wire> {
-        val raw = SettingsStore.current.engineWiresJson
-        if (raw != wiresSource) {
-            wiresSource = raw
-            wiresCache = Inputs.parse(raw)
-        }
-        return wiresCache
-    }
-
-    private fun hasWire(input: String): Boolean = Inputs.firing(currentWires(), input, currentPackage).isNotEmpty()
-
-    private fun volumeInput(keyCode: Int): String? = when (keyCode) {
-        KeyEvent.KEYCODE_VOLUME_UP -> "volume_up"
-        KeyEvent.KEYCODE_VOLUME_DOWN -> "volume_down"
-        else -> null
-    }
-
-    /** Runs every wire for [input] here, as if its action were a key being pressed. */
-    private fun fireInput(input: String) {
-        val wires = Inputs.firing(currentWires(), input, currentPackage)
-        if (wires.isEmpty()) return
-        AppLogger.d("Engine", "$input → ${wires.size} wire(s)")
-        wires.forEach { wire ->
-            val action = wire.parsed
-            if (action == null) {
-                notices.post("A wire on “$input” has an action that could not be read: ${wire.action}")
-            } else {
-                runCatching { perform(action) }.onFailure { AppLogger.e("Engine", "wire on $input failed", it) }
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // A long-press threshold that learns — see LongPressTuner for the rules
     // -----------------------------------------------------------------------
 
@@ -939,7 +894,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // A threshold the user set by hand since the last write is theirs: start
         // learning again from it rather than overwriting it with the old guess.
         if (existing != null && (tunerWrote < 0 || settings.longPressMs == tunerWrote)) return existing
-        return com.example.core.hitmap.LongPressTuner(settings.longPressMs).also {
+        return com.example.core.hitmap.LongPressTuner(
+            settings.longPressMs,
+            step = settings.knobLong(com.example.core.config.Knobs.TUNER_STEP_MS),
+            margin = settings.knobLong(com.example.core.config.Knobs.TUNER_MARGIN_MS)
+        ).also {
             tuner = it
             tunerWrote = settings.longPressMs
         }
@@ -1079,13 +1038,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 }
         }
 
-    /**
-     * What was on screen when the user last asked for it to go to the AI, and when.
-     * Context for the next task — "reply to this" — never its input, and forgotten
-     * once it is old or the user has moved to another app.
-     */
-    private var screenContext: Triple<Long, String?, String>? = null
-
     private val performer: com.example.io.Performer by lazy {
         com.example.io.Performer(object : com.example.io.PerformerHost {
             override val context: Context get() = this@CustomKeyboardIme
@@ -1101,7 +1053,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             }
 
             override fun offerToAi(text: String) {
-                screenContext = Triple(System.currentTimeMillis(), currentPackage, text)
+                // Shared with the engine: a screen read with the keyboard closed is
+                // context for the next task just as much.
+                com.example.engine.EngineRuntime.screenContext = Triple(System.currentTimeMillis(), currentPackage, text)
             }
 
             override fun notice(text: String, actionLabel: String?, action: (() -> Unit)?) {
@@ -1121,7 +1075,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
             override fun record(state: String, name: String) = recordMacro(state, name)
 
-            override fun play(name: String, times: Int) = playMacro(name, times)
+            override fun play(name: String, times: Int) {
+                if (recorder != null) {
+                    notices.post("Stop recording before playing")
+                    return
+                }
+                com.example.engine.EngineRuntime.playMacro(name, times)
+            }
 
             override fun dismissKeyboard() = hideKeyboard()
         })
@@ -1132,7 +1092,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     // -----------------------------------------------------------------------
 
     private var recorder: com.example.core.io.MacroRecorder? = null
-    private var playing = 0
 
     private fun recordMacro(state: String, name: String) {
         val active = recorder
@@ -1151,47 +1110,24 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 s.copy(macrosJson = com.example.core.io.Macros.write(all))
             }
             notices.post("Saved “${done.name}”: ${steps.size} step${if (steps.size == 1) "" else "s"}", "Play") {
-                playMacro(done.name, 1)
+                com.example.engine.EngineRuntime.playMacro(done.name, 1)
             }
         } else {
-            recorder = com.example.core.io.MacroRecorder(name)
+            val s = SettingsStore.current
+            recorder = com.example.core.io.MacroRecorder(
+                name,
+                minPause = s.knobLong(com.example.core.config.Knobs.MACRO_MIN_PAUSE_MS),
+                maxPause = s.knobLong(com.example.core.config.Knobs.MACRO_MAX_PAUSE_MS)
+            )
             notices.post("Recording “$name” — everything you press, until you stop it")
-        }
-    }
-
-    private fun playMacro(name: String, times: Int) {
-        if (recorder != null) {
-            notices.post("Stop recording before playing")
-            return
-        }
-        val steps = com.example.core.io.Macros.parse(SettingsStore.current.macrosJson)[name]
-        if (steps.isNullOrEmpty()) {
-            notices.post("No macro called “$name” yet — record one first")
-            return
-        }
-        // Nested plays are allowed but bounded: a macro that plays itself is a loop
-        // nobody can stop from the keyboard.
-        if (playing >= 4) return
-        serviceScope.launch {
-            playing++
-            try {
-                repeat(times) {
-                    steps.forEach { step ->
-                        val wait = com.example.core.io.Macros.waitOf(step)
-                        if (wait != null) delay(wait) else perform(step)
-                    }
-                }
-            } finally {
-                playing--
-            }
         }
     }
 
     /** The screen text handed to the AI, if it is still about what is in front. */
     private fun freshScreenContext(): String? {
-        val (at, pkg, text) = screenContext ?: return null
+        val (at, pkg, text) = com.example.engine.EngineRuntime.screenContext ?: return null
         val fresh = System.currentTimeMillis() - at < 10 * 60_000L && pkg == currentPackage
-        if (!fresh) screenContext = null
+        if (!fresh) com.example.engine.EngineRuntime.screenContext = null
         return text.takeIf { fresh }
     }
 
@@ -1271,7 +1207,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         if (action !is KeyAction.MoveCursor) arrowRun = null
         // Recorded as performed, not as pressed: what a key *did* is what a replay
         // has to do, whichever key or wire it came from. Not while a macro plays.
-        if (playing == 0) recorder?.record(action, android.os.SystemClock.uptimeMillis())
+        if (!com.example.engine.EngineRuntime.isPlaying) recorder?.record(action, android.os.SystemClock.uptimeMillis())
         val serial = ++actionSerial
         if (action is KeyAction.Backspace && settings.longPressAdaptive) backspaceAfterRelease(serial)
         when (action) {
@@ -1544,7 +1480,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     private fun properNounFor(word: String, settings: Settings): String? {
         if (word.isBlank()) return null
         settings.properNouns.firstOrNull { it.equals(word, ignoreCase = true) }?.let { return it }
-        return properNouns.formFor(word)
+        return properNouns.formFor(
+            word,
+            minCapitals = settings.knob(com.example.core.config.Knobs.PROPER_NOUN_MIN).toInt(),
+            ratio = settings.knob(com.example.core.config.Knobs.PROPER_NOUN_RATIO)
+        )
     }
 
     /**

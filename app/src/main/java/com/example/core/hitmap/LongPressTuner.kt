@@ -21,7 +21,9 @@ package com.example.core.hitmap
 class LongPressTuner(
     threshold: Long,
     private val min: Long = 90L,
-    private val max: Long = 600L
+    private val max: Long = 600L,
+    private val step: Long = STEP,
+    private val margin: Long = MARGIN
 ) {
     var threshold: Long = threshold.coerceIn(min, max)
         private set
@@ -36,21 +38,21 @@ class LongPressTuner(
         guard()?.let { floor ->
             // Only upwards here, and gently: taps crowding the threshold is a warning,
             // not an emergency.
-            if (floor > threshold) threshold = minOf(floor, threshold + STEP).coerceIn(min, max)
+            if (floor > threshold) threshold = minOf(floor, threshold + step).coerceIn(min, max)
         }
         return threshold
     }
 
     /** The strip opened and what it typed was deleted at once. */
     fun accidental(): Long {
-        threshold = (threshold + STEP).coerceIn(min, max)
+        threshold = (threshold + step).coerceIn(min, max)
         return threshold
     }
 
     /** A tap was deleted and the same key long-pressed straight after. */
     fun tooSlow(): Long {
         val floor = guard() ?: min
-        threshold = maxOf(threshold - STEP, floor).coerceIn(min, max)
+        threshold = maxOf(threshold - step, floor).coerceIn(min, max)
         return threshold
     }
 
@@ -62,7 +64,7 @@ class LongPressTuner(
         if (taps.size < MIN_SAMPLES) return null
         val sorted = taps.sorted()
         val p90 = sorted[((sorted.size - 1) * 0.9).toInt()]
-        return p90 + MARGIN
+        return p90 + margin
     }
 
     companion object {

@@ -167,7 +167,12 @@ object SettingsSchema {
         val keys = defaults.keys().asSequence().toList()
         return keys.map { key ->
             val raw = defaults.opt(key)
-            val meta = METADATA[key]
+            val meta = METADATA[key] ?: Knobs.byKey(key)?.let { k ->
+                Meta(
+                    kind = SettingKind.FLOAT, group = k.group, label = k.label, help = k.help,
+                    min = k.min.toFloat(), max = k.max.toFloat(), expert = true
+                )
+            }
             val kind = meta?.kind ?: inferKind(raw)
             SettingSpec(
                 key = key,
@@ -245,11 +250,12 @@ object SettingsSchema {
     const val GROUP_PRIVACY = "Privacy & diagnostics"
     const val GROUP_DATA = "Stored data"
     const val GROUP_POCKET = "Pocket lock"
+    const val GROUP_ENGINE = "Engine: inputs and wires"
 
     private val GROUP_ORDER = listOf(
         GROUP_APPEARANCE, GROUP_FREE, GROUP_COVERAGE, GROUP_LAYOUTS, GROUP_TYPING,
         GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_CLIPBOARD,
-        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_POCKET,
+        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_ENGINE, GROUP_POCKET,
         GROUP_PRIVACY, GROUP_DATA
     )
 
@@ -341,7 +347,7 @@ object SettingsSchema {
             multiline = true, expert = true
         ),
         "engineWiresJson" to Meta(
-            kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Wires: when this happens, do that",
+            kind = SettingKind.JSON, group = GROUP_ENGINE, label = "Wires: when this happens, do that",
             multiline = true,
             help = "A list of {\"on\": …, \"do\": …, \"in\": [apps]}. On: shake, face_down, face_up, " +
                 "tilt_left, tilt_right, tilt_forward, tilt_back, cover, uncover, volume_up, " +
@@ -381,6 +387,22 @@ object SettingsSchema {
             group = GROUP_POCKET, label = "Bring the app back if something gets past",
             help = "Navigation gestures from the screen edge can reach past any window. If another " +
                 "app comes to the front while locked, the locked one is reopened."
+        ),
+        "pocketUnlockPhrase" to Meta(
+            group = GROUP_POCKET, label = "Unlock by saying",
+            help = "Listened for only while locked, on the phone's own recogniser where it has one. " +
+                "Works even covered — speaking is how you unlock without taking it out. Needs the " +
+                "microphone permission; whether the system allows listening with the keyboard closed " +
+                "depends on the phone."
+        ),
+        "pocketLockPhrase" to Meta(
+            group = GROUP_POCKET, label = "Lock by saying",
+            help = "Means listening whenever unlocked: the microphone indicator stays on and it costs " +
+                "battery. Limit it to the talking apps below."
+        ),
+        "pocketLockPhraseApps" to Meta(
+            kind = SettingKind.STRING_LIST, group = GROUP_POCKET, label = "…only in these apps",
+            help = "Package names, e.g. com.google.android.apps.maps. Empty: everywhere."
         ),
         "macrosJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Recorded macros",

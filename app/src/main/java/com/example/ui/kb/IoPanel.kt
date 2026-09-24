@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.core.config.knob
 import com.example.core.io.Command
 import com.example.core.io.Verbs
 import com.example.core.layout.CursorDirection
@@ -179,8 +180,13 @@ private fun Trackpad(theme: KeyboardTheme, running: Boolean) {
     val host = LocalKeyboardHost.current
     val density = LocalDensity.current
     val live by rememberUpdatedState(running)
-    val stepX = with(density) { 14.dp.toPx() }
-    val stepY = with(density) { 22.dp.toPx() }
+    val settingsNow = com.example.core.config.SettingsStore.current
+    val stepDp = settingsNow.knob(com.example.core.config.Knobs.TRACKPAD_STEP_DP).toFloat()
+    val stepX = with(density) { stepDp.dp.toPx() }
+    // Lines are taller than characters are wide, so a line takes a longer stroke.
+    val stepY = stepX * 1.6f
+    val gainBase = settingsNow.knob(com.example.core.config.Knobs.POINTER_GAIN).toFloat()
+    val gainAccel = settingsNow.knob(com.example.core.config.Knobs.POINTER_ACCEL).toFloat()
     val slop = with(density) { 6.dp.toPx() }
 
     fun pointer() = IoAccessibilityService.instance?.pointer
@@ -222,7 +228,7 @@ private fun Trackpad(theme: KeyboardTheme, running: Boolean) {
                             } else if (live) {
                                 // Faster the faster the finger moves: fine control when
                                 // slow, the whole screen in one stroke when quick.
-                                val gain = 1.4f + (delta.getDistance() / 18f).coerceAtMost(2.2f)
+                                val gain = gainBase + (delta.getDistance() / 18f).coerceAtMost(gainAccel)
                                 pointer()?.moveBy(delta.x * gain, delta.y * gain)
                             } else {
                                 cursor += delta

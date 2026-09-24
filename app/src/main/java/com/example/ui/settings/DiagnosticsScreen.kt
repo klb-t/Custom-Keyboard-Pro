@@ -66,14 +66,25 @@ fun DiagnosticsScreen() {
                     else "Without it: " + ability.without
                 )
                 if (availability == Availability.OFF) {
-                    (ability.needs as? Need.SpecialAccess)?.let { need ->
+                    // Every screen that grants it — where there are several ways in,
+                    // each is offered, since each gives something slightly different.
+                    val screens = when (val n = ability.needs) {
+                        is Need.SpecialAccess -> listOf(n)
+                        is Need.AnyOf -> n.options.filterIsInstance<Need.SpecialAccess>()
+                        else -> emptyList()
+                    }
+                    screens.forEach { need ->
                         ActionRow(
-                            label = "Open the settings screen for this",
+                            label = if (screens.size > 1) "Grant it this way" else "Open the settings screen for this",
                             description = need.where,
                             onClick = {
                                 runCatching {
-                                    Abilities.settingsIntent(context, ability)
-                                        ?.let { context.startActivity(it) }
+                                    val intent = android.content.Intent(need.settingsAction).apply {
+                                        if (need.settingsAction == android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION) {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                        }
+                                    }
+                                    context.startActivity(intent)
                                 }
                             }
                         )

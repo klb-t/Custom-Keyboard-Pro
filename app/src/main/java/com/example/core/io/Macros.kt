@@ -15,7 +15,11 @@ import org.json.JSONObject
  * a pause is kept only around steps that act on other apps, where it matters, and
  * capped, so a coffee break in the middle of recording is not replayed.
  */
-class MacroRecorder(val name: String) {
+class MacroRecorder(
+    val name: String,
+    private val minPause: Long = MIN_KEPT_PAUSE,
+    private val maxPause: Long = MAX_KEPT_PAUSE
+) {
     private val steps = mutableListOf<KeyAction>()
     private var lastAt = -1L
     private var lastWasOutside = false
@@ -27,8 +31,8 @@ class MacroRecorder(val name: String) {
         val outside = action is KeyAction.Do
         if (lastAt >= 0 && (outside || lastWasOutside)) {
             val gap = atMs - lastAt
-            if (gap >= MIN_KEPT_PAUSE) {
-                steps += KeyAction.Do(Command("wait", listOf(gap.coerceAtMost(MAX_KEPT_PAUSE).toString())))
+            if (gap >= minPause) {
+                steps += KeyAction.Do(Command("wait", listOf(gap.coerceAtMost(maxPause).toString())))
             }
         }
         steps += action

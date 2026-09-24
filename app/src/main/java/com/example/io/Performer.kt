@@ -23,6 +23,7 @@ import com.example.core.io.NodeQuery
 import com.example.core.io.Sweep
 import com.example.core.io.VerbSpec
 import com.example.core.io.Verbs
+import com.example.core.config.knob
 import com.example.util.AppLogger
 
 /** What the performer needs from whoever is running it — the keyboard, for now. */
@@ -108,7 +109,11 @@ class Performer(private val host: PerformerHost) {
 
             "tap" -> point(service!!, command)?.let { (x, y) -> service.press(x, y, 60) }
             "long_press" -> point(service!!, command)?.let { (x, y) ->
-                service.press(x, y, (command.int("ms") ?: 600).toLong())
+                service.press(
+                    x, y,
+                    (command.int("ms")?.toLong()
+                        ?: com.example.core.config.SettingsStore.current.knob(com.example.core.config.Knobs.POINTER_LONG_MS).toLong())
+                )
             }
             "swipe" -> {
                 val s = service!!
@@ -126,21 +131,7 @@ class Performer(private val host: PerformerHost) {
                 else -> service!!.pointer.toggle()
             }
 
-            "pocket_lock" -> {
-                val mode = com.example.core.io.PocketMode.parse(command.arg("mode"))
-                    ?: com.example.core.config.SettingsStore.current.pocketMode
-                val pocket = service!!.pocket
-                val state = command.arg("state")?.lowercase()
-                if (state == "off" || (state != "on" && pocket.locked)) {
-                    pocket.unlock("asked")
-                } else if (!pocket.locked) {
-                    // The keyboard goes first: what is being locked is the app, and a
-                    // keyboard left open under the lock is a keyboard left in the pocket.
-                    host.dismissKeyboard()
-                    android.os.Handler(android.os.Looper.getMainLooper())
-                        .postDelayed({ pocket.lock(mode) }, 300)
-                }
-            }
+            "pocket_lock" -> pocketLock(command)
 
             "click", "long_click" -> {
                 val query = NodeQuery.from(command)
@@ -195,6 +186,32 @@ class Performer(private val host: PerformerHost) {
 
             else -> host.notice("“${spec.id}” is listed but not wired up yet")
         }
+    }
+
+    private fun pocketLock(command: Command) {
+        val mode = com.example.core.io.PocketMode.parse(command.arg("mode"))
+            ?: com.example.core.config.SettingsStore.current.pocketMode
+        val state = command.arg("state")?.lowercase()
+        if (state == "off" || (state != "on" && PocketLocks.locked)) {
+            PocketLocks.unlock("asked")
+            return
+        }
+        if (PocketLocks.locked) return
+        if (!PocketLocks.available(context)) {
+            // Two ways in, and each gives something the other does not; the user
+            // picks. Accessibility first because it does more.
+            host.notice(
+                "Pocket lock needs accessibility (does everything) or “display over other apps” " +
+                    "(no volume-key blocking without focus, no bringing the app back)",
+                actionLabel = "Accessibility"
+            ) { startSafely(IoAccessibilityService.settingsIntent()) }
+            return
+        }
+        // The keyboard goes first: what is being locked is the app, and a keyboard
+        // left open under the lock is a keyboard left in the pocket.
+        host.dismissKeyboard()
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ PocketLocks.lock(context, mode) }, 300)
     }
 
     // ------------------------------------------------------------------

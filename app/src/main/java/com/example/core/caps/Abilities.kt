@@ -27,6 +27,12 @@ sealed interface Need {
      * text that has to explain it.
      */
     data class SpecialAccess(val settingsAction: String, val where: String) : Need
+
+    /**
+     * Any one of several grants will do, each giving the ability in its own way.
+     * Listed in order of preference — the first gives the most.
+     */
+    data class AnyOf(val options: List<Need>) : Need
 }
 
 /** Whether this build can do a thing at all, and whether it is allowed to right now. */
@@ -171,9 +177,14 @@ object Abilities {
             without = "The power button still switches the screen off, and apps that keep " +
                 "talking with the screen off need nothing more. Those that stop cannot be " +
                 "kept going with touch locked.",
-            needs = Need.SpecialAccess(
-                AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
-                "Settings › Accessibility"
+            needs = Need.AnyOf(
+                listOf(
+                    Need.SpecialAccess(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS, "Settings › Accessibility"),
+                    Need.SpecialAccess(
+                        AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        "Settings › Apps › Special access › Display over other apps"
+                    )
+                )
             )
         ),
         Ability(
@@ -207,11 +218,21 @@ object Abilities {
                 if (ContextCompat.checkSelfPermission(context, need.name) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
                 ) Availability.ON else Availability.OFF
-            is Need.SpecialAccess ->
-                if (need.settingsAction == AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS &&
-                    com.example.io.IoAccessibilityService.isEnabled(context)
-                ) Availability.ON else Availability.OFF
+            else -> if (granted(context, need)) Availability.ON else Availability.OFF
         }
+    }
+
+    private fun granted(context: Context, need: Need): Boolean = when (need) {
+        is Need.Nothing -> true
+        is Need.Permission -> ContextCompat.checkSelfPermission(context, need.name) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        is Need.SpecialAccess -> when (need.settingsAction) {
+            AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS -> com.example.io.IoAccessibilityService.isEnabled(context)
+            AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION ->
+                android.os.Build.VERSION.SDK_INT < 23 || AndroidSettings.canDrawOverlays(context)
+            else -> false
+        }
+        is Need.AnyOf -> need.options.any { granted(context, it) }
     }
 
     fun isOn(context: Context, id: String): Boolean =
@@ -219,7 +240,11 @@ object Abilities {
 
     /** Where to send somebody who wants to grant this, or null when it is a dialog. */
     fun settingsIntent(context: Context, ability: Ability): Intent? {
-        val need = ability.needs as? Need.SpecialAccess ?: return null
+        val need = when (val n = ability.needs) {
+            is Need.SpecialAccess -> n
+            is Need.AnyOf -> n.options.filterIsInstance<Need.SpecialAccess>().firstOrNull()
+            else -> null
+        } ?: return null
         return Intent(need.settingsAction).apply {
             if (need.settingsAction == AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION ||
                 need.settingsAction == AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS

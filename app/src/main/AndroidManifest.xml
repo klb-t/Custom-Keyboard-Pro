@@ -6,6 +6,11 @@
     <!-- Only used when the user configures an AI or speech provider themselves. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      Optional, granted by the user on a settings screen: the pocket lock without the
+      accessibility service. Nothing else uses it.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!--
       Lets "open com.some.app" find apps to start. Since Android 11 an app sees only

@@ -112,12 +112,15 @@ class MotionGestures(
  * Covering and uncovering the proximity sensor — a hand wave over the top of the
  * phone. Most sensors report only near or far; the edge between them is the event.
  */
-class ProximityGesture(private val refractoryMs: Long = 600) {
+class ProximityGesture(private val refractoryMs: Long = 600, private val nearCm: Float = 3f) {
     private var near: Boolean? = null
     private var lastAt = -1L
 
+    /** The sensor's last answer: covered or not, whatever the refractory period hid. */
+    val covered: Boolean get() = near == true
+
     fun reading(distance: Float, maxRange: Float, atMs: Long): String? {
-        val isNear = distance < maxRange && distance < 3f
+        val isNear = distance < maxRange && distance < nearCm
         val was = near
         near = isNear
         if (was == null || was == isNear) return null

@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import com.example.core.io.NodeFacts
 import com.example.core.io.NodeQuery
 import com.example.core.io.Sweep
+import com.example.core.config.knob
 import com.example.util.AppLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,7 +77,16 @@ class IoAccessibilityService : AccessibilityService() {
 
     val pointer: PointerOverlay by lazy { PointerOverlay(this) }
 
-    val pocket: PocketLockOverlay by lazy { PocketLockOverlay(this) }
+    val pocket: PocketLockOverlay by lazy {
+        PocketLockOverlay(object : LockHost {
+            override val context: Context get() = this@IoAccessibilityService
+            override val windowType: Int = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            override val filtersKeys: Boolean = true
+            override fun wantKeys(on: Boolean) = this@IoAccessibilityService.wantKeys("pocket", on)
+            override val foregroundPackage: String? get() = this@IoAccessibilityService.foregroundPackage
+            override fun screenSize(): Pair<Int, Int> = this@IoAccessibilityService.screenSize()
+        })
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -85,7 +95,28 @@ class IoAccessibilityService : AccessibilityService() {
         com.example.core.config.SettingsStore.init(this)
         instance = this
         _running.value = true
+        com.example.engine.EngineRuntime.keyFilter = { on -> wantKeys("engine", on) }
+        com.example.engine.EngineRuntime.serviceConnected(this)
         AppLogger.d(TAG, "connected")
+    }
+
+    private val keyOwners = mutableSetOf<String>()
+
+    /**
+     * Hardware keys come to the service only while someone here wants them — the
+     * pocket lock, or a wire on a volume key with the keyboard closed. The rest of the
+     * time they are none of its business, and asking for them anyway would put every
+     * key press on the phone through it.
+     */
+    fun wantKeys(owner: String, on: Boolean) {
+        val before = keyOwners.isNotEmpty()
+        if (on) keyOwners += owner else keyOwners -= owner
+        val after = keyOwners.isNotEmpty()
+        if (before == after) return
+        val info = serviceInfo ?: return
+        info.flags = if (after) info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        else info.flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+        runCatching { serviceInfo = info }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -104,6 +135,9 @@ class IoAccessibilityService : AccessibilityService() {
         runCatching { pointer.hide() }
         // A lock that outlived its service would have no way out. It goes first.
         runCatching { pocket.unlock("service stopped") }
+        com.example.engine.EngineRuntime.keyFilter = null
+        com.example.engine.EngineRuntime.serviceDisconnected()
+        keyOwners.clear()
         AppLogger.d(TAG, "disconnected")
     }
 
@@ -116,13 +150,15 @@ class IoAccessibilityService : AccessibilityService() {
         if (pkg != packageName && pkg != "com.android.systemui") {
             foregroundPackage = pkg
             pocket.onForeground(pkg)
+            com.example.engine.EngineRuntime.appInFront(pkg)
         }
     }
 
-    /** Only asked for while the pocket lock is up; see [PocketLockOverlay]. */
+    /** Only asked for while someone wants keys; see [wantKeys]. The lock comes first. */
     override fun onKeyEvent(event: android.view.KeyEvent?): Boolean {
         val e = event ?: return false
-        return runCatching { pocket.onKey(e) }.getOrDefault(false)
+        if (pocket.locked) return runCatching { pocket.onKey(e) }.getOrDefault(false)
+        return runCatching { com.example.engine.EngineRuntime.onVolumeKey(e) }.getOrDefault(false)
     }
 
     override fun onInterrupt() = Unit
@@ -241,7 +277,8 @@ class IoAccessibilityService : AccessibilityService() {
         }
         val r = Rect().also { target.getBoundsInScreen(it) }
         if (r.isEmpty) return false
-        return if (long) press(r.exactCenterX(), r.exactCenterY(), 650) else press(r.exactCenterX(), r.exactCenterY(), 60)
+        val hold = com.example.core.config.SettingsStore.current.knob(com.example.core.config.Knobs.POINTER_LONG_MS).toLong()
+        return if (long) press(r.exactCenterX(), r.exactCenterY(), hold) else press(r.exactCenterX(), r.exactCenterY(), 60)
     }
 
     /** The biggest scrollable thing on screen: the feed, the page, the list. */
@@ -357,7 +394,10 @@ class IoAccessibilityService : AccessibilityService() {
                 main.postDelayed({ done(count) }, 150)
                 return
             }
-            main.postDelayed({ runPage() }, 700)
+            main.postDelayed(
+                { runPage() },
+                com.example.core.config.SettingsStore.current.knob(com.example.core.config.Knobs.SWEEP_PAGE_MS).toLong()
+            )
         }
 
         runPage()

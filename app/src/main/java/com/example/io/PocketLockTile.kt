@@ -8,7 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.example.core.config.Knobs
 import com.example.core.config.SettingsStore
+import com.example.core.config.knobLong
 
 /**
  * The pocket lock from the quick settings shade — the way to start it with no
@@ -30,27 +32,29 @@ class PocketLockTile : TileService() {
     override fun onClick() {
         super.onClick()
         SettingsStore.init(this)
-        val service = IoAccessibilityService.instance
-        if (service == null) {
-            openAccessibilitySettings()
-            return
-        }
-        if (service.pocket.locked) {
-            service.pocket.unlock("tile")
+        if (PocketLocks.locked) {
+            PocketLocks.unlock("tile")
             refresh()
             return
         }
-        if (Build.VERSION.SDK_INT >= 31) {
+        if (!PocketLocks.available(this)) {
+            openAccessibilitySettings()
+            return
+        }
+        val service = IoAccessibilityService.instance
+        if (service != null && Build.VERSION.SDK_INT >= 31) {
             service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
-        } else {
+        } else if (Build.VERSION.SDK_INT < 31) {
             @Suppress("DEPRECATION")
             sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
         }
         // After the shade has gone, so the lock is over the app and not over the shade.
+        // (Without accessibility on Android 12+, the shade cannot be closed for you;
+        // the lock goes up over it and the shade closes on its own once you lock.)
         main.postDelayed({
-            IoAccessibilityService.instance?.pocket?.lock(SettingsStore.current.pocketMode)
+            PocketLocks.lock(applicationContext, SettingsStore.current.pocketMode)
             refresh()
-        }, 450)
+        }, SettingsStore.current.knobLong(Knobs.POCKET_SHADE_DELAY_MS))
     }
 
     private fun openAccessibilitySettings() {
@@ -67,14 +71,9 @@ class PocketLockTile : TileService() {
 
     private fun refresh() {
         val tile = qsTile ?: return
-        val service = IoAccessibilityService.instance
-        tile.state = when {
-            service == null -> Tile.STATE_INACTIVE
-            service.pocket.locked -> Tile.STATE_ACTIVE
-            else -> Tile.STATE_INACTIVE
-        }
+        tile.state = if (PocketLocks.locked) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         if (Build.VERSION.SDK_INT >= 29) {
-            tile.subtitle = if (service == null) "Needs accessibility" else null
+            tile.subtitle = if (PocketLocks.available(this)) null else "Needs a permission"
         }
         tile.updateTile()
     }

@@ -148,6 +148,9 @@ object SettingsStore {
         put("pocketIgnoreWhenCovered", s.pocketIgnoreWhenCovered)
         put("pocketKeepAwake", s.pocketKeepAwake)
         put("pocketRestoreApp", s.pocketRestoreApp)
+        put("pocketUnlockPhrase", s.pocketUnlockPhrase)
+        put("pocketLockPhrase", s.pocketLockPhrase)
+        put("pocketLockPhraseApps", JSONArray(s.pocketLockPhraseApps))
 
         put("insetsMode", s.insetsMode.name)
         put("avoidCoveringCursor", s.avoidCoveringCursor)
@@ -279,6 +282,10 @@ object SettingsStore {
         put("generatedPanelsJson", s.generatedPanelsJson)
         put("customProvidersJson", s.customProvidersJson)
         put("discoveredModelsJson", s.discoveredModelsJson)
+
+        // Every knob, at its current value — so each one is a setting like any other,
+        // shown, searched and restored by the same machinery.
+        Knobs.ALL.forEach { k -> put(k.key, s.knob(k)) }
     }
 
     internal fun fromJson(o: JSONObject): Settings {
@@ -329,6 +336,11 @@ object SettingsStore {
             pocketIgnoreWhenCovered = o.optBoolean("pocketIgnoreWhenCovered", d.pocketIgnoreWhenCovered),
             pocketKeepAwake = o.optBoolean("pocketKeepAwake", d.pocketKeepAwake),
             pocketRestoreApp = o.optBoolean("pocketRestoreApp", d.pocketRestoreApp),
+            pocketUnlockPhrase = o.optString("pocketUnlockPhrase", d.pocketUnlockPhrase),
+            pocketLockPhrase = o.optString("pocketLockPhrase", d.pocketLockPhrase),
+            pocketLockPhraseApps = o.optJSONArray("pocketLockPhraseApps")?.let { arr ->
+                (0 until arr.length()).map { arr.optString(it).trim() }.filter { it.isNotEmpty() }
+            } ?: d.pocketLockPhraseApps,
 
             insetsMode = enumOf(o.optString("insetsMode", d.insetsMode.name), d.insetsMode),
             avoidCoveringCursor = o.optBoolean("avoidCoveringCursor", d.avoidCoveringCursor),
@@ -463,7 +475,13 @@ object SettingsStore {
             customThemesJson = o.optString("customThemesJson", d.customThemesJson),
             generatedPanelsJson = o.optString("generatedPanelsJson", d.generatedPanelsJson),
             customProvidersJson = o.optString("customProvidersJson", d.customProvidersJson),
-            discoveredModelsJson = o.optString("discoveredModelsJson", d.discoveredModelsJson)
+            discoveredModelsJson = o.optString("discoveredModelsJson", d.discoveredModelsJson),
+            // Only what differs from the designed default is kept, so a later build
+            // that improves a default still reaches everyone who never touched it.
+            knobs = Knobs.ALL.mapNotNull { k ->
+                val v = o.optDouble(k.key)
+                if (v.isNaN() || v == k.default) null else k.id to v.coerceIn(k.min, k.max)
+            }.toMap()
         )
     }
 }

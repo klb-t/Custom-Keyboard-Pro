@@ -28,8 +28,7 @@ data class VerbSpec(
     val needsAccessibility: Boolean
         get() = ability == Abilities.ACT_IN_OTHER_APPS ||
             ability == Abilities.READ_OTHER_APPS ||
-            ability == Abilities.POINTER ||
-            ability == Abilities.POCKET_LOCK
+            ability == Abilities.POINTER
 }
 
 /**
@@ -249,7 +248,8 @@ object Verbs {
                 Param("mode", "touch (screen stays) or screen (goes black).", "screen")
             ),
             ability = Abilities.POCKET_LOCK, group = GROUP_SYSTEM,
-            without = "Says it needs accessibility and offers to switch it on."
+            without = "Works with either accessibility or \"display over other apps\"; with " +
+                "neither, says so and offers the screen that grants it."
         ),
         VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",

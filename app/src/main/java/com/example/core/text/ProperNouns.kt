@@ -45,11 +45,11 @@ class ProperNouns(
     }
 
     /** The form to write [word] in, or null when it is not a proper noun here. */
-    fun formFor(word: String): String? {
+    fun formFor(word: String, minCapitals: Int = MIN_CAPITALS, ratio: Double = 2.0): String? {
         val key = word.lowercase()
         declared[key]?.let { return it }
         val e = counts[key] ?: return null
-        if (e.capital >= MIN_CAPITALS && e.capital > e.lower * 2 && e.form.isNotEmpty()) return e.form
+        if (e.capital >= minCapitals && e.capital > e.lower * ratio && e.form.isNotEmpty()) return e.form
         return null
     }
 

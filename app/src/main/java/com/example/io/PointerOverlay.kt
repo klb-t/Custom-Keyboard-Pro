@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import com.example.core.config.knob
 
 /**
  * A mouse pointer drawn over everything, moved from the keyboard's trackpad.
@@ -84,7 +85,10 @@ class PointerOverlay(private val service: IoAccessibilityService) {
 
     fun click(): Boolean = visible && service.press(x, y, 60)
 
-    fun longClick(): Boolean = visible && service.press(x, y, 650)
+    fun longClick(): Boolean = visible && service.press(
+        x, y,
+        com.example.core.config.SettingsStore.current.knob(com.example.core.config.Knobs.POINTER_LONG_MS).toLong()
+    )
 
     /** A two-finger drag on the trackpad: the page under the pointer moves by [dy]. */
     fun scrollBy(dx: Float, dy: Float): Boolean {

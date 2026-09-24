@@ -3,6 +3,7 @@ package com.example.ui.kb
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
+import com.example.core.config.knob
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -50,7 +51,9 @@ class NoticeBoard {
         val notice = Notice(++next, text, actionLabel, action)
         _current.value = notice
         // Longer when there is something to tap: reading and then reaching takes time.
-        val ms = if (action != null && actionLabel != null) 7000L else 3500L
+        val base = com.example.core.config.SettingsStore.current
+            .knob(com.example.core.config.Knobs.NOTICE_MS).toLong()
+        val ms = if (action != null && actionLabel != null) base * 2 else base
         handler.postDelayed({ if (_current.value?.id == notice.id) _current.value = null }, ms)
     }
 

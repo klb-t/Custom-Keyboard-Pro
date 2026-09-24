@@ -94,7 +94,7 @@ class AbilitiesTest {
         Abilities.ALL.forEach { ability ->
             val intent = Abilities.settingsIntent(context, ability)
             when (ability.needs) {
-                is Need.SpecialAccess -> assertNotNull(
+                is Need.SpecialAccess, is Need.AnyOf -> assertNotNull(
                     "'${ability.id}' needs a settings screen and names none", intent
                 )
                 else -> assertNull(

@@ -138,6 +138,26 @@ data class Settings(
     val pocketKeepAwake: Boolean = true,
     /** Bring the locked app back if something else reaches the front. */
     val pocketRestoreApp: Boolean = true,
+    /**
+     * A spoken phrase that unlocks, heard only while locked. Blank: none. A shorthand
+     * for an engine wire — {"on": "voice", "phrase": …, "do": "do:pocket_lock off",
+     * "when": "locked"} — and it bypasses the "covered" guard, since speaking is how
+     * you unlock without taking the phone out.
+     */
+    val pocketUnlockPhrase: String = "",
+    /**
+     * A spoken phrase that locks. Blank: none. It means listening whenever the lock is
+     * not up — the microphone indicator stays on and it costs battery — so it is
+     * limited to the apps listed in [pocketLockPhraseApps] unless that is empty.
+     */
+    val pocketLockPhrase: String = "",
+    val pocketLockPhraseApps: List<String> = emptyList(),
+
+    /**
+     * Every number that would otherwise be hardcoded — thresholds, delays, gains —
+     * by [Knobs] id, holding only what the user changed. Read with [knob].
+     */
+    val knobs: Map<String, Double> = emptyMap(),
 
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
