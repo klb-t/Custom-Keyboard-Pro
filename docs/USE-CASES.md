@@ -51,6 +51,10 @@ API for it.
 | "a mouse for a remote desktop" | pointer overlay + trackpad panel; without access, the trackpad moves the text cursor |
 | "the AI should know what post I am answering" | `read_screen to=ai`: screen text as context, never as the input |
 | "media, volume, torch, open an app" | the same verbs; they need no permission at all |
+| "I tap the arrow back to a typo and miss by a few" | cursor magnet: a lone unknown word near where the presses stop; four strengths |
+| "the long-press delay should adapt to me" | a tuner kept clear of plain taps, nudged by deleted alternates and retried presses |
+| "capitals at names and surnames" | `proper_noun`: a situation learned from what the user capitalises mid-sentence |
+| "shake / flip / tilt / volume keys should do things" | the engine's inputs: wires from any input to anything a key can do |
 
 ## The outputs engine, first half
 
@@ -67,9 +71,15 @@ answers without it: Back becomes the Back key, scrolling becomes Page Down, the
 trackpad moves the text cursor, and the rest say what they need and offer the screen
 that grants it.
 
-The second half — **inputs** other than keys (sensors, floating controls, timers,
-network messages) wired to these verbs — is the Engine, and it plugs into the same
-catalogue rather than a new one.
+The second half is **inputs** (`core/engine/Wires.kt`): shake, face down/up, four
+tilts, a hand over the proximity sensor, the side keys, the keyboard opening and
+closing. A wire says `{"on": input, "do": action, "in": [apps]}`, and the action is
+anything a key can do — so every input reaches every output, including the ones not
+written yet. Sensors nobody wired are never switched on.
+
+Still to come on the same wires: floating controls (sliders, knobs, pads), timers,
+network ports and known services, and listening with the keyboard closed (through
+the accessibility service).
 
 ## Not absorbable, and why
 
@@ -89,8 +99,9 @@ refuse capture. Most do.
 
 ## Open
 
-- The Engine's inputs: sensors, floating controls and potentiometers, timers, network
-  ports and known services — each an input bound to a verb line
+- More inputs on the same wires: floating controls and potentiometers, timers,
+  network ports and known services, gyroscope and light, inputs while the keyboard
+  is closed
 - Reading text drawn as pictures on screen (the service already may take screenshots)
 - A pointer speed and acceleration setting; long-press on the pad itself
 
