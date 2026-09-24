@@ -158,6 +158,10 @@ object SettingsStore {
 
         put("autoCapitalize", s.autoCapitalize)
         put("capitalisationRulesJson", s.capitalisationRulesJson)
+        put("cursorMagnet", s.cursorMagnet.name)
+        put("cursorMagnetReach", s.cursorMagnetReach)
+        put("cursorMagnetPauseMs", s.cursorMagnetPauseMs)
+        put("cursorMagnetStride", s.cursorMagnetStride)
         put("providerProfilesJson", s.providerProfilesJson)
         put("wordListSourcesJson", s.wordListSourcesJson)
         put("doubleSpacePeriod", s.doubleSpacePeriod)
@@ -324,6 +328,10 @@ object SettingsStore {
 
             autoCapitalize = o.optBoolean("autoCapitalize", d.autoCapitalize),
             capitalisationRulesJson = o.optString("capitalisationRulesJson", d.capitalisationRulesJson),
+            cursorMagnet = enumOf(o.optString("cursorMagnet", d.cursorMagnet.name), d.cursorMagnet),
+            cursorMagnetReach = o.optInt("cursorMagnetReach", d.cursorMagnetReach),
+            cursorMagnetPauseMs = o.optLong("cursorMagnetPauseMs", d.cursorMagnetPauseMs),
+            cursorMagnetStride = o.optInt("cursorMagnetStride", d.cursorMagnetStride),
             providerProfilesJson = o.optString("providerProfilesJson", d.providerProfilesJson),
             wordListSourcesJson = o.optString("wordListSourcesJson", d.wordListSourcesJson),
             doubleSpacePeriod = o.optBoolean("doubleSpacePeriod", d.doubleSpacePeriod),

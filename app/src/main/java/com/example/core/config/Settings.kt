@@ -190,6 +190,24 @@ data class Settings(
     val capitalisationRulesJson: String = "",
 
     /**
+     * How hard the arrow keys are pulled towards a word the dictionary does not know.
+     *
+     * The case: a typo noticed after the word is finished, the left arrow tapped to get
+     * back to it, a few presses off. With exactly one unknown word near where the
+     * presses stopped, heading towards it, that word is where they were going — and
+     * its nearest real word says where in it the slip is. OFF, OFFER (a tap in the
+     * strip), ON_PAUSE (finishes the trip when the presses stop) or STRIDE (the first
+     * press goes straight there). Default: ON_PAUSE, the gentlest one that saves taps.
+     */
+    val cursorMagnet: com.example.core.text.CursorMagnet.Pull = com.example.core.text.CursorMagnet.Pull.ON_PAUSE,
+    /** How close, in characters, the presses must stop for the pull to apply. */
+    val cursorMagnetReach: Int = 3,
+    /** How long the presses must stop before ON_PAUSE and OFFER act. */
+    val cursorMagnetPauseMs: Long = 380L,
+    /** How far STRIDE will jump in one press. */
+    val cursorMagnetStride: Int = 40,
+
+    /**
      * Per-provider setup: key, base URL, model and parameters, keyed by provider id.
      *
      * A key belongs to a provider, not to the app and not to a feature. Keeping one

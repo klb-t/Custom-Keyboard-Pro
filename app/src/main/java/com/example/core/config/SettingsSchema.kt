@@ -398,6 +398,23 @@ object SettingsSchema {
                 "that says nothing is a veto. Blank uses the built-in set; an empty " +
                 "list means no rules at all."
         ),
+        "cursorMagnet" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_TYPING, label = "Arrows find the typo",
+            help = "Tapping the arrows back towards a word the dictionary does not know: " +
+                "OFFER shows the jump in the strip, ON_PAUSE finishes the trip when you stop " +
+                "near it, STRIDE goes straight there on the first press.",
+            options = com.example.core.text.CursorMagnet.Pull.entries.map { it.name }
+        ),
+        "cursorMagnetReach" to Meta(
+            group = GROUP_TYPING, label = "…when you stop this close (characters)", min = 1f, max = 12f
+        ),
+        "cursorMagnetPauseMs" to Meta(
+            group = GROUP_TYPING, label = "…after a pause of", min = 120f, max = 2000f, expert = true
+        ),
+        "cursorMagnetStride" to Meta(
+            group = GROUP_TYPING, label = "…and STRIDE jumps at most (characters)", min = 5f, max = 400f,
+            expert = true
+        ),
         "doubleSpacePeriod" to Meta(group = GROUP_TYPING, label = "Double space inserts a full stop"),
         "autoSpaceAfterPunctuation" to Meta(group = GROUP_TYPING, label = "Space after punctuation"),
         "smartQuotes" to Meta(group = GROUP_TYPING, label = "Curly quotes"),

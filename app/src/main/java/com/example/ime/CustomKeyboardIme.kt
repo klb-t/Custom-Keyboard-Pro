@@ -34,6 +34,7 @@ import com.example.core.asr.VoiceController
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.convert.PasteConversion
+import com.example.core.data.BundledDictionary
 import com.example.core.data.ClipboardEntity
 import com.example.core.data.KeyboardRepository
 import com.example.core.data.WordLists
@@ -45,6 +46,7 @@ import com.example.core.layout.KeyAction
 import com.example.core.text.CapitalHow
 import com.example.core.text.CapitalMoment
 import com.example.core.text.Capitalisation
+import com.example.core.text.CursorMagnet
 import com.example.core.layout.KeyDef
 import com.example.core.layout.KeyCodes
 import com.example.core.layout.LayoutDef
@@ -66,6 +68,8 @@ import com.example.ui.kb.KeyboardRoot
 import com.example.ui.kb.LocalKeyboardHost
 import com.example.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -852,6 +856,100 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override val notices = com.example.ui.kb.NoticeBoard()
 
+    // -----------------------------------------------------------------------
+    // Arrows that find the typo — see CursorMagnet for what is decided and why
+    // -----------------------------------------------------------------------
+
+    /** One run of arrow presses in one direction: where it began, and what is near. */
+    private class ArrowRun(val start: Int, val direction: Int) {
+        var pulled = false
+        var presses = 0
+        var suspects: kotlinx.coroutines.Deferred<List<CursorMagnet.Suspect>>? = null
+    }
+
+    private var arrowRun: ArrowRun? = null
+
+    private fun arrowStarting(direction: Int, settings: Settings) {
+        if (settings.cursorMagnet == CursorMagnet.Pull.OFF || editor.isSensitive) {
+            arrowRun = null
+            return
+        }
+        val cursor = editor.selectionEnd
+        if (cursor < 0 || editor.selectionStart != cursor) {
+            arrowRun = null
+            return
+        }
+        if (arrowRun?.direction == direction) return
+        val before = editor.textBefore(MAGNET_BEFORE).toString()
+        val after = editor.textAfter(MAGNET_AFTER).toString()
+        val run = ArrowRun(cursor, direction)
+        val origin = cursor - before.length
+        val locale = layout.locale
+        run.suspects = serviceScope.async { suspectsIn(before + after, origin, locale) }
+        arrowRun = run
+    }
+
+    private fun arrowPressed(settings: Settings) {
+        val run = arrowRun ?: return
+        if (run.pulled) return
+        val press = ++run.presses
+        val pull = settings.cursorMagnet
+        serviceScope.launch {
+            val suspects = runCatching { run.suspects?.await() }.getOrNull().orEmpty()
+            if (suspects.isEmpty() || run.pulled || arrowRun !== run) return@launch
+            if (pull == CursorMagnet.Pull.STRIDE) {
+                if (press != 1) return@launch
+                CursorMagnet.stride(suspects, run.start, run.direction, settings.cursorMagnetStride)
+                    ?.let { pullTo(run, it) }
+                return@launch
+            }
+            delay(settings.cursorMagnetPauseMs)
+            // A newer press means the trip is not over; the newest press decides.
+            if (run.presses != press || run.pulled || arrowRun !== run) return@launch
+            val cursor = editor.selectionEnd
+            if (cursor < 0 || editor.selectionStart != cursor) return@launch
+            val target = CursorMagnet.aim(
+                suspects, run.start, cursor, run.direction, settings.cursorMagnetReach
+            ) ?: return@launch
+            if (pull == CursorMagnet.Pull.ON_PAUSE) {
+                pullTo(run, target)
+            } else {
+                val word = suspects.firstOrNull { target in it.start..it.end }?.word ?: return@launch
+                notices.post("“$word” — is this the typo?", "Go there") { pullTo(run, target) }
+            }
+        }
+    }
+
+    private fun pullTo(run: ArrowRun, target: Int) {
+        if (arrowRun !== run) return
+        // Once per run: a user who moves on from where they were pulled has said
+        // where they actually want to be, and must not be pulled back.
+        run.pulled = true
+        editor.placeCursor(target)
+    }
+
+    /** Words near the cursor the dictionaries do not know, in field positions. */
+    private suspend fun suspectsIn(text: String, origin: Int, locale: String?): List<CursorMagnet.Suspect> =
+        withContext(Dispatchers.IO) {
+            val ctx = this@CustomKeyboardIme
+            // With no list for the language, every word is "unknown", which means
+            // nothing — and pulling towards nothing is the one failure to avoid.
+            if (!BundledDictionary.covers(ctx, locale)) return@withContext emptyList()
+            CursorMagnet.words(text)
+                .filter { CursorMagnet.worthChecking(it, text) }
+                .mapNotNull { span ->
+                    val lower = span.word.lowercase()
+                    val known = BundledDictionary.knows(ctx, locale, lower) ||
+                        runCatching { repository.knows(lower) || repository.knows(span.word) }.getOrDefault(true)
+                    if (known) return@mapNotNull null
+                    val fix = runCatching {
+                        Correction.suggest(ctx, repository, lower, locale.orEmpty())
+                    }.getOrNull()
+                    val s = CursorMagnet.suspect(span, fix)
+                    s.copy(start = s.start + origin, end = s.end + origin, landing = s.landing + origin)
+                }
+        }
+
     /**
      * What was on screen when the user last asked for it to go to the AI, and when.
      * Context for the next task — "reply to this" — never its input, and forgotten
@@ -973,6 +1071,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun perform(action: KeyAction) {
         val settings = SettingsStore.current
+        // Anything but an arrow ends a run of arrow presses: the magnet only ever
+        // finishes a trip the user is visibly in the middle of.
+        if (action !is KeyAction.MoveCursor) arrowRun = null
         when (action) {
             is KeyAction.None -> Unit
 
@@ -1026,7 +1127,18 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 // extending rather than stopping after the first — which is what
                 // holding shift does on a keyboard with a shift to hold.
                 val extend = action.extendSelection || state.isActive(ModifierKind.SHIFT)
+                val horizontal = action.direction == com.example.core.layout.CursorDirection.LEFT ||
+                    action.direction == com.example.core.layout.CursorDirection.RIGHT
+                val magnetic = !extend && horizontal &&
+                    action.unit == com.example.core.layout.TextUnit.CHARACTER
+                // Read before the move: once setSelection is sent, the editor answers
+                // questions about the text around where the cursor is going.
+                if (magnetic) arrowStarting(
+                    if (action.direction == com.example.core.layout.CursorDirection.LEFT) -1 else 1,
+                    settings
+                ) else arrowRun = null
                 editor.moveCursor(action.direction, action.unit, extend)
+                if (magnetic) arrowPressed(settings)
                 state.consumeOneShotLayer()
             }
 
@@ -1644,3 +1756,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         )
     }
 }
+
+/** How much text around the cursor the arrows' pull looks at for a typo. */
+private const val MAGNET_BEFORE = 300
+private const val MAGNET_AFTER = 120

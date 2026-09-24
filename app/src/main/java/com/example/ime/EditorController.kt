@@ -455,6 +455,21 @@ class EditorController(
         }
     }
 
+    /**
+     * Puts the cursor at [position], collapsing any selection — for the few callers
+     * that already know exactly where it should go, such as the arrows' pull towards
+     * a typo. Recorded as expected, so the update it causes is not read as the user
+     * moving the cursor themselves.
+     */
+    fun placeCursor(position: Int) {
+        val ic = connection() ?: return
+        val target = position.coerceAtLeast(0)
+        anchor = -1
+        caret = -1
+        expected = target to target
+        ic.setSelection(target, target)
+    }
+
     fun selectAll() {
         connection()?.performContextMenuAction(android.R.id.selectAll)
     }

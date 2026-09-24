@@ -141,6 +141,12 @@ object BundledDictionary {
         return out
     }
 
+    /**
+     * Whether there is a list for this language at all. Asked before treating "not in
+     * the list" as meaning anything: with no list, every word is not in it.
+     */
+    fun covers(context: Context, locale: String?): Boolean = resolve(context, locale) != null
+
     /** "pl-PL", "pl_PL" and "pl" alike become "pl". Null when there is nothing to use. */
     private fun resolve(context: Context, locale: String?): String? {
         val tag = locale?.trim()?.lowercase()?.take(2)?.takeIf { it.length == 2 } ?: return null
