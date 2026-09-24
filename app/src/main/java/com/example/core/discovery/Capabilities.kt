@@ -251,7 +251,18 @@ data class CapabilitySpec(
     val modelsPath: String = "",
     /** Models this capability is known to serve, when the provider publishes no list. */
     val models: List<String> = emptyList(),
-    val notes: String = ""
+    val notes: String = "",
+    /**
+     * Values for the call's placeholders when the user has not set them — the voice
+     * a speech endpoint reads with, say. Without these a template either hardcodes the
+     * value (and nobody can change it) or sends an empty one (and the call fails).
+     */
+    val defaults: Map<String, String> = emptyMap(),
+    /**
+     * Known values for a placeholder, when the provider publishes a fixed set: voices,
+     * sizes, styles. Offered as a list in the settings; anything else is still accepted.
+     */
+    val choices: Map<String, List<String>> = emptyMap()
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         if (wire.isNotBlank()) put("wire", wire)
@@ -260,6 +271,8 @@ data class CapabilitySpec(
         if (modelsPath.isNotBlank()) put("modelsPath", modelsPath)
         if (models.isNotEmpty()) put("models", JSONArray(models))
         if (notes.isNotBlank()) put("notes", notes)
+        if (defaults.isNotEmpty()) put("defaults", JSONObject(defaults.toMap()))
+        if (choices.isNotEmpty()) put("choices", JSONObject().apply { choices.forEach { (k, v) -> put(k, JSONArray(v)) } })
     }
 
     companion object {
@@ -269,7 +282,11 @@ data class CapabilitySpec(
             defaultModel = o.optString("defaultModel"),
             modelsPath = o.optString("modelsPath"),
             models = o.optJSONArray("models").toStringList(),
-            notes = o.optString("notes")
+            notes = o.optString("notes"),
+            defaults = o.optJSONObject("defaults").toStringMap(),
+            choices = o.optJSONObject("choices")?.let { c ->
+                buildMap { c.keys().forEach { k -> put(k, c.optJSONArray(k).toStringList()) } }
+            } ?: emptyMap()
         )
     }
 }

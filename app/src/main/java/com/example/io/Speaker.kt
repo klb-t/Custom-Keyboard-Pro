@@ -54,6 +54,13 @@ object Speaker {
     private var afterwards: (() -> Unit)? = null
     private var generation = 0
 
+    private val scope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+    )
+
+    /** A provider's voice, while one is reading; null means the phone's own engine. */
+    private var cloud: CloudVoice? = null
+
     /** Where the word being spoken is in the field, when the text came from it. */
     var onWord: ((start: Int, end: Int) -> Unit)? = null
 
@@ -169,6 +176,10 @@ object Speaker {
      */
     fun speak(ctx: Context, what: String, origin: Int? = null, then: (() -> Unit)? = null) {
         if (what.isBlank()) return
+        CloudVoice.providerFor(SettingsStore.current)?.let { (provider, key) ->
+            speakWithProvider(ctx, what, then, CloudVoice(ctx.applicationContext, scope, provider, key, SettingsStore.current))
+            return
+        }
         ensure(ctx) {
             val t = tts ?: return@ensure
             configure(t)
@@ -181,6 +192,52 @@ object Speaker {
             afterwards = then
             speakFrom(t, 0, 0)
         }
+    }
+
+    /**
+     * The same text through a provider's voice. If the provider fails part-way, the
+     * phone's own voice carries on from the piece that failed — a reading that stops
+     * dead because a network dropped is worse than one that changes voice.
+     */
+    private fun speakWithProvider(ctx: Context, what: String, then: (() -> Unit)?, voice: CloudVoice) {
+        stopEverything()
+        context = ctx.applicationContext
+        generation++
+        text = what
+        chunks = SpeechText.chunks(what, SettingsStore.current.knobInt(Knobs.READ_CHUNK_CHARS))
+        chunkIndex = 0
+        offset = 0
+        fieldOrigin = null
+        afterwards = then
+        cloud = voice
+        setPhase(Phase.SPEAKING, what.take(60))
+        voice.play(
+            chunks.map { it.text }, 0,
+            onPiece = { i ->
+                chunkIndex = i
+                offset = chunks.getOrNull(i)?.start ?: 0
+            },
+            onDone = {
+                cloud = null
+                finish()
+            },
+            onError = { e, i ->
+                cloud = null
+                AppLogger.e(TAG, "provider voice failed", e)
+                tell?.invoke("The provider's voice failed (${e.message ?: "no reason"}) — the phone's voice carries on")
+                ensure(ctx) {
+                    val t = tts ?: return@ensure
+                    configure(t)
+                    speakFrom(t, i, chunks.getOrNull(i)?.start ?: 0)
+                }
+            }
+        )
+    }
+
+    private fun stopEverything() {
+        cloud?.stop()
+        cloud = null
+        tts?.stop()
     }
 
     /** A few words said at once, dropping anything queued — for echoing what is typed. */
@@ -219,12 +276,18 @@ object Speaker {
     fun stop() {
         generation++
         afterwards = null
-        tts?.stop()
+        stopEverything()
         setPhase(Phase.IDLE)
     }
 
     fun pause() {
         if (_status.value.phase != Phase.SPEAKING) return
+        cloud?.let {
+            // A player can really pause; only the phone's engine needs the workaround.
+            it.pause()
+            setPhase(Phase.PAUSED)
+            return
+        }
         generation++
         tts?.stop()
         setPhase(Phase.PAUSED)
@@ -232,6 +295,11 @@ object Speaker {
 
     fun resume(ctx: Context) {
         if (_status.value.phase != Phase.PAUSED) return
+        cloud?.let {
+            it.resume()
+            setPhase(Phase.SPEAKING)
+            return
+        }
         ensure(ctx) {
             val t = tts ?: return@ensure
             configure(t)

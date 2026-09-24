@@ -47,11 +47,34 @@
           "body": {
             "model": "{{model}}",
             "input": "{{prompt}}",
-            "voice": "alloy"
+            "voice": "{{voice}}"
           },
           "resultPath": ""
         },
-        "defaultModel": "gpt-4o-mini-tts"
+        "defaultModel": "gpt-4o-mini-tts",
+        "defaults": {
+          "voice": "alloy"
+        },
+        "choices": {
+          "voice": [
+            "alloy",
+            "ash",
+            "ballad",
+            "coral",
+            "echo",
+            "fable",
+            "nova",
+            "onyx",
+            "sage",
+            "shimmer",
+            "verse"
+          ]
+        },
+        "models": [
+          "gpt-4o-mini-tts",
+          "tts-1",
+          "tts-1-hd"
+        ]
       },
       "embed": {
         "call": {
@@ -870,7 +893,7 @@
       },
       "speech": {
         "call": {
-          "path": "/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+          "path": "/text-to-speech/{{voice}}",
           "auth": "header",
           "authName": "xi-api-key",
           "body": {
@@ -879,7 +902,16 @@
           },
           "resultPath": ""
         },
-        "defaultModel": "eleven_multilingual_v2"
+        "defaultModel": "eleven_multilingual_v2",
+        "defaults": {
+          "voice": "21m00Tcm4TlvDq8ikWAM"
+        },
+        "notes": "The voice is a voice id from your ElevenLabs voice library.",
+        "models": [
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2_5"
+        ]
       }
     },
     "freeTier": true,

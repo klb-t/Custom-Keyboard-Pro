@@ -360,4 +360,25 @@ class ProviderCatalogTest {
         assertNotNull(p.capability(AiCapability.CHAT))
         assertEquals(listOf(AiCapability.CHAT), p.abilities)
     }
+
+    @Test
+    fun `a speaking provider takes its voice as a setting, with a default`() {
+        val speakers = bundled.filter { it.can(AiCapability.SPEECH) && it.capability(AiCapability.SPEECH)?.call != null }
+        assertTrue("nothing in the catalogue can read aloud", speakers.isNotEmpty())
+        speakers.forEach { p ->
+            val cap = p.capability(AiCapability.SPEECH)!!
+            val call = cap.call!!
+            val usesVoice = "{{voice}}" in call.bodyTemplate || "{{voice}}" in call.path
+            assertTrue("${p.id} hardcodes its voice instead of asking for one", usesVoice)
+            assertFalse("${p.id} has no default voice, so an unset one would send nothing", cap.defaults["voice"].isNullOrBlank())
+        }
+    }
+
+    @Test
+    fun `defaults and choices survive the round trip`() {
+        val cap = CapabilitySpec(defaults = mapOf("voice" to "alloy"), choices = mapOf("voice" to listOf("alloy", "nova")))
+        val back = CapabilitySpec.fromJson(cap.toJson())
+        assertEquals(cap.defaults, back.defaults)
+        assertEquals(cap.choices, back.choices)
+    }
 }

@@ -161,6 +161,9 @@ object SettingsStore {
         put("ttsUsage", s.ttsUsage)
         put("ttsEcho", s.ttsEcho.name)
         put("ttsFollowAlong", s.ttsFollowAlong)
+        put("ttsProvider", s.ttsProvider)
+        put("ttsModel", s.ttsModel)
+        put("ttsCloudVoice", s.ttsCloudVoice)
         put("pocketUnlockPhrase", s.pocketUnlockPhrase)
         put("pocketLockPhrase", s.pocketLockPhrase)
         put("pocketLockPhraseApps", JSONArray(s.pocketLockPhraseApps))
@@ -362,6 +365,9 @@ object SettingsStore {
             ttsUsage = o.optString("ttsUsage", d.ttsUsage),
             ttsEcho = enumOf(o.optString("ttsEcho", d.ttsEcho.name), d.ttsEcho),
             ttsFollowAlong = o.optBoolean("ttsFollowAlong", d.ttsFollowAlong),
+            ttsProvider = o.optString("ttsProvider", d.ttsProvider),
+            ttsModel = o.optString("ttsModel", d.ttsModel),
+            ttsCloudVoice = o.optString("ttsCloudVoice", d.ttsCloudVoice),
             pocketUnlockPhrase = o.optString("pocketUnlockPhrase", d.pocketUnlockPhrase),
             pocketLockPhrase = o.optString("pocketLockPhrase", d.pocketLockPhrase),
             pocketLockPhraseApps = o.optJSONArray("pocketLockPhraseApps")?.let { arr ->

@@ -235,6 +235,10 @@ class MainActivity : ComponentActivity() {
         com.example.io.Speaker.warmUp(this)
         SettingsSchema.dynamicOptions["ttsEngine"] = { listOf("") + com.example.io.Speaker.engines() }
         SettingsSchema.dynamicOptions["ttsVoice"] = { listOf("") + com.example.io.Speaker.voices() }
+        SettingsSchema.dynamicOptions["ttsProvider"] = {
+            listOf("") + com.example.core.discovery.ProviderCatalog
+                .serving(com.example.core.discovery.AiCapability.SPEECH, SettingsStore.current).map { it.id }
+        }
         SettingsSchema.dynamicOptions["aiModel"] = {
             ModelDiscovery.cachedModels(SettingsStore.current)
         }

@@ -188,6 +188,12 @@ data class Settings(
     val ttsEcho: com.example.core.speech.SpeechText.Echo = com.example.core.speech.SpeechText.Echo.OFF,
     /** Select the word being read, when reading from the field. */
     val ttsFollowAlong: Boolean = false,
+    /** A provider's voice instead of the phone's; blank is the phone's. The text leaves the phone. */
+    val ttsProvider: String = "",
+    /** The provider's speech model; blank is its default. */
+    val ttsModel: String = "",
+    /** The provider's voice; blank is its default. */
+    val ttsCloudVoice: String = "",
 
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,

@@ -421,6 +421,18 @@ object SettingsSchema {
                 "private fields.",
             options = com.example.core.speech.SpeechText.Echo.entries.map { it.name }
         ),
+        "ttsProvider" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_SPEECH, label = "Voice from a provider",
+            help = "Blank reads with the phone's own voice, on the phone. A provider (OpenAI, ElevenLabs, " +
+                "or any you add that can speak) reads with its voice — the text is sent to it. Typing " +
+                "echo always uses the phone's voice; private fields are never read by either."
+        ),
+        "ttsModel" to Meta(group = GROUP_SPEECH, label = "…its model", help = "Blank uses the provider's default."),
+        "ttsCloudVoice" to Meta(
+            group = GROUP_SPEECH, label = "…its voice",
+            help = "Blank uses the provider's default. OpenAI: alloy, ash, coral, echo, fable, nova, onyx, " +
+                "sage, shimmer… ElevenLabs: a voice id from your library."
+        ),
         "ttsFollowAlong" to Meta(
             group = GROUP_SPEECH, label = "Follow along in the field",
             help = "While reading text from the field, the word being read is selected, so you can see where it is."

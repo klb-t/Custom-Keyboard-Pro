@@ -98,7 +98,9 @@ object CallEngine {
             val call = spec.call
                 ?: error("${provider.label} handles ${capability} in code, not as a described call.")
             val resolved = input.copy(
-                model = input.model.ifBlank { spec.defaultModel }
+                model = input.model.ifBlank { spec.defaultModel },
+                // The capability's own defaults first, so anything the user set wins.
+                params = spec.defaults + input.params.filterValues { it.isNotBlank() }
             )
             execute(provider, call, resolved, apiKey)
         }
