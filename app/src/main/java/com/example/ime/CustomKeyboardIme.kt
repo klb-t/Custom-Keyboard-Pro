@@ -47,6 +47,8 @@ import com.example.core.text.CapitalHow
 import com.example.core.text.CapitalMoment
 import com.example.core.text.Capitalisation
 import com.example.core.text.CursorMagnet
+import com.example.core.text.CapitalWhen
+import com.example.core.text.ProperNouns
 import com.example.core.layout.KeyDef
 import com.example.core.layout.KeyCodes
 import com.example.core.layout.LayoutDef
@@ -419,6 +421,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        saveProperNouns()
         super.onFinishInputView(finishingInput)
         voice.cancel()
         suggestions.clear()
@@ -1343,7 +1346,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         val committed = editor.lastCommit.ifEmpty { text }
         val endsWord = committed.isNotEmpty() && !TextOps.isWordChar(committed.trimEnd().lastOrNull() ?: ' ')
         if (endsWord) {
-            val completed = TextOps.currentWord(editor.textBefore(200).dropLast(committed.length))
+            val window = editor.textBefore(200)
+            val completed = TextOps.currentWord(window.dropLast(committed.length))
+            observeCase(completed, window.dropLast(committed.length + completed.length), settings)
             learnCurrentWordBefore(committed)
             if (settings.autoCorrect && !editor.isSensitive && completed.isNotBlank()) {
                 autoCorrect(completed, committed)
@@ -1387,6 +1392,54 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             CapitalHow.SHIFT -> state.setModifier(ModifierKind.SHIFT, active = true, oneShot = true)
             CapitalHow.FIX_AFTER_WORD -> if (moment == CapitalMoment.TYPING) fixLastWordCase()
         }
+
+        // A fact about the word just finished rather than about where it stands, so it
+        // is asked separately — and only once a word has ended.
+        if (moment == CapitalMoment.TYPING) {
+            val committed = editor.lastCommit
+            if (committed.isEmpty()) return
+            val word = TextOps.currentWord(before.dropLast(committed.length))
+            val form = properNounFor(word, settings) ?: return
+            if (form == word) return
+            val here = Capitalisation.action(rules, setOf(CapitalWhen.PROPER_NOUN), CapitalMoment.TYPING)
+            if (here == CapitalHow.FIX_AFTER_WORD) fixLastWordCase(form)
+        }
+    }
+
+    /** Learned and declared names, kept in a file of their own: they are data, not settings. */
+    private val properNouns: ProperNouns by lazy {
+        ProperNouns.fromJson(runCatching { java.io.File(filesDir, PROPER_NOUNS_FILE).readText() }.getOrNull())
+    }
+    private var properNounsDirty = 0
+
+    private fun properNounFor(word: String, settings: Settings): String? {
+        if (word.isBlank()) return null
+        settings.properNouns.firstOrNull { it.equals(word, ignoreCase = true) }?.let { return it }
+        return properNouns.formFor(word)
+    }
+
+    /**
+     * Counts the case a word was written in, where its position did not decide it.
+     * A lower-case word about to be fixed into a known name is not counted against
+     * the name — otherwise every fix would slowly teach it that it is not one.
+     */
+    private fun observeCase(word: String, beforeWord: CharSequence, settings: Settings) {
+        if (!settings.learnProperNouns || !settings.autoCapitalize || editor.isSensitive) return
+        if (word.isBlank()) return
+        if (word == word.lowercase() && properNounFor(word, settings) != null) return
+        val implied = Capitalisation.situations(beforeWord, atStartOfField = beforeWord.isEmpty())
+            .any { it in Capitalisation.POSITIONAL }
+        properNouns.observe(word, implied)
+        if (++properNounsDirty >= 15) saveProperNouns()
+    }
+
+    private fun saveProperNouns() {
+        if (properNounsDirty == 0) return
+        properNounsDirty = 0
+        val json = properNouns.toJson()
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { java.io.File(filesDir, PROPER_NOUNS_FILE).writeText(json) }
+        }
     }
 
     /**
@@ -1396,25 +1449,29 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * back. This lane changes text the user already typed, and the rule this project
      * holds to is that nothing of that kind is acceptable unless one press undoes it.
      */
-    private fun fixLastWordCase() {
+    private fun fixLastWordCase(form: String? = null) {
         val committed = editor.lastCommit
         if (committed.isEmpty()) return
         val before = editor.textBefore(240)
         val word = TextOps.currentWord(before.dropLast(committed.length))
         if (word.isBlank()) return
 
-        val fixed = Capitalisation.capitalise(word)
+        // A known name comes back in the form it is written in; anything else just
+        // gets its first letter raised.
+        val fixed = form?.takeIf { it.equals(word, ignoreCase = true) } ?: Capitalisation.capitalise(word)
         if (fixed == word) return
 
-        // The situation has to have held where the word *started*, not where it ended.
-        val beforeWord = before.dropLast(committed.length + word.length)
-        val rules = Capitalisation.fromJson(SettingsStore.current.capitalisationRulesJson)
-        val here = Capitalisation.action(
-            rules,
-            Capitalisation.situations(beforeWord, atStartOfField = beforeWord.isEmpty()),
-            CapitalMoment.TYPING
-        )
-        if (here != CapitalHow.FIX_AFTER_WORD) return
+        if (form == null) {
+            // The situation has to have held where the word *started*, not where it ended.
+            val beforeWord = before.dropLast(committed.length + word.length)
+            val rules = Capitalisation.fromJson(SettingsStore.current.capitalisationRulesJson)
+            val here = Capitalisation.action(
+                rules,
+                Capitalisation.situations(beforeWord, atStartOfField = beforeWord.isEmpty()),
+                CapitalMoment.TYPING
+            )
+            if (here != CapitalHow.FIX_AFTER_WORD) return
+        }
 
         // Spelling correction is the other rewrite that happens at a word boundary, and
         // it runs off the input path. Both re-check that the text still ends the way
@@ -1828,3 +1885,4 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 /** How much text around the cursor the arrows' pull looks at for a typo. */
 private const val MAGNET_BEFORE = 300
 private const val MAGNET_AFTER = 120
+private const val PROPER_NOUNS_FILE = "proper_nouns.json"

@@ -159,6 +159,8 @@ object SettingsStore {
 
         put("autoCapitalize", s.autoCapitalize)
         put("capitalisationRulesJson", s.capitalisationRulesJson)
+        put("properNouns", JSONArray(s.properNouns))
+        put("learnProperNouns", s.learnProperNouns)
         put("cursorMagnet", s.cursorMagnet.name)
         put("cursorMagnetReach", s.cursorMagnetReach)
         put("cursorMagnetPauseMs", s.cursorMagnetPauseMs)
@@ -330,6 +332,10 @@ object SettingsStore {
 
             autoCapitalize = o.optBoolean("autoCapitalize", d.autoCapitalize),
             capitalisationRulesJson = o.optString("capitalisationRulesJson", d.capitalisationRulesJson),
+            properNouns = o.optJSONArray("properNouns")?.let { arr ->
+                (0 until arr.length()).map { arr.optString(it).trim() }.filter { it.isNotEmpty() }
+            } ?: d.properNouns,
+            learnProperNouns = o.optBoolean("learnProperNouns", d.learnProperNouns),
             cursorMagnet = enumOf(o.optString("cursorMagnet", d.cursorMagnet.name), d.cursorMagnet),
             cursorMagnetReach = o.optInt("cursorMagnetReach", d.cursorMagnetReach),
             cursorMagnetPauseMs = o.optLong("cursorMagnetPauseMs", d.cursorMagnetPauseMs),

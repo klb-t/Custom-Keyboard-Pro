@@ -399,10 +399,21 @@ object SettingsSchema {
             multiline = true,
             help = "One rule per line of policy: \"on\" is the situation " +
                 "(field_start, sentence_end, line_start, list_item, after_colon, " +
-                "word_start), \"does\" is what happens (shift, fix_after_word, " +
+                "word_start, proper_noun), \"does\" is what happens (shift, fix_after_word, " +
                 "nothing), \"at\" is when it is asked (opening, typing). A rule " +
                 "that says nothing is a veto. Blank uses the built-in set; an empty " +
                 "list means no rules at all."
+        ),
+        "properNouns" to Meta(
+            kind = SettingKind.STRING_LIST, group = GROUP_TYPING, label = "Names, as they are spelled",
+            help = "Written this way from the first time you type them in lower case — " +
+                "Kowalski, iPhone, Łódź. Others are learned from what you capitalise mid-sentence."
+        ),
+        "learnProperNouns" to Meta(
+            group = GROUP_TYPING, label = "Learn names from what I capitalise",
+            help = "A word you keep writing with a capital in the middle of sentences is " +
+                "fixed the same way when you type it in lower case. Only with capitalisation " +
+                "on, and never in password or private fields."
         ),
         "cursorMagnet" to Meta(
             kind = SettingKind.ENUM, group = GROUP_TYPING, label = "Arrows find the typo",

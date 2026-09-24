@@ -195,6 +195,14 @@ data class Settings(
      * list means no rules, which is not the same thing and is honoured.
      */
     val capitalisationRulesJson: String = "",
+    /**
+     * Names written the way they are spelled from the first time: "Kowalski",
+     * "iPhone", "Łódź". The rest are learned from which words the user capitalises in
+     * the middle of sentences; this list is for the ones they want right at once.
+     */
+    val properNouns: List<String> = emptyList(),
+    /** Whether names are learned from typing at all. */
+    val learnProperNouns: Boolean = true,
 
     /**
      * How hard the arrow keys are pulled towards a word the dictionary does not know.

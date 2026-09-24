@@ -29,7 +29,14 @@ enum class CapitalWhen {
     AFTER_COLON,
 
     /** At the start of any word at all — which is how you get Title Case. */
-    WORD_START;
+    WORD_START,
+
+    /**
+     * The word just finished is one this person writes with a capital — a name, a
+     * place, a brand ([ProperNouns]). A fact about the word rather than about where
+     * it stands, so [situations] never reports it; the caller asks at a word's end.
+     */
+    PROPER_NOUN;
 
     companion object {
         fun from(name: String): CapitalWhen? =
@@ -141,7 +148,15 @@ object Capitalisation {
     val DEFAULT: List<CapitalRule> = listOf(
         CapitalRule(CapitalWhen.FIELD_START, CapitalHow.SHIFT),
         CapitalRule(CapitalWhen.SENTENCE_END, CapitalHow.SHIFT, setOf(CapitalMoment.TYPING)),
-        CapitalRule(CapitalWhen.LINE_START, CapitalHow.SHIFT, setOf(CapitalMoment.TYPING))
+        CapitalRule(CapitalWhen.LINE_START, CapitalHow.SHIFT, setOf(CapitalMoment.TYPING)),
+        // Nothing to press shift for: a name is only known once it has been typed.
+        CapitalRule(CapitalWhen.PROPER_NOUN, CapitalHow.FIX_AFTER_WORD, setOf(CapitalMoment.TYPING))
+    )
+
+    /** The situations that imply a capital by position, which say nothing about a word. */
+    val POSITIONAL: Set<CapitalWhen> = setOf(
+        CapitalWhen.FIELD_START, CapitalWhen.SENTENCE_END, CapitalWhen.LINE_START,
+        CapitalWhen.LIST_ITEM, CapitalWhen.AFTER_COLON
     )
 
     fun toJson(rules: List<CapitalRule>): String =
