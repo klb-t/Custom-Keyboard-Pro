@@ -111,6 +111,29 @@ object Knobs {
     val TUNER_MARGIN_MS = k("tunerMarginMs", 30.0, 0.0, 300.0, TIMING, "Learning long press: margin above taps (ms)",
         "How far above nearly all plain taps the threshold is kept.")
 
+    // --- keys ------------------------------------------------------------------
+    val REPEAT_ACCEL_MS = k("repeatAccelMs", 3.0, 0.0, 50.0, TIMING, "Key repeat: speeds up by (ms per repeat)",
+        "0 keeps a held key repeating at one steady rate.")
+    val REPEAT_FASTEST_MS = k("repeatFastestMs", 22.0, 5.0, 500.0, TIMING, "Key repeat: never faster than (ms)",
+        "The shortest interval acceleration may reach.")
+    val LONG_SWIPE_FACTOR = k("longSwipeFactor", 3.0, 1.0, 10.0, SettingsSchema.GROUP_GESTURES, "Whole-keyboard swipe: × the key swipe",
+        "How much longer than a key swipe a stroke must be to count as a swipe over the whole keyboard.")
+    val LABEL_SIZE = k("labelSize", 0.36, 0.15, 0.8, SettingsSchema.GROUP_APPEARANCE, "Key letters: share of key height",
+        "Before the text scale setting is applied.")
+    val LONG_LABEL_SHRINK = k("longLabelShrink", 0.62, 0.3, 1.0, SettingsSchema.GROUP_APPEARANCE, "Key words: shrink labels longer than two characters to",
+        "So \"Enter\" and \"Esc\" fit.")
+    val HINT_SIZE = k("hintSize", 0.45, 0.2, 1.0, SettingsSchema.GROUP_APPEARANCE, "Corner hints: size relative to the label", "")
+    val PREVIEW_HEIGHT = k("previewHeight", 1.25, 0.5, 3.0, SettingsSchema.GROUP_APPEARANCE, "Key preview: height × key", "")
+    val POPUP_RAISE = k("popupRaise", 1.15, 0.5, 3.0, SettingsSchema.GROUP_APPEARANCE, "Long-press strip: raised by × key height", "")
+
+    // --- typing intelligence windows -----------------------------------------
+    val MAGNET_BEFORE = k("magnetBefore", 300.0, 20.0, 4000.0, TYPING, "Arrows find the typo: look back (characters)", "")
+    val MAGNET_AFTER = k("magnetAfter", 120.0, 0.0, 4000.0, TYPING, "Arrows find the typo: look ahead (characters)", "")
+    val SCREEN_CONTEXT_MINUTES = k("screenContextMinutes", 10.0, 1.0, 240.0, SettingsSchema.GROUP_AI, "Screen text stays context for (minutes)",
+        "After \"Screen → AI\", how long the next AI task still sees it.")
+    val SCREEN_CONTEXT_CHARS = k("screenContextChars", 6000.0, 200.0, 50000.0, SettingsSchema.GROUP_AI, "Screen text given to the AI (characters)", "")
+    val ASR_RETRY_MS = k("asrRetryMs", 250.0, 0.0, 5000.0, SettingsSchema.GROUP_VOICE, "Dictation: retry after a dropped connection (ms)", "")
+
     // --- notices ---------------------------------------------------------------
     val NOTICE_MS = k("noticeMs", 3500.0, 500.0, 30000.0, TIMING, "News in the strip stays (ms)",
         "Twice as long when it has something to tap.")

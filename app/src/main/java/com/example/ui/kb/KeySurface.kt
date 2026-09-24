@@ -1,5 +1,9 @@
 package com.example.ui.kb
 
+import com.example.core.config.knobLong
+import com.example.core.config.knobFloat
+import com.example.core.config.SettingsStore
+import com.example.core.config.Knobs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -233,7 +237,9 @@ fun KeySurface(
                                         touch.consumed = true
                                         delay(interval)
                                         // Accelerate, but never past a rate a person can stop.
-                                        if (interval > 22L) interval -= 3L
+                                        val fastest = settings.knobLong(Knobs.REPEAT_FASTEST_MS)
+                                        interval = (interval - settings.knobLong(Knobs.REPEAT_ACCEL_MS))
+                                            .coerceAtLeast(minOf(fastest, settings.repeatIntervalMs))
                                     }
                                 }
                             }
@@ -343,7 +349,7 @@ fun KeySurface(
                         val longSwipe = SwipeDirection.of(
                             touch.currentX - touch.startX,
                             touch.currentY - touch.startY,
-                            swipeThresholdPx * 3f
+                            swipeThresholdPx * settings.knobFloat(Knobs.LONG_SWIPE_FACTOR)
                         )
                         if (longSwipe != null && onSurfaceSwipe(longSwipe)) return
 
@@ -702,7 +708,7 @@ private fun KeyView(
     val widthDp: Dp = with(density) { (placed.width - gapPx).coerceAtLeast(1f).toDp() }
     val heightDp: Dp = with(density) { (placed.height - gapPx).coerceAtLeast(1f).toDp() }
     val fontSize = with(density) {
-        val base = placed.height * 0.36f * settings.keyTextScale
+        val base = placed.height * settings.knobFloat(Knobs.LABEL_SIZE) * settings.keyTextScale
         base.coerceIn(10.dp.toPx(), 30.dp.toPx()).toSp()
     }
 
@@ -737,7 +743,7 @@ private fun KeyView(
                 Text(
                     text = label,
                     color = contentColor,
-                    fontSize = if (label.length > 2) fontSize * 0.62f else fontSize,
+                    fontSize = if (label.length > 2) fontSize * settings.knobFloat(Knobs.LONG_LABEL_SHRINK) else fontSize,
                     fontWeight = if (key.style == null) FontWeight.Normal else FontWeight.Medium,
                     maxLines = 2,
                     textAlign = TextAlign.Center,
@@ -750,7 +756,7 @@ private fun KeyView(
             Text(
                 text = hint,
                 color = theme.keyHintText,
-                fontSize = fontSize * 0.45f,
+                fontSize = fontSize * settings.knobFloat(Knobs.HINT_SIZE),
                 modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 3.dp, vertical = 1.dp)
             )
         }
@@ -825,7 +831,7 @@ private fun androidx.compose.foundation.layout.BoxScope.Indicator(
 private fun KeyPreview(placed: PlacedKey, theme: KeyboardTheme, density: androidx.compose.ui.unit.Density) {
     val label = placed.key.effectiveLabel
     if (label.isEmpty()) return
-    val heightPx = placed.height * 1.25f
+    val heightPx = placed.height * SettingsStore.current.knobFloat(Knobs.PREVIEW_HEIGHT)
     Popup(
         alignment = Alignment.TopStart,
         offset = IntOffset(placed.left.roundToInt(), (placed.top - heightPx).roundToInt())
@@ -862,7 +868,7 @@ private fun LongPressPopup(popup: PopupState, surfaceWidthPx: Float, theme: Keyb
     val cellWidth = popup.anchor.width
     val cellHeight = popup.anchor.height
     val originX = popupOriginX(popup, surfaceWidthPx, cellWidth)
-    val originY = popup.anchor.top - cellHeight * 1.15f
+    val originY = popup.anchor.top - cellHeight * SettingsStore.current.knobFloat(Knobs.POPUP_RAISE)
 
     Popup(
         alignment = Alignment.TopStart,

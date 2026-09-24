@@ -1,5 +1,6 @@
 package com.example.core.asr
 
+import com.example.core.config.knob
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -170,7 +171,8 @@ class AndroidAsr(private val context: Context) : AsrEngine {
                 } catch (e: Exception) {
                     listener?.invoke(AsrState.Error(e.message ?: "Could not start the recogniser."))
                 }
-            }, RETRY_DELAY_MS)
+            }, com.example.core.config.SettingsStore.current
+                .knob(com.example.core.config.Knobs.ASR_RETRY_MS).toLong())
         }
     }
 

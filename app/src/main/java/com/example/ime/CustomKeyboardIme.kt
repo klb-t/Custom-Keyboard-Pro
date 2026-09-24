@@ -34,6 +34,7 @@ import com.example.core.asr.VoiceController
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.config.knob
+import com.example.core.config.knobInt
 import com.example.core.config.knobLong
 import com.example.core.convert.PasteConversion
 import com.example.core.data.BundledDictionary
@@ -992,8 +993,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             return
         }
         if (arrowRun?.direction == direction) return
-        val before = editor.textBefore(MAGNET_BEFORE).toString()
-        val after = editor.textAfter(MAGNET_AFTER).toString()
+        val before = editor.textBefore(settings.knobInt(com.example.core.config.Knobs.MAGNET_BEFORE)).toString()
+        val after = editor.textAfter(settings.knobInt(com.example.core.config.Knobs.MAGNET_AFTER)).toString()
         val run = ArrowRun(cursor, direction)
         val origin = cursor - before.length
         val locale = layout.locale
@@ -1150,7 +1151,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     /** The screen text handed to the AI, if it is still about what is in front. */
     private fun freshScreenContext(): String? {
         val (at, pkg, text) = com.example.engine.EngineRuntime.screenContext ?: return null
-        val fresh = System.currentTimeMillis() - at < 10 * 60_000L && pkg == currentPackage
+        val minutes = SettingsStore.current.knob(com.example.core.config.Knobs.SCREEN_CONTEXT_MINUTES)
+        val fresh = System.currentTimeMillis() - at < (minutes * 60_000L).toLong() && pkg == currentPackage
         if (!fresh) com.example.engine.EngineRuntime.screenContext = null
         return text.takeIf { fresh }
     }
@@ -1779,7 +1781,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 systemPrompt = task.systemPrompt,
                 userPrompt = if (onScreen == null) prompt else
                     "For context, this is what is on the screen (do not rewrite it):\n" +
-                        onScreen.take(6000) + "\n\n---\n\n" + prompt
+                        onScreen.take(settings.knobInt(com.example.core.config.Knobs.SCREEN_CONTEXT_CHARS)) + "\n\n---\n\n" + prompt
             )
             state.setFlag(IndicatorKeys.AI_BUSY, false)
             response.onSuccess { raw ->
@@ -2072,10 +2074,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         )
     }
 }
-
-/** How much text around the cursor the arrows' pull looks at for a typo. */
-private const val MAGNET_BEFORE = 300
-private const val MAGNET_AFTER = 120
 private const val PROPER_NOUNS_FILE = "proper_nouns.json"
 private const val ACTIONS_FILE = "shortcut_stats.json"
 
