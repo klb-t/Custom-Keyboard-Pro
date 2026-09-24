@@ -143,10 +143,7 @@ class ActionStats(private val maxPerBucket: Int = 40) {
                 val meta = MetaCodes.describe(action.metaState)
                     .split('+').filter { it.isNotBlank() }
                     .joinToString("+") { it.replaceFirstChar { c -> c.uppercase() } }
-                val key = (KeyCodes.name(action.keyCode) ?: "key ${action.keyCode}")
-                    .removePrefix("KEYCODE_").lowercase()
-                    .replaceFirstChar { it.uppercase() }
-                    .replace("Dpad_", "").replace("Move_", "")
+                val key = keyName(action.keyCode)
                 if (meta.isEmpty()) key else "$meta+$key"
             }
             is KeyAction.Clipboard -> when (action.op) {
@@ -163,6 +160,38 @@ class ActionStats(private val maxPerBucket: Int = 40) {
             is KeyAction.SwitchLayout -> action.layoutId ?: "Next layout"
             is KeyAction.Presentation -> action.mode.name.lowercase()
             else -> ""
+        }
+
+        /**
+         * A key's everyday name. Worked out here rather than asked of the platform,
+         * whose answer differs between versions and is a bare number in some.
+         */
+        fun keyName(code: Int): String {
+            return when (code) {
+                in android.view.KeyEvent.KEYCODE_A..android.view.KeyEvent.KEYCODE_Z ->
+                    ('A' + (code - android.view.KeyEvent.KEYCODE_A)).toString()
+                in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 ->
+                    ('0' + (code - android.view.KeyEvent.KEYCODE_0)).toString()
+                in android.view.KeyEvent.KEYCODE_F1..android.view.KeyEvent.KEYCODE_F12 ->
+                    "F" + (code - android.view.KeyEvent.KEYCODE_F1 + 1)
+                android.view.KeyEvent.KEYCODE_ESCAPE -> "Esc"
+                android.view.KeyEvent.KEYCODE_TAB -> "Tab"
+                android.view.KeyEvent.KEYCODE_ENTER -> "Enter"
+                android.view.KeyEvent.KEYCODE_SPACE -> "Space"
+                android.view.KeyEvent.KEYCODE_DEL -> "Backspace"
+                android.view.KeyEvent.KEYCODE_FORWARD_DEL -> "Delete"
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> "←"
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> "→"
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> "↑"
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "↓"
+                android.view.KeyEvent.KEYCODE_MOVE_HOME -> "Home"
+                android.view.KeyEvent.KEYCODE_MOVE_END -> "End"
+                android.view.KeyEvent.KEYCODE_PAGE_UP -> "PgUp"
+                android.view.KeyEvent.KEYCODE_PAGE_DOWN -> "PgDn"
+                android.view.KeyEvent.KEYCODE_INSERT -> "Ins"
+                else -> (KeyCodes.name(code) ?: "Key $code").removePrefix("KEYCODE_").lowercase()
+                    .replaceFirstChar { it.uppercase() }
+            }
         }
 
         /**
