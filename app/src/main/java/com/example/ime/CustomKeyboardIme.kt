@@ -1118,7 +1118,71 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                     ).show()
                 }
             }
+
+            override fun record(state: String, name: String) = recordMacro(state, name)
+
+            override fun play(name: String, times: Int) = playMacro(name, times)
         })
+    }
+
+    // -----------------------------------------------------------------------
+    // Macros: shown once, repeated on demand
+    // -----------------------------------------------------------------------
+
+    private var recorder: com.example.core.io.MacroRecorder? = null
+    private var playing = 0
+
+    private fun recordMacro(state: String, name: String) {
+        val active = recorder
+        val stop = state == "stop" || (state != "start" && active != null)
+        if (stop) {
+            val done = active ?: return
+            recorder = null
+            val steps = done.steps()
+            if (steps.isEmpty()) {
+                notices.post("Stopped — nothing was recorded")
+                return
+            }
+            SettingsStore.update { s ->
+                val all = com.example.core.io.Macros.parse(s.macrosJson).toMutableMap()
+                all[done.name] = steps
+                s.copy(macrosJson = com.example.core.io.Macros.write(all))
+            }
+            notices.post("Saved “${done.name}”: ${steps.size} step${if (steps.size == 1) "" else "s"}", "Play") {
+                playMacro(done.name, 1)
+            }
+        } else {
+            recorder = com.example.core.io.MacroRecorder(name)
+            notices.post("Recording “$name” — everything you press, until you stop it")
+        }
+    }
+
+    private fun playMacro(name: String, times: Int) {
+        if (recorder != null) {
+            notices.post("Stop recording before playing")
+            return
+        }
+        val steps = com.example.core.io.Macros.parse(SettingsStore.current.macrosJson)[name]
+        if (steps.isNullOrEmpty()) {
+            notices.post("No macro called “$name” yet — record one first")
+            return
+        }
+        // Nested plays are allowed but bounded: a macro that plays itself is a loop
+        // nobody can stop from the keyboard.
+        if (playing >= 4) return
+        serviceScope.launch {
+            playing++
+            try {
+                repeat(times) {
+                    steps.forEach { step ->
+                        val wait = com.example.core.io.Macros.waitOf(step)
+                        if (wait != null) delay(wait) else perform(step)
+                    }
+                }
+            } finally {
+                playing--
+            }
+        }
     }
 
     /** The screen text handed to the AI, if it is still about what is in front. */
@@ -1203,6 +1267,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // Anything but an arrow ends a run of arrow presses: the magnet only ever
         // finishes a trip the user is visibly in the middle of.
         if (action !is KeyAction.MoveCursor) arrowRun = null
+        // Recorded as performed, not as pressed: what a key *did* is what a replay
+        // has to do, whichever key or wire it came from. Not while a macro plays.
+        if (playing == 0) recorder?.record(action, android.os.SystemClock.uptimeMillis())
         val serial = ++actionSerial
         if (action is KeyAction.Backspace && settings.longPressAdaptive) backspaceAfterRelease(serial)
         when (action) {

@@ -115,6 +115,13 @@ data class Settings(
      */
     val engineWiresJson: String = "",
 
+    /**
+     * Recorded macros: {"name": [actions…]}, each action written the way layouts write
+     * them. Recorded with the "record" action, played with "play" — from a key, a wire
+     * or the Actions panel.
+     */
+    val macrosJson: String = "",
+
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
     /**

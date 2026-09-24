@@ -44,6 +44,12 @@ interface PerformerHost {
 
     /** Tells the user something, with an optional thing to tap. */
     fun notice(text: String, actionLabel: String? = null, action: (() -> Unit)? = null)
+
+    /** Starts, stops or toggles recording a macro called [name]. */
+    fun record(state: String, name: String)
+
+    /** Plays the macro called [name], [times] times. */
+    fun play(name: String, times: Int)
 }
 
 /**
@@ -156,6 +162,17 @@ class Performer(private val host: PerformerHost) {
             "search" -> search(command.arg("query")?.takeIf { it.isNotBlank() } ?: host.nearbyText())
             "share" -> share(command.arg("text")?.takeIf { it.isNotBlank() } ?: host.nearbyText())
             "system_settings" -> systemSettings(command.arg("page").orEmpty())
+
+            "record" -> host.record(
+                command.arg("state")?.lowercase() ?: "toggle",
+                command.arg("name")?.takeIf { it.isNotBlank() } ?: "last"
+            )
+            "play" -> host.play(
+                command.arg("name")?.takeIf { it.isNotBlank() } ?: "last",
+                (command.int("times") ?: 1).coerceIn(1, 1000)
+            )
+            // Only a macro being played waits; the player handles it before it gets here.
+            "wait" -> Unit
 
             else -> host.notice("“${spec.id}” is listed but not wired up yet")
         }

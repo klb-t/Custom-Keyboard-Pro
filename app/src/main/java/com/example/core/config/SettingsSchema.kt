@@ -348,6 +348,12 @@ object SettingsSchema {
                 "\"cursor:left\", \"do:torch toggle\", \"layout:science\". Sensors are switched on " +
                 "only for the wires that need them, and only while the keyboard is open."
         ),
+        "macrosJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Recorded macros",
+            multiline = true,
+            help = "Each name holds the steps recorded under it, written like key actions. " +
+                "Editable: a wait is {\"type\": \"do\", \"command\": \"wait 500\"}."
+        ),
         "elementPosesJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Where floating pieces were moved",
             multiline = true, expert = true,

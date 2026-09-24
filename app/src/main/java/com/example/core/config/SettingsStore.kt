@@ -139,6 +139,7 @@ object SettingsStore {
         put("freeKeyPinsJson", s.freeKeyPinsJson)
         put("elementPosesJson", s.elementPosesJson)
         put("engineWiresJson", s.engineWiresJson)
+        put("macrosJson", s.macrosJson)
 
         put("insetsMode", s.insetsMode.name)
         put("avoidCoveringCursor", s.avoidCoveringCursor)
@@ -311,6 +312,7 @@ object SettingsStore {
             freeKeyPinsJson = o.optString("freeKeyPinsJson", d.freeKeyPinsJson),
             elementPosesJson = o.optString("elementPosesJson", d.elementPosesJson),
             engineWiresJson = o.optString("engineWiresJson", d.engineWiresJson),
+            macrosJson = o.optString("macrosJson", d.macrosJson),
 
             insetsMode = enumOf(o.optString("insetsMode", d.insetsMode.name), d.insetsMode),
             avoidCoveringCursor = o.optBoolean("avoidCoveringCursor", d.avoidCoveringCursor),

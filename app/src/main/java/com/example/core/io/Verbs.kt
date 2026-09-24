@@ -49,6 +49,7 @@ object Verbs {
     const val GROUP_SCREEN = "On screen"
     const val GROUP_MEDIA = "Media and device"
     const val GROUP_OPEN = "Open and share"
+    const val GROUP_MACROS = "Macros"
 
     private val xy = listOf(
         Param("x", "Across the screen: 0–1 as a fraction, or pixels above 1.", "0.5"),
@@ -236,6 +237,34 @@ object Verbs {
             params = listOf(Param("text", "What to share.", "")),
             group = GROUP_OPEN,
             without = "Needs nothing."
+        ),
+        VerbSpec(
+            id = "record", glyph = "⏺", label = "Record a macro",
+            help = "Start or stop recording everything pressed on the keyboard — keys, " +
+                "actions, pauses between actions on other apps — under a name, to play back later.",
+            params = listOf(
+                Param("state", "start, stop or toggle.", "toggle"),
+                Param("name", "What to call it.", "last")
+            ),
+            group = GROUP_MACROS,
+            without = "Needs nothing."
+        ),
+        VerbSpec(
+            id = "play", glyph = "▶", label = "Play a macro",
+            help = "Play back a recorded macro, once or several times.",
+            params = listOf(
+                Param("name", "Which one.", "last"),
+                Param("times", "How many times in a row.", "1")
+            ),
+            group = GROUP_MACROS,
+            without = "Needs nothing; the steps inside it need whatever they need."
+        ),
+        VerbSpec(
+            id = "wait", glyph = "⏱", label = "Wait",
+            help = "Pause a macro, so an app has time to open, load or animate before the next step.",
+            params = listOf(Param("ms", "How long.", "500")),
+            group = GROUP_MACROS,
+            without = "Needs nothing; outside a macro it does nothing, which is what waiting is."
         ),
         VerbSpec(
             id = "system_settings", glyph = "⚙", label = "A settings screen",

@@ -169,6 +169,12 @@ class IoCommandTest {
         override fun notice(text: String, actionLabel: String?, action: (() -> Unit)?) {
             notices += text
         }
+        override fun record(state: String, name: String) {
+            notices += "record $state $name"
+        }
+        override fun play(name: String, times: Int) {
+            notices += "play $name $times"
+        }
     }
 
     @Test
