@@ -514,6 +514,7 @@ object LayoutJson {
                                 put("reservesSpace", element.reservesSpace)
                                 put("pinned", element.pinned)
                                 put("draggable", element.draggable)
+                                if (element.overlapsPanel) put("overlapsPanel", true)
                                 put("visible", element.visible)
                             })
                         }
@@ -642,6 +643,7 @@ private fun readElements(root: JSONObject): List<ElementDef> {
             reservesSpace = o.optBoolean("reservesSpace", true),
             pinned = o.optBoolean("pinned", false),
             draggable = o.optBoolean("draggable", true),
+            overlapsPanel = o.optBoolean("overlapsPanel", false),
             visible = o.optBoolean("visible", true)
         )
     }

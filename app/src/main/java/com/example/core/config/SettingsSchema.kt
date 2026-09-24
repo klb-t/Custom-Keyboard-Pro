@@ -318,8 +318,8 @@ object SettingsSchema {
         "floatingY" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — y", min = 0f, max = 2400f, expert = true),
         "floatingSafeBottomDp" to Meta(
             group = GROUP_APPEARANCE, label = "Keep clear of the navigation bar", min = 0f, max = 160f,
-            help = "A panel dragged under the system bar cannot be grabbed back. This is " +
-                "how much of the bottom it is kept out of."
+            help = "The system bars are kept clear of already. This is extra, for what " +
+                "the system does not report: a launcher's gesture strip, a case's lip."
         ),
         "floatingWidthDp" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — width", min = 180f, max = 720f),
         "floatingHeightDp" to Meta(group = GROUP_APPEARANCE, label = "Floating panel — height", min = 0f, max = 720f),
@@ -338,6 +338,12 @@ object SettingsSchema {
         "freeKeyPinsJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_FREE, label = "Where keys were dragged to",
             multiline = true, expert = true
+        ),
+        "elementPosesJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Where floating pieces were moved",
+            multiline = true, expert = true,
+            help = "Per layout and piece: share of free space to the left, share above, and " +
+                "size. Empty puts every piece back where its layout drew it."
         ),
         "freeShowGuides" to Meta(
             group = GROUP_FREE, label = "Show arranging guides",

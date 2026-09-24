@@ -264,7 +264,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             CompositionLocalProvider(LocalKeyboardHost provides this@CustomKeyboardIme) {
                 KeyboardRoot(
                     settings = settings,
-                    onHeightChanged = { px -> applyInputViewHeight(view, px) }
+                    onSizeChanged = { px, whole -> applyInputViewSize(view, px, whole) }
                 )
             }
         }
@@ -277,22 +277,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // the navigation bar instead. Nothing in the app's own layout can see this,
         // which is why it looked like a drawing bug.
         //
-        // The inset is asked for rather than guessed — it is a handle on one phone, a
-        // button bar on another, zero in landscape on a third, and it changes while the
-        // keyboard is open when somebody rotates. It becomes bottom padding *and* extra
-        // height, so the keys keep the size the user chose and the space below them is
-        // added rather than taken.
+        // The insets are asked for rather than guessed — a handle on one phone, a
+        // button bar on another, a bar down the *side* in landscape on a third, and
+        // they change while the keyboard is open when somebody rotates. All four sides
+        // become padding, so the keys are laid out only where a finger can reach them;
+        // see [applyInputViewSize] for how the height follows.
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
-            val bars = insets.getInsets(
-                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout()
-            )
-            if (bars.bottom != systemBottomInsetPx) {
-                systemBottomInsetPx = bars.bottom
-                v.updatePadding(bottom = bars.bottom)
-                // Re-apply the height so the padding is added to it rather than eaten
-                // out of the keys.
-                requestedHeightPx.value.takeIf { it > 0 }?.let { applyInputViewHeight(v, it, force = true) }
-            }
+            takeSystemInsets(v, insets)
             insets
         }
 
@@ -301,26 +292,77 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         return view
     }
 
-    /** How much of the bottom of our window the system bars are sitting on. */
-    private var systemBottomInsetPx: Int = 0
+    /** The system bars and cutouts overlapping our window, as last reported. */
+    private var systemInsets: androidx.core.graphics.Insets = androidx.core.graphics.Insets.NONE
+
+    /** The status bar's height; kept clear of only when the view covers the screen. */
+    private var statusTopPx: Int = 0
 
     /**
-     * The input view's height is whatever the current settings and orientation work out
-     * to, so changing the height slider resizes the live keyboard rather than needing it
-     * to be dismissed and reopened.
+     * Whether the input view currently spans the whole screen rather than just the
+     * keyboard — true whenever something has to be placeable anywhere: a floating
+     * panel, free keys, a layout with a floating piece.
      */
-    private fun applyInputViewHeight(view: View, heightPx: Int, force: Boolean = false) {
-        if (heightPx <= 0) return
-        if (!force && requestedHeightPx.value == heightPx) return
+    @Volatile
+    private var wholeScreen: Boolean = false
+
+    private fun takeSystemInsets(view: View, insets: WindowInsetsCompat) {
+        val bars = insets.getInsets(
+            WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout()
+        )
+        val status = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+        if (bars == systemInsets && status == statusTopPx) return
+        systemInsets = bars
+        statusTopPx = status
+        AppLogger.d("IME.insets", "bars=$bars status=$status wholeScreen=$wholeScreen")
+        applyInputViewSize(view, requestedHeightPx.value, wholeScreen, force = true)
+    }
+
+    /**
+     * The input view's size follows the settings and the orientation, so changing the
+     * height slider resizes the live keyboard rather than needing it reopened.
+     *
+     * Two shapes, and the difference is the fix for keys under the navigation bar:
+     *
+     *  - **Keyboard-sized**: exactly the keys plus the bottom bar. The bar is added
+     *    to the height *and* padded, so the keys keep the size the user chose and the
+     *    space under them is extra rather than taken.
+     *  - **Whole screen**: MATCH_PARENT, so the window is exactly as tall as the
+     *    system allows, and every bar — status bar included — is padding. The first
+     *    version asked for "the screen height" in pixels instead, and since Android 15
+     *    that figure includes the bars: the view came out taller than the window, and
+     *    the bottom of the keyboard was simply cut off under the buttons. Asking for
+     *    "as much as there is" cannot be wrong in that way.
+     */
+    private fun applyInputViewSize(view: View, heightPx: Int, whole: Boolean, force: Boolean = false) {
+        if (heightPx <= 0 && !whole) return
+        if (!force && requestedHeightPx.value == heightPx && wholeScreen == whole) return
         requestedHeightPx.value = heightPx
-        // The keyboard asked for this many pixels of keys; the system bar needs its own
-        // on top of that. Asking for the sum is what keeps a nav bar from costing the
-        // user a row of keys.
+        wholeScreen = whole
+        val bars = systemInsets
+        view.updatePadding(
+            left = bars.left,
+            top = if (whole) maxOf(bars.top, statusTopPx) else 0,
+            right = bars.right,
+            bottom = bars.bottom
+        )
         view.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            heightPx + systemBottomInsetPx
+            if (whole) ViewGroup.LayoutParams.MATCH_PARENT else heightPx + bars.bottom
         )
         view.requestLayout()
+    }
+
+    /**
+     * A second chance at the insets, for the window that never dispatches them.
+     *
+     * Most do on attach. The one that does not would leave the keyboard where it was
+     * before this fix — under the bar — with nothing in the log to say why.
+     */
+    override fun onWindowShown() {
+        super.onWindowShown()
+        val view = composeView ?: return
+        ViewCompat.getRootWindowInsets(view)?.let { takeSystemInsets(view, it) }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -425,6 +467,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         }
         val settings = SettingsStore.current
 
+        if (wholeScreen) {
+            applyWholeScreenRegion(insets, view, settings)
+            return
+        }
+
         // Cursor avoidance can override the policy for as long as it applies: the
         // point of RESERVE_SPACE is precisely to claim space the policy would not.
         val reserving = settings.avoidCoveringCursor &&
@@ -480,6 +527,46 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         rects.forEach { insets.touchableRegion.union(it) }
     }
 
+    /**
+     * The view covers the screen, so "the view" is no longer "the keyboard".
+     *
+     * Before this, a layout with one floating piece made the whole screen the
+     * keyboard's: every touch anywhere was swallowed, and the app was told the
+     * keyboard began at the top of the screen — so it was resized into nothing, which
+     * is what the settings screen looked like behind the Workbench layout.
+     *
+     * Touches: the pieces themselves (unless the policy restricts them to keys), plus
+     * every key and every pressable row, which are what the restricted policies keep.
+     * Space kept clear: only what a docked piece asks for, and only under FULL or
+     * PANEL_ONLY — a floating block cannot ask the app to keep a hole in the middle of
+     * the screen, so it never moves the app at all.
+     */
+    private fun applyWholeScreenRegion(insets: Insets, view: View, settings: Settings) {
+        val restricted = settings.insetsMode == InsetsMode.KEYS_ONLY || settings.insetsMode == InsetsMode.NONE
+        val panels = panelRectsBySource.values.toList()
+        val region = insets.touchableRegion
+        region.setEmpty()
+        if (!restricted) panels.forEach { region.union(it.rect) }
+        keyRects.forEach { region.union(it) }
+
+        if (region.isEmpty) {
+            // Nothing drawn yet. The floating panel's rectangle can be worked out from
+            // settings; anything else is a frame away from reporting, and until then
+            // the whole screen is not ours to take.
+            if (settings.presentation == PresentationMode.FLOATING && settings.insetsMode != InsetsMode.NONE) {
+                applyPanelRegion(insets, view, settings)
+                return
+            }
+        }
+
+        insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+        val keepClear = if (restricted) null
+        else panels.filter { it.reservesContent }.minOfOrNull { it.rect.top }
+        val top = keepClear ?: view.height
+        insets.contentTopInsets = top
+        insets.visibleTopInsets = top
+    }
+
     /** The floating panel's own rectangle, and nothing around it. */
     private fun applyPanelRegion(insets: Insets, view: View, settings: Settings) {
         if (settings.presentation != PresentationMode.FLOATING) {
@@ -502,8 +589,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         val height = px(
             (if (settings.floatingHeightDp > 0f) settings.floatingHeightDp else 240f) + handleHeightDp
         )
-        val left = px(settings.floatingX).coerceIn(0, (view.width - width).coerceAtLeast(0))
-        val top = px(settings.floatingY).coerceIn(0, (view.height - height).coerceAtLeast(0))
+        // The panel is laid out inside the system bars' padding, so its origin is too.
+        val innerW = view.width - view.paddingLeft - view.paddingRight
+        val innerH = view.height - view.paddingTop - view.paddingBottom
+        val left = view.paddingLeft + px(settings.floatingX).coerceIn(0, (innerW - width).coerceAtLeast(0))
+        val top = view.paddingTop + px(settings.floatingY).coerceIn(0, (innerH - height).coerceAtLeast(0))
 
         insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
         insets.touchableRegion.set(Rect(left, top, left + width, top + height))
@@ -535,9 +625,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         }
 
         // The insertion marker is in screen coordinates; the keyboard's top edge is
-        // the screen height minus however much of it the keyboard occupies.
+        // the screen height minus however much of it the keyboard occupies — unless
+        // the view covers the screen, when it is wherever the docked piece begins.
         val screenHeight = resources.displayMetrics.heightPixels
-        val keyboardTop = (screenHeight - view.height).toFloat()
+        val keyboardTop = if (wholeScreen) {
+            val onScreen = IntArray(2).also { view.getLocationOnScreen(it) }
+            val inWindow = IntArray(2).also { view.getLocationInWindow(it) }
+            val dockTop = panelRectsBySource.values.filter { it.reservesContent }
+                .minOfOrNull { it.rect.top } ?: (inWindow[1] + view.height)
+            (onScreen[1] - inWindow[1] + dockTop).toFloat()
+        } else (screenHeight - view.height).toFloat()
         val margin = settings.cursorAvoidMarginDp * resources.displayMetrics.density
         val overlap = bottom + margin - keyboardTop
 
@@ -754,9 +851,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val avoidance = com.example.ui.kb.AvoidanceState()
 
     /**
-     * The last key rectangles the UI drew, in input-view pixels.
+     * The last key rectangles the UI drew — and the toolbar and rows, which are just
+     * as pressable — in window pixels.
      *
-     * Only read when the insets policy is KEYS_ONLY. Kept as a plain field rather than
+     * Read by the restricted policies, and whenever the view covers the screen. Kept
+     * as a plain field rather than
      * observable state because nothing recomposes on it — the framework asks for
      * insets on its own schedule, and this is simply the freshest answer available
      * when it does.
@@ -767,12 +866,32 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         get() = keyRectsBySource.values.flatten()
 
     override fun reportKeyRects(sourceId: String, rects: List<Rect>) {
-        val previous = keyRectsBySource.put(sourceId, rects)
-        val changed = previous == null || previous != rects
-        // The framework recomputes insets on layout, not on a whim, so a keyboard
-        // whose keys moved without a relayout would keep the stale region.
-        if (changed && SettingsStore.current.insetsMode == InsetsMode.KEYS_ONLY) {
-            composeView?.requestLayout()
+        val previous = if (rects.isEmpty()) keyRectsBySource.remove(sourceId)
+        else keyRectsBySource.put(sourceId, rects)
+        if ((previous ?: emptyList()) != rects) regionChanged()
+    }
+
+    /** One whole piece of the keyboard, and whether the app should stay above it. */
+    private data class PanelRect(val rect: Rect, val reservesContent: Boolean)
+
+    private val panelRectsBySource = java.util.concurrent.ConcurrentHashMap<String, PanelRect>()
+
+    override fun reportPanelRect(sourceId: String, rect: Rect?, reservesContent: Boolean) {
+        val next = rect?.let { PanelRect(it, reservesContent) }
+        val previous = if (next == null) panelRectsBySource.remove(sourceId)
+        else panelRectsBySource.put(sourceId, next)
+        if (previous != next) regionChanged()
+    }
+
+    /**
+     * The framework recomputes insets on a traversal, not on a whim, so a keyboard
+     * whose pieces moved without one would keep the stale region — and a stale region
+     * is keys that do not answer, or an app that does not get its touches back.
+     */
+    private fun regionChanged() {
+        val settings = SettingsStore.current
+        if (wholeScreen || settings.insetsMode == InsetsMode.KEYS_ONLY || settings.insetsMode == InsetsMode.NONE) {
+            composeView?.post { composeView?.requestLayout() }
         }
     }
 

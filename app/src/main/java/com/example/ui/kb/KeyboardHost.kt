@@ -94,9 +94,24 @@ interface KeyboardHost {
      *
      * Keyed by [sourceId] because a layout can be several elements at once — a docked
      * panel and a floating block are two surfaces, and the second reporting must not
-     * erase the first. An element that does not reserve space simply reports nothing.
+     * erase the first. Not only keys: anything a finger has to reach — the toolbar,
+     * the completion row — reports here too, or a mode that restricts touches to
+     * "the keys" quietly makes the toolbar dead. Coordinates are the window's.
      */
     fun reportKeyRects(sourceId: String, rects: List<android.graphics.Rect>)
+
+    /**
+     * Tells the service where one whole piece of the keyboard is, in window pixels, or
+     * that it is gone ([rect] null).
+     *
+     * Needed once the input view covers the whole screen — which it has to for a
+     * floating piece to be placed anywhere. Then "the view" is no longer "the
+     * keyboard": the app has to be told to stay above the docked panel only
+     * ([reservesContent]), and touches outside every piece have to go through to it.
+     * Without this the app is squeezed into nothing above a keyboard as tall as the
+     * screen, which is exactly what it looked like.
+     */
+    fun reportPanelRect(sourceId: String, rect: android.graphics.Rect?, reservesContent: Boolean)
 
     /** How the keyboard is currently getting out of the cursor's way, if at all. */
     val avoidance: AvoidanceState

@@ -440,11 +440,26 @@ data class ElementDef(
     val opacity: Float = 1f,
     /** The element's own background. 0 leaves its keys floating over the app. */
     val panelOpacity: Float = 1f,
-    /** Whether the app is asked to keep this element's space clear. */
+    /**
+     * Whether this element's whole rectangle is the keyboard's.
+     *
+     * Docked, that also means the app is resized to stay above it, as a keyboard
+     * always has been. Floating or free, the app cannot be asked to keep a hole in the
+     * middle of the screen clear, so it means only this: true takes every touch inside
+     * the rectangle, false takes touches on the keys alone and lets the ones between
+     * them through to the app.
+     */
     val reservesSpace: Boolean = true,
     /** Pinned elements stay put even when they would cover the text cursor. */
     val pinned: Boolean = false,
     val draggable: Boolean = true,
+    /**
+     * Allowed to sit over the docked panel. Off by default: a floating piece is almost
+     * always meant to sit beside the keyboard, and on a short landscape screen the
+     * only way to keep it there is to shrink it. On for a key laid deliberately over
+     * the keys — a transparent overlay, a second layer of targets.
+     */
+    val overlapsPanel: Boolean = false,
     /** Drawn only when the field being typed into is of a matching kind, if set. */
     val visible: Boolean = true
 )

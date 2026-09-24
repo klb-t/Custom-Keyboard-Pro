@@ -40,16 +40,14 @@ data class Settings(
     val floatingWidthDp: Float = 320f,
     val floatingHeightDp: Float = 240f,
     /**
-     * Bottom strip kept clear of the floating panel.
+     * Extra bottom strip kept clear of the floating panel, on top of the system bars.
      *
-     * The input view runs to the bottom of the screen, but the system's own
-     * navigation bar is drawn over the last stretch of it, and a panel dragged under
-     * that bar cannot be grabbed again — the handle is there, the touches are not.
-     * Clamping the panel above it is what keeps the panel recoverable, and it is a
-     * number rather than a constant because gesture bars, three-button bars and
-     * tablets all disagree about how much room they take.
+     * The bars themselves are now asked for and kept clear of exactly, whichever kind
+     * the phone has, so this defaults to nothing. It stays for the cases the system
+     * does not report: a launcher's own gesture area, a case with a lip, a thumb that
+     * cannot reach the bottom edge.
      */
-    val floatingSafeBottomDp: Float = 56f,
+    val floatingSafeBottomDp: Float = 0f,
     val separateLandscapeSize: Boolean = true,
 
     /**
@@ -100,6 +98,13 @@ data class Settings(
     val freeArrangeMode: Boolean = false,
     /** Where the user dragged keys to: {"keyId": [left, top, right, bottom]}. */
     val freeKeyPinsJson: String = "",
+    /**
+     * Where floating pieces of layouts were moved and how far they were resized:
+     * {"layoutId/elementId": [shareLeft, shareAbove, scale]}. Kept apart from the
+     * layout, so moving a piece never edits a built-in layout, and as shares of free
+     * space rather than coordinates, so the move survives turning the phone.
+     */
+    val elementPosesJson: String = "",
 
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,

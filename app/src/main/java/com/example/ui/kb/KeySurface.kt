@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +43,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.foundation.Image
 import androidx.compose.ui.text.font.FontWeight
@@ -101,22 +102,22 @@ fun KeySurface(
     learner: com.example.core.hitmap.TouchLearner? = null,
     /** Identifies this surface when it reports its geometry; see KeyboardHost. */
     surfaceId: String = "main",
-    /** False when this surface's keys should not claim touches from the app. */
-    reservesSpace: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val layer: LayerDef = layout.layer(layerName) ?: layout.base
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Where this surface sits inside the input view, so the key rectangles reported
-    // to the service are in the same coordinates its insets are.
+    // Where this surface sits in the window, so the key rectangles reported to the
+    // service are in the coordinates its touchable region is. Not the Compose root:
+    // the root is inset by the system bars' padding, and a region off by the height
+    // of a navigation bar is a row of keys that takes the wrong touches.
     var surfaceOrigin by remember { mutableStateOf(Offset.Zero) }
 
     BoxWithConstraints(
         modifier
             .fillMaxSize()
-            .onGloballyPositioned { surfaceOrigin = it.positionInRoot() }
+            .onGloballyPositioned { surfaceOrigin = it.positionInWindow() }
     ) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
@@ -129,11 +130,16 @@ fun KeySurface(
         // themselves. Reporting what was actually placed — rather than recomputing it
         // there — is what keeps the touchable region and the visible keys in step.
         val host = LocalKeyboardHost.current
-        LaunchedEffect(placement, surfaceOrigin, reservesSpace) {
+        // Every visible key, always. Whether the space *around* the keys is also the
+        // keyboard's is a question about the element, answered where the element is
+        // drawn; a key that reports nothing cannot be pressed in any restricted mode.
+        DisposableEffect(host, surfaceId) {
+            onDispose { host.reportKeyRects(surfaceId, emptyList()) }
+        }
+        LaunchedEffect(placement, surfaceOrigin) {
             host.reportKeyRects(
                 surfaceId,
-                if (!reservesSpace) emptyList()
-                else placement.filter { it.key.visible }.map { p ->
+                placement.filter { it.key.visible }.map { p ->
                     android.graphics.Rect(
                         (surfaceOrigin.x + p.left).toInt(),
                         (surfaceOrigin.y + p.top).toInt(),

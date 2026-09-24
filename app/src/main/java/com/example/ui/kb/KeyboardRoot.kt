@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,24 +36,27 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
-import com.example.core.layout.KeyAction
 import com.example.core.layout.ElementDef
+import com.example.core.layout.ElementGeometry
 import com.example.core.layout.ElementPlacement
 import com.example.core.layout.FreeKeyPins
-import com.example.core.layout.NormRect
-import com.example.core.layout.LayerTransforms
+import com.example.core.layout.KeyAction
 import com.example.core.layout.LanguageKeys
+import com.example.core.layout.LayerTransforms
 import com.example.core.layout.LayoutDef
 import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
+import com.example.core.layout.NormRect
 import com.example.core.layout.PanelId
 import com.example.core.layout.PresentationMode
 import com.example.core.predict.CompletionState
 import com.example.core.predict.Slice
+import kotlin.math.roundToInt
 import com.example.core.layout.TextUnit as EditUnit
 
 /**
@@ -66,7 +71,13 @@ import com.example.core.layout.TextUnit as EditUnit
 @Composable
 fun KeyboardRoot(
     settings: Settings,
-    onHeightChanged: (Int) -> Unit
+    /**
+     * The height the keys need, and whether the view has to cover the whole screen
+     * instead. Two answers rather than one number, because "the screen's height" is
+     * not a number anyone here can know: whether it includes the system bars changed
+     * in Android 15, and the service can ask the window for "all of it" directly.
+     */
+    onSizeChanged: (heightPx: Int, wholeScreen: Boolean) -> Unit
 ) {
     val host = LocalKeyboardHost.current
     val configuration = LocalConfiguration.current
@@ -112,9 +123,8 @@ fun KeyboardRoot(
     val needsWholeScreen = floating || free ||
         host.layout.elements.any { it.visible && it.placement != ElementPlacement.DOCKED }
 
-    LaunchedEffect(totalHeightDp, needsWholeScreen, screenHeightDp) {
-        val target = if (needsWholeScreen) screenHeightDp.toFloat() else totalHeightDp
-        onHeightChanged(with(density) { target.dp.roundToPx() })
+    LaunchedEffect(totalHeightDp, needsWholeScreen) {
+        onSizeChanged(with(density) { totalHeightDp.dp.roundToPx() }, needsWholeScreen)
     }
 
     val elements = host.layout.elements.filter { it.visible }
@@ -212,35 +222,7 @@ private fun KeyboardBody(
     val layout = host.layout
 
     Column(Modifier.fillMaxSize()) {
-        if (settings.indicatorStripVisible) {
-            IndicatorStrip(theme = theme, height = indicatorHeight)
-        }
-
-        if (settings.suggestionsEnabled || panel != null) {
-            SuggestionStrip(
-                suggestions = if (panel == null) suggestions else emptyList(),
-                settings = settings,
-                theme = theme,
-                aiBusy = aiBusy,
-                onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
-                onReject = { host.suggestions.block(it.text) },
-                onToolbar = { host.openPanel(it) },
-                height = stripHeight
-            )
-        }
-
-        // Below the corrections, never beside them. The row above replaces what is
-        // already written; this one only ever adds, and the two must not be one
-        // horizontal list where a mis-tap turns an addition into a substitution.
-        completion?.let { state ->
-            CompletionRow(
-                state = state,
-                theme = theme,
-                height = stripHeight,
-                onAccept = { slice -> acceptCompletion(host, slice) },
-                onDismiss = { host.completions.clear() }
-            )
-        }
+        KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, stripHeight, indicatorHeight)
 
         Box(
             Modifier
@@ -248,8 +230,8 @@ private fun KeyboardBody(
                 .height(keyboardHeightDp.dp)
                 .padding(horizontal = settings.sidePaddingDp.dp)
         ) {
-            when (panel) {
-                null -> Box(Modifier.fillMaxSize()) {
+            if (panel == null) {
+                Box(Modifier.fillMaxSize()) {
                     KeyArea(layout = layout, settings = settings, theme = theme)
                     if (settings.debugOverlay) {
                         DebugOverlay(
@@ -263,29 +245,101 @@ private fun KeyboardBody(
                         )
                     }
                 }
-                PanelId.EMOJI -> EmojiPanel(theme) { host.openPanel(null) }
-                PanelId.CLIPBOARD -> ClipboardPanel(theme) { host.openPanel(null) }
-                PanelId.VOICE -> VoicePanel(theme, settings) { host.openPanel(null) }
-                PanelId.AI_TOOLS -> AiToolsPanel(theme, settings) { host.openPanel(null) }
-                PanelId.CURSOR -> CursorPanel(theme) { host.openPanel(null) }
-                PanelId.LAYOUT_PICKER -> LayoutPickerPanel(theme, settings) { host.openPanel(null) }
-                PanelId.INDICATORS -> Box(Modifier.fillMaxSize().background(theme.background)) {
-                    IndicatorStrip(theme, 32.dp)
-                }
-                PanelId.NUMPAD -> KeyArea(
-                    layout = LayoutRepository.byId("numpad") ?: layout,
-                    settings = settings,
-                    theme = theme
-                )
-                PanelId.SETTINGS -> LaunchedEffect(Unit) {
-                    host.openApp()
-                    host.openPanel(null)
-                }
+            } else {
+                PanelContent(panel, layout, settings, theme)
             }
         }
 
         if (settings.bottomPaddingDp > 0f) {
             Box(Modifier.fillMaxWidth().height(settings.bottomPaddingDp.dp).background(theme.background))
+        }
+    }
+}
+
+/**
+ * The rows above the keys, drawn the same way whichever shape the keyboard has.
+ *
+ * One composable because there used to be two copies, and the copy in the layout with
+ * separate pieces had the toolbar but not what it opens — so tapping it on the
+ * Workbench layout did nothing at all, and the layout could not be switched away from.
+ *
+ * Each row reports itself as something a finger must reach, so a policy that lets
+ * only "the keys" take touches does not quietly include the toolbar in what it lets
+ * through to the app.
+ */
+@Composable
+private fun KeyboardRows(
+    settings: Settings,
+    theme: KeyboardTheme,
+    suggestions: List<com.example.core.suggest.Suggestion>,
+    aiBusy: Boolean,
+    completion: CompletionState?,
+    panel: PanelId?,
+    stripHeight: androidx.compose.ui.unit.Dp,
+    indicatorHeight: androidx.compose.ui.unit.Dp
+) {
+    val host = LocalKeyboardHost.current
+    if (settings.indicatorStripVisible) {
+        Box(Modifier.touchTarget("row:indicators")) {
+            IndicatorStrip(theme = theme, height = indicatorHeight)
+        }
+    }
+
+    if (settings.suggestionsEnabled || panel != null) {
+        Box(Modifier.touchTarget("row:toolbar")) {
+            SuggestionStrip(
+                suggestions = if (panel == null) suggestions else emptyList(),
+                settings = settings,
+                theme = theme,
+                aiBusy = aiBusy,
+                onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
+                onReject = { host.suggestions.block(it.text) },
+                onToolbar = { host.openPanel(it) },
+                height = stripHeight
+            )
+        }
+    }
+
+    // Below the corrections, never beside them. The row above replaces what is
+    // already written; this one only ever adds, and the two must not be one
+    // horizontal list where a mis-tap turns an addition into a substitution.
+    completion?.let { state ->
+        Box(Modifier.touchTarget("row:completion")) {
+            CompletionRow(
+                state = state,
+                theme = theme,
+                height = stripHeight,
+                onAccept = { slice -> acceptCompletion(host, slice) },
+                onDismiss = { host.completions.clear() }
+            )
+        }
+    }
+}
+
+/** Whatever the toolbar opened, in the space the keys would otherwise take. */
+@Composable
+private fun PanelContent(panel: PanelId, layout: LayoutDef, settings: Settings, theme: KeyboardTheme) {
+    val host = LocalKeyboardHost.current
+    Box(Modifier.fillMaxSize().touchTarget("panel:${panel.name}")) {
+        when (panel) {
+            PanelId.EMOJI -> EmojiPanel(theme) { host.openPanel(null) }
+            PanelId.CLIPBOARD -> ClipboardPanel(theme) { host.openPanel(null) }
+            PanelId.VOICE -> VoicePanel(theme, settings) { host.openPanel(null) }
+            PanelId.AI_TOOLS -> AiToolsPanel(theme, settings) { host.openPanel(null) }
+            PanelId.CURSOR -> CursorPanel(theme) { host.openPanel(null) }
+            PanelId.LAYOUT_PICKER -> LayoutPickerPanel(theme, settings) { host.openPanel(null) }
+            PanelId.INDICATORS -> Box(Modifier.fillMaxSize().background(theme.background)) {
+                IndicatorStrip(theme, 32.dp)
+            }
+            PanelId.NUMPAD -> KeyArea(
+                layout = LayoutRepository.byId("numpad") ?: layout,
+                settings = settings,
+                theme = theme
+            )
+            PanelId.SETTINGS -> LaunchedEffect(Unit) {
+                host.openApp()
+                host.openPanel(null)
+            }
         }
     }
 }
@@ -331,8 +385,7 @@ private fun KeyArea(
      * there regardless of what the main panel is doing.
      */
     layerOverride: String? = null,
-    surfaceId: String = "main",
-    reservesSpace: Boolean = true
+    surfaceId: String = "main"
 ) {
     val host = LocalKeyboardHost.current
     val state = host.state
@@ -384,7 +437,6 @@ private fun KeyArea(
         onSurfaceSwipe = { direction -> host.performSurfaceGesture(direction) },
         learner = host.touchLearner,
         surfaceId = surfaceId,
-        reservesSpace = reservesSpace,
         onCursorNudge = { steps ->
             repeat(kotlin.math.abs(steps)) {
                 host.perform(
@@ -509,9 +561,8 @@ private fun FloatingShell(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val maxW = maxWidth.value
-        // The last stretch of the input view is underneath the system navigation bar,
-        // which takes the touches. A panel allowed down there looks present and is
-        // unreachable, so the usable height stops short of it.
+        // The system bars are already outside this box — the view is padded by them.
+        // What is subtracted here is only the extra the user asked to keep clear.
         val maxH = (maxHeight.value - settings.floatingSafeBottomDp).coerceAtLeast(120f)
 
         // The panel is nudged up out of the cursor's way without its stored position
@@ -534,6 +585,9 @@ private fun FloatingShell(
                     RoundedCornerShape(14.dp)
                 )
                 .border(1.dp, theme.keyBorder, RoundedCornerShape(14.dp))
+                // The panel, not the screen, is what takes touches — reported as
+                // drawn, so the region follows a drag and a resize exactly.
+                .panelArea("floating", reservesContent = false)
         ) {
             Column(Modifier.fillMaxSize()) {
                 Row(
@@ -763,10 +817,11 @@ private fun ArrangeOverlay(settings: Settings, theme: KeyboardTheme) {
  * A layout drawn as its own set of pieces.
  *
  * Docked elements share the panel at the bottom in the order the layout lists them;
- * floating and free elements are placed by their own bounds over the whole screen.
- * Each carries its own opacity, its own background, whether it claims space from the
- * app, and whether it may move out of the cursor's way — because those are questions
- * about a piece of keyboard, not about the keyboard.
+ * floating and free elements are placed by their own bounds over the rest of the
+ * screen — see [ElementGeometry] for how those bounds survive rotation and why they
+ * keep off the docked panel. Each carries its own opacity, its own background, whether
+ * it claims the space around its keys, and whether it may move out of the cursor's
+ * way — because those are questions about a piece of keyboard, not about the keyboard.
  */
 @Composable
 private fun ElementComposition(
@@ -788,10 +843,12 @@ private fun ElementComposition(
 
     val docked = elements.filter { it.placement == ElementPlacement.DOCKED }
     val loose = elements.filter { it.placement != ElementPlacement.DOCKED }
+    val poses = remember(settings.elementPosesJson) { ElementGeometry.parse(settings.elementPosesJson) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val viewWidth = maxWidth
-        val viewHeight = maxHeight
+        val areaW = with(density) { maxWidth.toPx() }
+        val areaH = with(density) { maxHeight.toPx() }
+        val dockedPx = if (docked.isEmpty()) 0f else with(density) { dockedHeightDp.dp.toPx() }
 
         if (docked.isNotEmpty()) {
             Box(
@@ -799,6 +856,9 @@ private fun ElementComposition(
                     .fillMaxWidth()
                     .height(dockedHeightDp.dp)
                     .align(Alignment.BottomCenter)
+                    // The one piece the app is asked to stay above, as a keyboard
+                    // always was; the rest of the screen stays the app's.
+                    .panelArea("element:dock", reservesContent = true)
             ) {
                 DockedElements(
                     settings = settings,
@@ -816,42 +876,160 @@ private fun ElementComposition(
         }
 
         loose.forEach { element ->
-            // A floating piece with no stated position would otherwise be invisible at
-            // the top-left corner of nothing; put it somewhere reachable instead.
-            val bounds = element.bounds ?: NormRect(0.55f, 0.30f, 0.98f, 0.62f)
-            val shift = if (element.pinned) 0f else host.avoidance.shiftPx
-            val shiftDp = with(density) { shift.toDp() }
+            val poseKey = ElementGeometry.key(layout.id, element.id)
+            LooseElement(
+                element = element,
+                layout = layout,
+                settings = settings,
+                theme = theme,
+                storedPose = poses[poseKey],
+                areaW = areaW,
+                areaH = areaH,
+                ceiling = if (docked.isNotEmpty() && !element.overlapsPanel) areaH - dockedPx else null,
+                onPose = { pose ->
+                    SettingsStore.update { s ->
+                        val all = ElementGeometry.parse(s.elementPosesJson).toMutableMap()
+                        if (pose == null) all.remove(poseKey) else all[poseKey] = pose
+                        s.copy(elementPosesJson = if (all.isEmpty()) "" else ElementGeometry.write(all))
+                    }
+                }
+            )
+        }
+    }
+}
 
-            Box(
-                Modifier
-                    .offset(
-                        x = viewWidth * bounds.left,
-                        y = (viewHeight * bounds.top - shiftDp).coerceAtLeast(0.dp)
+/**
+ * One floating or free piece.
+ *
+ * A floating piece that may be moved gets a grip along its top: drag it to move the
+ * piece, drag the corner mark to resize it, double-tap the grip to put it back where
+ * the layout drew it. The move is kept apart from the layout ([Settings.elementPosesJson]),
+ * so moving a piece of a built-in layout never needs a copy of it.
+ */
+@Composable
+private fun LooseElement(
+    element: ElementDef,
+    layout: LayoutDef,
+    settings: Settings,
+    theme: KeyboardTheme,
+    storedPose: ElementGeometry.Pose?,
+    areaW: Float,
+    areaH: Float,
+    ceiling: Float?,
+    onPose: (ElementGeometry.Pose?) -> Unit
+) {
+    val host = LocalKeyboardHost.current
+    val density = LocalDensity.current
+    // A piece with no stated position would otherwise be invisible at the top-left
+    // corner of nothing; put it somewhere reachable instead.
+    val bounds = element.bounds ?: NormRect(0.55f, 0.30f, 0.98f, 0.62f)
+
+    // The pose being dragged lives here until the finger lifts, so a drag is smooth
+    // and costs one write rather than one per frame.
+    var livePose by remember(storedPose, element.id) { mutableStateOf(storedPose) }
+    val box = ElementGeometry.resolve(bounds, livePose, areaW, areaH, ceiling)
+    // Read fresh on every drag event rather than captured: several can arrive between
+    // two frames, and each has to start from where the last one left the piece.
+    val currentCeiling by rememberUpdatedState(ceiling)
+    fun liveBox() = ElementGeometry.resolve(bounds, livePose, areaW, areaH, currentCeiling)
+    fun livePoseOrAuthored() = livePose ?: ElementGeometry.poseOf(bounds)
+
+    val shift = if (element.pinned) 0f else host.avoidance.shiftPx
+    val floating = element.placement == ElementPlacement.FLOATING
+    val movable = floating && element.draggable
+
+    Box(
+        Modifier
+            .offset {
+                IntOffset(box.left.roundToInt(), (box.top - shift).coerceAtLeast(0f).roundToInt())
+            }
+            .size(
+                width = with(density) { box.width.toDp() },
+                height = with(density) { box.height.toDp() }
+            )
+            .alpha((settings.keyboardOpacity * element.opacity).coerceIn(0.05f, 1f))
+            .then(
+                if (floating)
+                    Modifier.background(
+                        theme.background.copy(
+                            alpha = theme.background.alpha *
+                                (settings.panelOpacity * element.panelOpacity).coerceIn(0f, 1f)
+                        ),
+                        RoundedCornerShape(12.dp)
                     )
-                    .size(
-                        width = viewWidth * bounds.width.coerceAtLeast(0.05f),
-                        height = viewHeight * bounds.height.coerceAtLeast(0.05f)
-                    )
-                    .alpha((settings.keyboardOpacity * element.opacity).coerceIn(0.05f, 1f))
-                    .then(
-                        if (element.placement == ElementPlacement.FLOATING)
-                            Modifier.background(
-                                theme.background.copy(
-                                    alpha = theme.background.alpha *
-                                        (settings.panelOpacity * element.panelOpacity).coerceIn(0f, 1f)
-                                ),
-                                RoundedCornerShape(12.dp)
-                            )
-                        else Modifier
-                    )
-            ) {
+                else Modifier
+            )
+            // Claiming the rectangle means touches between its keys stay the
+            // keyboard's; not claiming it lets them through. The keys themselves
+            // report either way.
+            .then(
+                if (element.reservesSpace) Modifier.panelArea("element:${element.id}", reservesContent = false)
+                else Modifier
+            )
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            if (movable) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .touchTarget("grip:${element.id}"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pointerInput(element.id) {
+                                detectTapGestures(onDoubleTap = { livePose = null; onPose(null) })
+                            }
+                            .pointerInput(element.id, areaW, areaH) {
+                                detectDragGestures(
+                                    onDragEnd = { onPose(livePose) },
+                                    onDragCancel = { onPose(livePose) }
+                                ) { change, delta ->
+                                    change.consume()
+                                    livePose = ElementGeometry.dragged(
+                                        liveBox(), delta.x, delta.y, areaW, areaH, livePoseOrAuthored().scale,
+                                        currentCeiling
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            Modifier
+                                .width(36.dp)
+                                .height(4.dp)
+                                .background(theme.keyHintText.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .width(24.dp)
+                            .fillMaxHeight()
+                            .pointerInput(element.id, areaW, areaH) {
+                                detectDragGestures(
+                                    onDragEnd = { onPose(livePose) },
+                                    onDragCancel = { onPose(livePose) }
+                                ) { change, delta ->
+                                    change.consume()
+                                    livePose = ElementGeometry.resized(livePoseOrAuthored(), liveBox(), delta.x)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("⤡", color = theme.keyHintText, fontSize = 10.sp)
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().weight(1f)) {
                 KeyArea(
                     layout = layout,
                     settings = settings,
                     theme = theme,
                     layerOverride = element.layer,
-                    surfaceId = element.id,
-                    reservesSpace = element.reservesSpace
+                    surfaceId = element.id
                 )
             }
         }
@@ -885,53 +1063,33 @@ private fun DockedElements(
             )
             .alpha(settings.keyboardOpacity.coerceIn(0.05f, 1f))
     ) {
-        if (settings.indicatorStripVisible) {
-            IndicatorStrip(theme = theme, height = indicatorHeight)
-        }
-        if (settings.suggestionsEnabled || panel != null) {
-            SuggestionStrip(
-                suggestions = if (panel == null) suggestions else emptyList(),
-                settings = settings,
-                theme = theme,
-                aiBusy = aiBusy,
-                onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
-                onReject = { host.suggestions.block(it.text) },
-                onToolbar = { host.openPanel(it) },
-                height = stripHeight
-            )
-        }
+        KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, stripHeight, indicatorHeight)
 
-        // Below the corrections, never beside them. The row above replaces what is
-        // already written; this one only ever adds, and the two must not be one
-        // horizontal list where a mis-tap turns an addition into a substitution.
-        completion?.let { state ->
-            CompletionRow(
-                state = state,
-                theme = theme,
-                height = stripHeight,
-                onAccept = { slice -> acceptCompletion(host, slice) },
-                onDismiss = { host.completions.clear() }
-            )
-        }
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(keyboardHeightDp.dp)
                 .padding(horizontal = settings.sidePaddingDp.dp)
         ) {
-            Column(Modifier.fillMaxSize()) {
-                elements.forEach { element ->
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
-                        KeyArea(
-                            layout = layout,
-                            settings = settings,
-                            theme = theme,
-                            // The first docked element is the main panel and follows
-                            // layer switching; any further ones show what they say.
-                            layerOverride = if (element === elements.first()) null else element.layer,
-                            surfaceId = element.id,
-                            reservesSpace = element.reservesSpace
-                        )
+            if (panel != null) {
+                // What the toolbar opened replaces the docked keys, exactly as it does
+                // on a layout without pieces. Leaving it out is how the toolbar came
+                // to look alive on this kind of layout and do nothing.
+                PanelContent(panel, layout, settings, theme)
+            } else {
+                Column(Modifier.fillMaxSize()) {
+                    elements.forEach { element ->
+                        Box(Modifier.fillMaxWidth().weight(1f)) {
+                            KeyArea(
+                                layout = layout,
+                                settings = settings,
+                                theme = theme,
+                                // The first docked element is the main panel and follows
+                                // layer switching; any further ones show what they say.
+                                layerOverride = if (element === elements.first()) null else element.layer,
+                                surfaceId = element.id
+                            )
+                        }
                     }
                 }
             }
