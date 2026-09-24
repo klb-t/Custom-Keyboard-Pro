@@ -105,6 +105,8 @@ data class Settings(
      * space rather than coordinates, so the move survives turning the phone.
      */
     val elementPosesJson: String = "",
+    /** Where each floating control was left: {"layoutId/elementId": [value, valueY]}. */
+    val controlValuesJson: String = "",
 
     /**
      * The engine's wiring: when something happens, do something. A JSON list of

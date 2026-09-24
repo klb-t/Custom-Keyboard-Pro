@@ -470,6 +470,11 @@ data class ElementDef(
      * the keys — a transparent overlay, a second layer of targets.
      */
     val overlapsPanel: Boolean = false,
+    /**
+     * A slider, knob, pad or switch instead of keys — see [ControlDef]. When set, the
+     * element shows the control and [layer] is not used.
+     */
+    val control: ControlDef? = null,
     /** Drawn only when the field being typed into is of a matching kind, if set. */
     val visible: Boolean = true
 )

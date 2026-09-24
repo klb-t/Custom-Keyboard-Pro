@@ -203,6 +203,38 @@ object Verbs {
             without = "Needs nothing."
         ),
         VerbSpec(
+            id = "volume_set", glyph = "🔉", label = "Set the volume",
+            help = "Put a volume at a level — what a fader on the keyboard sends.",
+            params = listOf(
+                Param("level", "0 to 1, or a percentage above 1.", "0.5"),
+                Param("stream", "music, ring, alarm, notification, call or system.", "music")
+            ),
+            group = GROUP_MEDIA,
+            without = "Needs nothing."
+        ),
+        VerbSpec(
+            id = "brightness", glyph = "☀", label = "Screen brightness",
+            help = "Set the screen's brightness, 0 to 1 (or a percentage), or \"auto\".",
+            params = listOf(Param("level", "0 to 1, a percentage, or auto.", "0.5")),
+            ability = Abilities.WRITE_SYSTEM_SETTINGS, group = GROUP_MEDIA,
+            without = "Says it needs \"modify system settings\" and opens that screen."
+        ),
+        VerbSpec(
+            id = "set", glyph = "⚙", label = "Change a setting",
+            help = "Set any of this keyboard's settings — every one of them, knobs included — by its key. " +
+                "With a control, a knob that sets the reading speed is \"do:set ttsRate {v}\".",
+            params = listOf(Param("key", "The setting's key, as the expert settings list shows it.", "ttsRate"), Param("value", "Its new value.", "1.2")),
+            group = GROUP_OPEN,
+            without = "Needs nothing."
+        ),
+        VerbSpec(
+            id = "toggle_setting", glyph = "⇆", label = "Flip a setting",
+            help = "Turn an on/off setting the other way — suggestions, echo, anything that is a switch.",
+            params = listOf(Param("key", "The setting's key.", "suggestionsEnabled")),
+            group = GROUP_OPEN,
+            without = "Needs nothing."
+        ),
+        VerbSpec(
             id = "torch", glyph = "🔦", label = "Torch",
             help = "The camera flash as a light.",
             params = listOf(Param("state", "on, off or toggle.", "toggle")),

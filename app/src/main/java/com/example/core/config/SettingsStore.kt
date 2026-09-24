@@ -138,6 +138,7 @@ object SettingsStore {
         put("freeArrangeMode", s.freeArrangeMode)
         put("freeKeyPinsJson", s.freeKeyPinsJson)
         put("elementPosesJson", s.elementPosesJson)
+        put("controlValuesJson", s.controlValuesJson)
         put("engineWiresJson", s.engineWiresJson)
         put("macrosJson", s.macrosJson)
         put("pocketMode", s.pocketMode.name)
@@ -342,6 +343,7 @@ object SettingsStore {
             freeArrangeMode = o.optBoolean("freeArrangeMode", d.freeArrangeMode),
             freeKeyPinsJson = o.optString("freeKeyPinsJson", d.freeKeyPinsJson),
             elementPosesJson = o.optString("elementPosesJson", d.elementPosesJson),
+            controlValuesJson = o.optString("controlValuesJson", d.controlValuesJson),
             engineWiresJson = o.optString("engineWiresJson", d.engineWiresJson),
             macrosJson = o.optString("macrosJson", d.macrosJson),
             pocketMode = enumOf(o.optString("pocketMode", d.pocketMode.name), d.pocketMode),

@@ -92,6 +92,7 @@ object Abilities {
     const val CAPTURE_PLAYBACK = "capture_playback"
     const val POCKET_LOCK = "pocket_lock"
     const val READ_ALOUD = "read_aloud"
+    const val WRITE_SYSTEM_SETTINGS = "write_system_settings"
 
     val ALL: List<Ability> = listOf(
         Ability(
@@ -171,6 +172,18 @@ object Abilities {
             )
         ),
         Ability(
+            id = WRITE_SYSTEM_SETTINGS,
+            label = "Changing system settings",
+            gives = "Screen brightness from a key, a slider or a wire — for a keyboard with a " +
+                "brightness fader, or a shake that dims the screen.",
+            without = "Brightness stays where the system's own slider puts it; everything else " +
+                "the keyboard does is unaffected.",
+            needs = Need.SpecialAccess(
+                AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS,
+                "Settings › Apps › Special access › Modify system settings"
+            )
+        ),
+        Ability(
             id = READ_ALOUD,
             label = "Reading aloud",
             gives = "The keyboard reads text out loud — what you wrote, the selection, the " +
@@ -240,6 +253,8 @@ object Abilities {
             AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS -> com.example.io.IoAccessibilityService.isEnabled(context)
             AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION ->
                 android.os.Build.VERSION.SDK_INT < 23 || AndroidSettings.canDrawOverlays(context)
+            AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS ->
+                android.os.Build.VERSION.SDK_INT < 23 || AndroidSettings.System.canWrite(context)
             else -> false
         }
         is Need.AnyOf -> need.options.any { granted(context, it) }
@@ -257,6 +272,7 @@ object Abilities {
         } ?: return null
         return Intent(need.settingsAction).apply {
             if (need.settingsAction == AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION ||
+                need.settingsAction == AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS ||
                 need.settingsAction == AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS
             ) {
                 data = Uri.parse("package:${context.packageName}")

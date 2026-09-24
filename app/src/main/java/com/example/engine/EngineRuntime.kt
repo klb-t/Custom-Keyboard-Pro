@@ -279,6 +279,15 @@ object EngineRuntime {
         }
     }
 
+    /**
+     * An input that carries a value — a control being moved. Each wire's action gets
+     * the value put in by [fill] before it runs.
+     */
+    fun fireWith(input: String, fill: (String) -> String) {
+        val live = Inputs.firing(wires(), input, state)
+        live.forEach { run(it.copy(action = fill(it.action)), input) }
+    }
+
     fun fire(input: String) {
         if (input == "voice") return
         val live = Inputs.firing(wires(), input, state)

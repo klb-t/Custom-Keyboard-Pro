@@ -80,7 +80,9 @@ fun DiagnosticsScreen() {
                             onClick = {
                                 runCatching {
                                     val intent = android.content.Intent(need.settingsAction).apply {
-                                        if (need.settingsAction == android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION) {
+                                        if (need.settingsAction == android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION ||
+                                            need.settingsAction == android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS
+                                        ) {
                                             data = android.net.Uri.parse("package:${context.packageName}")
                                         }
                                     }

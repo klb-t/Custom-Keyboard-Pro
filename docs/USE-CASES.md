@@ -65,6 +65,9 @@ API for it.
 | "everything a user might want different, in settings" | knobs: every hardcoded number declared once and shown as an expert setting |
 | "a keyboard that writes could also read aloud" | Speaker: one per process, pause as stop-and-resume-at-the-word, headset control via a media session |
 | "read the article while the phone is in my pocket" | PageReader: read, scroll, read only the new lines; composes with the pocket lock |
+| "read with a better voice" | the catalogue's speech capability; placeholders get defaults and known choices |
+| "floating controls, potentiometers" | controls as elements: slider, knob, pad, switch — an action with `{v}` in it, and an engine input |
+| "any setting from a key, a knob or a wire" | the `set` and `toggle_setting` verbs, through the settings schema's own checks |
 
 ## The outputs engine, first half
 

@@ -49,6 +49,7 @@ import com.example.core.layout.KeyAction
 import com.example.core.layout.LanguageKeys
 import com.example.core.layout.LayerTransforms
 import com.example.core.layout.LayoutDef
+import com.example.core.layout.LayoutJson
 import com.example.core.layout.LayoutRepository
 import com.example.core.layout.ModifierKind
 import com.example.core.layout.NormRect
@@ -1034,17 +1035,52 @@ private fun LooseElement(
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().weight(1f)) {
-                KeyArea(
-                    layout = layout,
-                    settings = settings,
-                    theme = theme,
-                    layerOverride = element.layer,
-                    surfaceId = element.id
-                )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    // A control is touched anywhere on it, not only on keys it does not have.
+                    .then(if (element.control != null) Modifier.touchTarget("control:${element.id}") else Modifier)
+            ) {
+                val control = element.control
+                if (control != null) {
+                    val valueKey = ElementGeometry.key(layout.id, element.id)
+                    val stored = remember(settings.controlValuesJson) {
+                        com.example.core.layout.Controls.parseValues(settings.controlValuesJson)[valueKey]
+                    }
+                    ControlView(control, stored, theme) { v, y, final ->
+                        sendControl(host, element.id, control, v, y)
+                        if (final) {
+                            SettingsStore.update { s ->
+                                val all = com.example.core.layout.Controls.parseValues(s.controlValuesJson).toMutableMap()
+                                all[valueKey] = v to y
+                                s.copy(controlValuesJson = com.example.core.layout.Controls.writeValues(all))
+                            }
+                        }
+                    }
+                } else {
+                    KeyArea(
+                        layout = layout,
+                        settings = settings,
+                        theme = theme,
+                        layerOverride = element.layer,
+                        surfaceId = element.id
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * A control moved: its own action, with the value put in, and the engine's input for
+ * it, so wires can listen to a fader as they listen to a shake.
+ */
+private fun sendControl(host: KeyboardHost, id: String, def: com.example.core.layout.ControlDef, v: Double, y: Double) {
+    if (def.action.isNotBlank()) {
+        LayoutJson.parseAction(com.example.core.layout.Controls.fill(def.action, v, def, y))?.let { host.perform(it) }
+    }
+    com.example.engine.EngineRuntime.fireWith("control:$id") { com.example.core.layout.Controls.fill(it, v, def, y) }
 }
 
 /** The pieces that live in the panel at the bottom, stacked in the order given. */

@@ -518,6 +518,7 @@ object LayoutJson {
                                 put("pinned", element.pinned)
                                 put("draggable", element.draggable)
                                 if (element.overlapsPanel) put("overlapsPanel", true)
+                                element.control?.let { put("control", it.toJson()) }
                                 put("visible", element.visible)
                             })
                         }
@@ -647,6 +648,7 @@ private fun readElements(root: JSONObject): List<ElementDef> {
             pinned = o.optBoolean("pinned", false),
             draggable = o.optBoolean("draggable", true),
             overlapsPanel = o.optBoolean("overlapsPanel", false),
+            control = o.optJSONObject("control")?.let { ControlDef.fromJson(it) },
             visible = o.optBoolean("visible", true)
         )
     }

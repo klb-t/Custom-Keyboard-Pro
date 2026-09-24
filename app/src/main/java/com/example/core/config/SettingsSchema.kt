@@ -347,6 +347,11 @@ object SettingsSchema {
             kind = SettingKind.JSON, group = GROUP_FREE, label = "Where keys were dragged to",
             multiline = true, expert = true
         ),
+        "controlValuesJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Where floating controls were left",
+            multiline = true, expert = true,
+            help = "Per layout and control: its value (and a pad's second value). Empty starts each where its layout says."
+        ),
         "engineWiresJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_ENGINE, label = "Wires: when this happens, do that",
             multiline = true,

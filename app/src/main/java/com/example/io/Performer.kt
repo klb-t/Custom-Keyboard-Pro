@@ -25,6 +25,7 @@ import com.example.core.io.VerbSpec
 import com.example.core.io.Verbs
 import com.example.core.config.knob
 import com.example.util.AppLogger
+import kotlin.math.roundToInt
 
 /** What the performer needs from whoever is running it — the keyboard, for now. */
 interface PerformerHost {
@@ -182,6 +183,10 @@ class Performer(private val host: PerformerHost) {
 
             "media" -> media(command.arg("action") ?: "play_pause")
             "volume" -> volume(command.arg("direction") ?: "up", command.arg("stream") ?: "music")
+            "volume_set" -> volumeSet(command.float("level"), command.arg("stream") ?: "music")
+            "brightness" -> brightness(command.arg("level"))
+            "set" -> setSetting(command.arg("key"), command.arg("value"))
+            "toggle_setting" -> toggleSetting(command.arg("key"))
             "torch" -> torch(command.arg("state") ?: "toggle")
             "vibrate" -> vibrate((command.int("ms") ?: 40).toLong())
 
@@ -380,6 +385,84 @@ class Performer(private val host: PerformerHost) {
             else -> AudioManager.ADJUST_RAISE
         }
         audio.adjustStreamVolume(s, d, AudioManager.FLAG_SHOW_UI)
+    }
+
+    /** 0–1 is a share of the range; anything above 1 is a percentage. */
+    private fun level(raw: Float): Float = (if (raw > 1f) raw / 100f else raw).coerceIn(0f, 1f)
+
+    private fun streamOf(name: String): Int = when (name.lowercase()) {
+        "ring" -> AudioManager.STREAM_RING
+        "alarm" -> AudioManager.STREAM_ALARM
+        "notification" -> AudioManager.STREAM_NOTIFICATION
+        "call", "voice" -> AudioManager.STREAM_VOICE_CALL
+        "system" -> AudioManager.STREAM_SYSTEM
+        else -> AudioManager.STREAM_MUSIC
+    }
+
+    private fun volumeSet(raw: Float?, stream: String) {
+        if (raw == null) {
+            host.notice("Set the volume: say to what, 0 to 1")
+            return
+        }
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val s = streamOf(stream)
+        val max = audio.getStreamMaxVolume(s)
+        // No volume panel: a fader being dragged would otherwise flash it on every step.
+        audio.setStreamVolume(s, (level(raw) * max).roundToInt(), 0)
+    }
+
+    private fun brightness(raw: String?) {
+        if (Build.VERSION.SDK_INT >= 23 && !Settings.System.canWrite(context)) {
+            host.notice("Brightness needs “modify system settings” for this app", "Allow") {
+                startSafely(
+                    Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+                )
+            }
+            return
+        }
+        val resolver = context.contentResolver
+        if (raw?.trim()?.lowercase() == "auto") {
+            Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
+            return
+        }
+        val value = raw?.replace(',', '.')?.toFloatOrNull()
+        if (value == null) {
+            host.notice("Brightness: say how bright, 0 to 1, or auto")
+            return
+        }
+        Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+        Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, (level(value) * 255).roundToInt().coerceIn(1, 255))
+    }
+
+    /** Any of the keyboard's own settings, through the same checks the settings screen uses. */
+    private fun setSetting(key: String?, value: String?) {
+        if (key.isNullOrBlank() || value == null) {
+            host.notice("Change a setting: say which (key) and to what (value)")
+            return
+        }
+        val spec = com.example.core.config.SettingsSchema.spec(key)
+        if (spec == null) {
+            host.notice("No setting called “$key”")
+            return
+        }
+        val before = com.example.core.config.SettingsStore.current
+        com.example.core.config.SettingsStore.setByKey(key, value)
+        if (com.example.core.config.SettingsStore.current == before &&
+            com.example.core.config.SettingsSchema.valueOf(before, key)?.toString() != value
+        ) {
+            host.notice("“$value” is not a value “${spec.label}” can take")
+        }
+    }
+
+    private fun toggleSetting(key: String?) {
+        val spec = key?.let { com.example.core.config.SettingsSchema.spec(it) }
+        if (spec == null || spec.kind != com.example.core.config.SettingKind.BOOL) {
+            host.notice("Flip a setting: “${key.orEmpty()}” is not an on/off setting")
+            return
+        }
+        val now = com.example.core.config.SettingsSchema.valueOf(com.example.core.config.SettingsStore.current, spec.key) == true
+        com.example.core.config.SettingsStore.setByKey(spec.key, !now)
+        host.notice("${spec.label}: ${if (!now) "on" else "off"}")
     }
 
     private fun torch(state: String) {
