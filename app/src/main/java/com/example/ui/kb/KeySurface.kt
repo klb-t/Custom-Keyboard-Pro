@@ -316,6 +316,9 @@ fun KeySurface(
                             if (!cancelled && current != null) {
                                 current.items.getOrNull(current.selected)?.let { choice ->
                                     onAction(key, KeyAction.Text(choice))
+                                    host.keyReleased(
+                                        key, android.os.SystemClock.uptimeMillis() - touch.downAt, fromStrip = true
+                                    )
                                 }
                             }
                             return
@@ -365,6 +368,12 @@ fun KeySurface(
                             }
                         }
                         onAction(key, action)
+                        // Only keys that have a strip say anything about the threshold:
+                        // how long a tap is held on a key with nothing to open is not a
+                        // near miss of anything.
+                        if (settings.longPressPopup && key.popup.isNotEmpty()) {
+                            host.keyReleased(key, android.os.SystemClock.uptimeMillis() - touch.downAt, fromStrip = false)
+                        }
                     }
 
                     fun moveTouch(id: PointerId, x: Float, y: Float) {
@@ -528,6 +537,8 @@ private class Touch(
     val startX: Float,
     val startY: Float
 ) {
+    /** When the finger came down, for learning how long this hand holds a tap. */
+    val downAt: Long = android.os.SystemClock.uptimeMillis()
     var currentX: Float = startX
     var currentY: Float = startY
     var slideAnchorX: Float = startX

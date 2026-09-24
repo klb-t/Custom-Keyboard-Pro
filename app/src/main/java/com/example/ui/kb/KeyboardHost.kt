@@ -118,6 +118,13 @@ interface KeyboardHost {
 
     /** One line of news for the user, shown where the suggestions are. */
     val notices: NoticeBoard
+
+    /**
+     * A key with a long-press strip was released after [heldMs] — as a plain tap, or
+     * with a choice from the strip ([fromStrip]). What the long-press threshold learns
+     * from, when it is allowed to learn.
+     */
+    fun keyReleased(key: KeyDef, heldMs: Long, fromStrip: Boolean) = Unit
 }
 
 /**

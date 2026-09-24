@@ -382,6 +382,12 @@ object SettingsSchema {
             help = "Only on keys that have both. Keep holding past the strip and the " +
                 "tabbed board opens instead; sliding along the strip cancels it."
         ),
+        "longPressAdaptive" to Meta(
+            group = GROUP_TIMING, label = "Let the long press learn your timing",
+            help = "Keeps it clear of how long you hold ordinary taps; a little longer when an " +
+                "alternate is deleted at once, a little shorter when you delete a tap and " +
+                "long-press the same key. The number above moves as it learns."
+        ),
         "repeatStartMs" to Meta(group = GROUP_TIMING, label = "Repeat starts after", min = 150f, max = 1500f),
         "repeatIntervalMs" to Meta(group = GROUP_TIMING, label = "Repeat interval", min = 10f, max = 300f),
         "doubleTapMs" to Meta(group = GROUP_TIMING, label = "Double tap window", min = 100f, max = 800f),

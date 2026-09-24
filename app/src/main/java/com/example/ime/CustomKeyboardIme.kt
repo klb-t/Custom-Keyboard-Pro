@@ -857,6 +857,72 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val notices = com.example.ui.kb.NoticeBoard()
 
     // -----------------------------------------------------------------------
+    // A long-press threshold that learns — see LongPressTuner for the rules
+    // -----------------------------------------------------------------------
+
+    /** Counts every action, so "straight after" means exactly that. */
+    private var actionSerial = 0L
+
+    private class Release(val keyId: String, val serial: Long, val at: Long)
+
+    private var tuner: com.example.core.hitmap.LongPressTuner? = null
+    private var tunerWrote = -1L
+    private var lastStripCommit: Release? = null
+    private var lastPlainTap: Release? = null
+    private var plainTapUndoneAt = -1L
+
+    private fun tunerFor(settings: Settings): com.example.core.hitmap.LongPressTuner {
+        val existing = tuner
+        // A threshold the user set by hand since the last write is theirs: start
+        // learning again from it rather than overwriting it with the old guess.
+        if (existing != null && (tunerWrote < 0 || settings.longPressMs == tunerWrote)) return existing
+        return com.example.core.hitmap.LongPressTuner(settings.longPressMs).also {
+            tuner = it
+            tunerWrote = settings.longPressMs
+        }
+    }
+
+    override fun keyReleased(key: KeyDef, heldMs: Long, fromStrip: Boolean) {
+        val settings = SettingsStore.current
+        if (!settings.longPressAdaptive) return
+        val t = tunerFor(settings)
+        val now = android.os.SystemClock.uptimeMillis()
+        if (fromStrip) {
+            val tap = lastPlainTap
+            if (tap != null && tap.keyId == key.id && plainTapUndoneAt == actionSerial - 1 && now - tap.at < 4000) {
+                t.tooSlow()
+            }
+            lastStripCommit = Release(key.id, actionSerial, now)
+            lastPlainTap = null
+        } else {
+            t.tap(heldMs)
+            lastPlainTap = Release(key.id, actionSerial, now)
+            lastStripCommit = null
+        }
+        persistThreshold(t)
+    }
+
+    private fun backspaceAfterRelease(serial: Long) {
+        val now = android.os.SystemClock.uptimeMillis()
+        lastStripCommit?.let {
+            if (it.serial == serial - 1 && now - it.at < 2000) {
+                tuner?.let { t ->
+                    t.accidental()
+                    persistThreshold(t)
+                }
+            }
+        }
+        lastStripCommit = null
+        lastPlainTap?.let { if (it.serial == serial - 1) plainTapUndoneAt = serial }
+    }
+
+    private fun persistThreshold(t: com.example.core.hitmap.LongPressTuner) {
+        if (t.threshold == SettingsStore.current.longPressMs) return
+        tunerWrote = t.threshold
+        SettingsStore.update { it.copy(longPressMs = t.threshold) }
+    }
+
+    // -----------------------------------------------------------------------
     // Arrows that find the typo — see CursorMagnet for what is decided and why
     // -----------------------------------------------------------------------
 
@@ -1074,6 +1140,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // Anything but an arrow ends a run of arrow presses: the magnet only ever
         // finishes a trip the user is visibly in the middle of.
         if (action !is KeyAction.MoveCursor) arrowRun = null
+        val serial = ++actionSerial
+        if (action is KeyAction.Backspace && settings.longPressAdaptive) backspaceAfterRelease(serial)
         when (action) {
             is KeyAction.None -> Unit
 

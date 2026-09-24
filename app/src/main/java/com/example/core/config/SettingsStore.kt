@@ -151,6 +151,7 @@ object SettingsStore {
 
         put("longPressMs", s.longPressMs)
         put("longPressBoardMs", s.longPressBoardMs)
+        put("longPressAdaptive", s.longPressAdaptive)
         put("repeatStartMs", s.repeatStartMs)
         put("repeatIntervalMs", s.repeatIntervalMs)
         put("doubleTapMs", s.doubleTapMs)
@@ -321,6 +322,7 @@ object SettingsStore {
 
             longPressMs = o.optLong("longPressMs", d.longPressMs),
             longPressBoardMs = o.optLong("longPressBoardMs", d.longPressBoardMs),
+            longPressAdaptive = o.optBoolean("longPressAdaptive", d.longPressAdaptive),
             repeatStartMs = o.optLong("repeatStartMs", d.repeatStartMs),
             repeatIntervalMs = o.optLong("repeatIntervalMs", d.repeatIntervalMs),
             doubleTapMs = o.optLong("doubleTapMs", d.doubleTapMs),

@@ -157,6 +157,13 @@ data class Settings(
      * because that is somebody already choosing.
      */
     val longPressBoardMs: Long = 320L,
+    /**
+     * Let [longPressMs] follow the hand: kept clear of how long plain taps are held,
+     * nudged up when an alternate is deleted straight away, down when a tap is deleted
+     * and the same key long-pressed at once. Off by default, because a number the
+     * user chose should not move without being asked to.
+     */
+    val longPressAdaptive: Boolean = false,
     val repeatStartMs: Long = 400L,
     val repeatIntervalMs: Long = 55L,
     val doubleTapMs: Long = 280L,
