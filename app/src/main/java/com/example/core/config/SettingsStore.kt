@@ -148,6 +148,11 @@ object SettingsStore {
         put("pocketIgnoreWhenCovered", s.pocketIgnoreWhenCovered)
         put("pocketKeepAwake", s.pocketKeepAwake)
         put("pocketRestoreApp", s.pocketRestoreApp)
+        put("fieldlessLayoutId", s.fieldlessLayoutId)
+        put("actionSuggestions", s.actionSuggestions)
+        put("actionSuggestionCount", s.actionSuggestionCount)
+        put("learnActions", s.learnActions)
+        put("actionCommandPrefix", s.actionCommandPrefix)
         put("pocketUnlockPhrase", s.pocketUnlockPhrase)
         put("pocketLockPhrase", s.pocketLockPhrase)
         put("pocketLockPhraseApps", JSONArray(s.pocketLockPhraseApps))
@@ -336,6 +341,11 @@ object SettingsStore {
             pocketIgnoreWhenCovered = o.optBoolean("pocketIgnoreWhenCovered", d.pocketIgnoreWhenCovered),
             pocketKeepAwake = o.optBoolean("pocketKeepAwake", d.pocketKeepAwake),
             pocketRestoreApp = o.optBoolean("pocketRestoreApp", d.pocketRestoreApp),
+            fieldlessLayoutId = o.optString("fieldlessLayoutId", d.fieldlessLayoutId),
+            actionSuggestions = o.optBoolean("actionSuggestions", d.actionSuggestions),
+            actionSuggestionCount = o.optInt("actionSuggestionCount", d.actionSuggestionCount),
+            learnActions = o.optBoolean("learnActions", d.learnActions),
+            actionCommandPrefix = o.optString("actionCommandPrefix", d.actionCommandPrefix),
             pocketUnlockPhrase = o.optString("pocketUnlockPhrase", d.pocketUnlockPhrase),
             pocketLockPhrase = o.optString("pocketLockPhrase", d.pocketLockPhrase),
             pocketLockPhraseApps = o.optJSONArray("pocketLockPhraseApps")?.let { arr ->

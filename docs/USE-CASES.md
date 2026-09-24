@@ -57,6 +57,12 @@ API for it.
 | "shake / flip / tilt / volume keys should do things" | the engine's inputs: wires from any input to anything a key can do |
 | "show it once, have it repeat" | macros: recorded as performed, pauses kept only around actions on other apps |
 | "lock touch, screen and buttons so a talking app can go in a pocket" | pocket lock: overlay + key filter + proximity guard; quick settings tile, `do:pocket_lock` |
+| "triggers with the keyboard closed" | EngineRuntime: one engine per process, fed by the keyboard and the accessibility service; wire scopes |
+| "a spoken password to unlock / lock" | the `voice` input with a phrase; the pocket lock's phrases are shorthand wires |
+| "overlay permission for the lock" | a second lock host; abilities grantable more than one way (`Need.AnyOf`) |
+| "the keyboard from quick settings with no field, for shortcuts" | a tile that asks the keyboard to show itself; keys go to the app as key presses |
+| "shortcuts in the suggestion pool, by context and statistics" | ActionStats (per situation / app / anywhere, with defaults) and `/name` commands |
+| "everything a user might want different, in settings" | knobs: every hardcoded number declared once and shown as an expert setting |
 
 ## The outputs engine, first half
 

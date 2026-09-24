@@ -286,6 +286,7 @@ private fun KeyboardRows(
     }
 
     val notice by host.notices.current.collectAsState()
+    val chips by host.actionChips.collectAsState()
     if (settings.suggestionsEnabled || panel != null) {
         Box(Modifier.touchTarget("row:toolbar")) {
             val shown = notice
@@ -302,7 +303,8 @@ private fun KeyboardRows(
                     onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
                     onReject = { host.suggestions.block(it.text) },
                     onToolbar = { host.openPanel(it) },
-                    height = stripHeight
+                    height = stripHeight,
+                    actions = if (panel == null) chips else emptyList()
                 )
             }
         }

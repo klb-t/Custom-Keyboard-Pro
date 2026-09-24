@@ -388,6 +388,26 @@ object SettingsSchema {
             help = "Navigation gestures from the screen edge can reach past any window. If another " +
                 "app comes to the front while locked, the locked one is reopened."
         ),
+        "fieldlessLayoutId" to Meta(
+            kind = SettingKind.ENUM, group = GROUP_LAYOUTS, label = "Layout for the keyboard without a field",
+            help = "What the quick settings tile \"Keyboard\" opens with: keys and shortcuts sent to the " +
+                "app in front. Blank keeps whatever layout is current."
+        ),
+        "actionSuggestions" to Meta(
+            group = GROUP_SUGGESTIONS, label = "Offer shortcuts in the strip",
+            help = "Copy with a selection, paste in an empty field, Ctrl+C in a terminal — and then " +
+                "whatever you actually use where you are, learned per app and situation."
+        ),
+        "actionSuggestionCount" to Meta(group = GROUP_SUGGESTIONS, label = "…how many", min = 1f, max = 8f),
+        "learnActions" to Meta(
+            group = GROUP_SUGGESTIONS, label = "Learn which shortcuts I use where",
+            help = "Counts, kept on the phone. Never in password or private fields."
+        ),
+        "actionCommandPrefix" to Meta(
+            group = GROUP_SUGGESTIONS, label = "Call shortcuts by name after",
+            help = "Type it at the start of a word and then a name — /copy, /torch, /home — and the " +
+                "strip offers it; taking it removes what you typed. Blank turns it off."
+        ),
         "pocketUnlockPhrase" to Meta(
             group = GROUP_POCKET, label = "Unlock by saying",
             help = "Listened for only while locked, on the phone's own recogniser where it has one. " +

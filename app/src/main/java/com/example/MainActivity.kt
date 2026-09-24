@@ -230,6 +230,7 @@ class MainActivity : ComponentActivity() {
     private fun registerDynamicOptions() {
         SettingsSchema.dynamicOptions["themeId"] = { ThemeStore.allThemes().map { it.id } }
         SettingsSchema.dynamicOptions["activeLayoutId"] = { LayoutRepository.all().map { it.id } }
+        SettingsSchema.dynamicOptions["fieldlessLayoutId"] = { listOf("") + LayoutRepository.all().map { it.id } }
         SettingsSchema.dynamicOptions["aiModel"] = {
             ModelDiscovery.cachedModels(SettingsStore.current)
         }

@@ -159,6 +159,20 @@ data class Settings(
      */
     val knobs: Map<String, Double> = emptyMap(),
 
+    /**
+     * The layout the keyboard switches to when opened with no text field (the quick
+     * settings tile) — a board of shortcuts, arrows, Escape. Blank keeps the current one.
+     */
+    val fieldlessLayoutId: String = "hacker",
+
+    /** Offer shortcuts in the strip — learned per app and situation, with defaults. */
+    val actionSuggestions: Boolean = true,
+    val actionSuggestionCount: Int = 3,
+    /** Count which shortcuts are used where. Never in private fields. */
+    val learnActions: Boolean = true,
+    /** Typed at the start of a word, calls shortcuts up by name: "/copy". Blank: off. */
+    val actionCommandPrefix: String = "/",
+
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
     /**

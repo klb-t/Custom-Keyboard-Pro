@@ -85,9 +85,29 @@ fun SuggestionStrip(
     onAccept: (Suggestion) -> Unit,
     onReject: (Suggestion) -> Unit,
     onToolbar: (PanelId) -> Unit,
-    height: androidx.compose.ui.unit.Dp
+    height: androidx.compose.ui.unit.Dp,
+    /** Shortcuts on offer; see [com.example.core.predict.ActionStats]. */
+    actions: List<com.example.core.predict.ActionChip> = emptyList()
 ) {
     val host = LocalKeyboardHost.current
+    val prominent = actions.filter { it.prominent }
+    val quiet = actions.filterNot { it.prominent }
+
+    @Composable
+    fun Chip(chip: com.example.core.predict.ActionChip) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .padding(vertical = 6.dp, horizontal = 3.dp)
+                .background(theme.keyBackground, RoundedCornerShape(6.dp))
+                .clickable { host.perform(chip.action) }
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            PanelText("⌘ " + chip.label, color = theme.stripText, fontSize = 13.sp, maxLines = 1)
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -95,7 +115,7 @@ fun SuggestionStrip(
             .background(theme.stripBackground),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (suggestions.isEmpty()) {
+        if (suggestions.isEmpty() && prominent.isEmpty()) {
             ToolbarButton("☺", "Emoji", theme) { onToolbar(PanelId.EMOJI) }
             ToolbarButton("▤", "Clipboard", theme) { onToolbar(PanelId.CLIPBOARD) }
             ToolbarButton("🎤", "Voice", theme) { onToolbar(PanelId.VOICE) }
@@ -103,7 +123,13 @@ fun SuggestionStrip(
             ToolbarButton("⇄", "Cursor", theme) { onToolbar(PanelId.CURSOR) }
             ToolbarButton("⌨", "Layouts", theme) { onToolbar(PanelId.LAYOUT_PICKER) }
             ToolbarButton("⌖", "Actions beyond the field", theme) { onToolbar(PanelId.IO) }
-            Spacer(Modifier.weight(1f))
+            // The space the toolbar leaves is where quiet shortcuts wait.
+            LazyRow(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(quiet) { chip -> Chip(chip) }
+            }
             if (aiBusy) {
                 PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
             }
@@ -113,6 +139,9 @@ fun SuggestionStrip(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Asked-for and selection shortcuts first; the words next; the rest
+                // after them, where they cost nothing to anyone typing.
+                items(prominent) { chip -> Chip(chip) }
                 itemsIndexed(suggestions.take(settings.suggestionCount.coerceAtLeast(1) * 2)) { index, suggestion ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (index > 0) {
@@ -153,6 +182,7 @@ fun SuggestionStrip(
                         }
                     }
                 }
+                items(quiet) { chip -> Chip(chip) }
             }
             if (aiBusy) PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 8.dp))
             ToolbarButton("▾", "More", theme) { onToolbar(PanelId.CLIPBOARD) }

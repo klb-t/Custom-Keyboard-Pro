@@ -125,7 +125,13 @@ interface KeyboardHost {
      * from, when it is allowed to learn.
      */
     fun keyReleased(key: KeyDef, heldMs: Long, fromStrip: Boolean) = Unit
+
+    /** Shortcuts offered in the strip for where the user is now. */
+    val actionChips: kotlinx.coroutines.flow.StateFlow<List<com.example.core.predict.ActionChip>>
+        get() = NO_CHIPS
 }
+
+private val NO_CHIPS = kotlinx.coroutines.flow.MutableStateFlow(emptyList<com.example.core.predict.ActionChip>())
 
 /**
  * Runtime state for cursor avoidance — deliberately not a setting.

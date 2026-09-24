@@ -164,6 +164,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onCreate() {
         super.onCreate()
+        liveKeyboard = this
         val tag = "IME.onCreate"
         AppLogger.d(tag, "start")
         try {
@@ -218,6 +219,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onDestroy() {
+        if (liveKeyboard === this) liveKeyboard = null
         com.example.engine.EngineRuntime.keyboardDestroyed()
         com.example.engine.EngineRuntime.noticeSink = null
         clipboardManager?.removePrimaryClipChangedListener(clipboardListener)
@@ -432,6 +434,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         saveProperNouns()
+        saveActionStats()
         com.example.engine.EngineRuntime.keyboardHidden()
         super.onFinishInputView(finishingInput)
         voice.cancel()
@@ -874,6 +877,27 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override val notices = com.example.ui.kb.NoticeBoard()
 
+    /**
+     * Shows the keyboard with no text field — for shortcuts, keys and actions sent to
+     * whatever app is in front.
+     *
+     * Android shows a keyboard for a field; asked to show itself with none, what the
+     * system does is up to the version and the app. Where it works, keys go to the app
+     * as ordinary key presses (Ctrl+C, arrows, Escape, space for play), which is what a
+     * keyboard without a field is for. Where it does not, nothing breaks: it just does
+     * not appear. Honest name for that: experimental.
+     */
+    fun showWithoutField() {
+        val s = SettingsStore.current
+        s.fieldlessLayoutId.takeIf { it.isNotBlank() && LayoutRepository.byId(it) != null }?.let { selectLayout(it) }
+        if (Build.VERSION.SDK_INT >= 28) {
+            requestShowSelf(0)
+        } else {
+            @Suppress("DEPRECATION")
+            showWindow(true)
+        }
+    }
+
     // -----------------------------------------------------------------------
     // A long-press threshold that learns — see LongPressTuner for the rules
     // -----------------------------------------------------------------------
@@ -1205,6 +1229,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // Anything but an arrow ends a run of arrow presses: the magnet only ever
         // finishes a trip the user is visibly in the middle of.
         if (action !is KeyAction.MoveCursor) arrowRun = null
+        recordShortcut(action)
         // Recorded as performed, not as pressed: what a key *did* is what a replay
         // has to do, whichever key or wire it came from. Not while a macro plays.
         if (!com.example.engine.EngineRuntime.isPlaying) recorder?.record(action, android.os.SystemClock.uptimeMillis())
@@ -1624,6 +1649,103 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // itself, so this stays one call rather than a policy scattered over the
         // service — every place text changes already ends up here.
         completions.request(before, sensitive)
+        updateActionChips(before)
+    }
+
+    // -----------------------------------------------------------------------
+    // Shortcuts in the suggestion pool — see ActionStats for how they are chosen
+    // -----------------------------------------------------------------------
+
+    private val actionChipsState = kotlinx.coroutines.flow.MutableStateFlow<List<com.example.core.predict.ActionChip>>(emptyList())
+    override val actionChips: kotlinx.coroutines.flow.StateFlow<List<com.example.core.predict.ActionChip>> = actionChipsState
+
+    private val actionStats: com.example.core.predict.ActionStats by lazy {
+        com.example.core.predict.ActionStats.fromJson(
+            runCatching { java.io.File(filesDir, ACTIONS_FILE).readText() }.getOrNull()
+        )
+    }
+    private var actionStatsDirty = 0
+
+    private fun actionContext(): com.example.core.predict.ActionContext {
+        val info = currentInputEditorInfo
+        val type = info?.inputType ?: 0
+        val cls = type and android.text.InputType.TYPE_MASK_CLASS
+        val variation = type and android.text.InputType.TYPE_MASK_VARIATION
+        val field = when {
+            editor.isPasswordField -> "password"
+            cls == android.text.InputType.TYPE_NULL -> "none"
+            cls == android.text.InputType.TYPE_CLASS_NUMBER || cls == android.text.InputType.TYPE_CLASS_PHONE -> "number"
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS -> "email"
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_URI -> "uri"
+            ((info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION) == EditorInfo.IME_ACTION_SEARCH -> "search"
+            else -> "text"
+        }
+        return com.example.core.predict.ActionContext(
+            pkg = currentPackage,
+            field = field,
+            selection = editor.selectionStart >= 0 && editor.selectionStart != editor.selectionEnd,
+            emptyField = editor.isKnownEmpty
+        )
+    }
+
+    private fun recordShortcut(action: KeyAction) {
+        val s = SettingsStore.current
+        if (!s.learnActions || editor.isSensitive || com.example.engine.EngineRuntime.isPlaying) return
+        if (!com.example.core.predict.ActionStats.isShortcut(action)) return
+        actionStats.record(actionContext(), action, System.currentTimeMillis())
+        if (++actionStatsDirty >= 10) saveActionStats()
+    }
+
+    private fun saveActionStats() {
+        if (actionStatsDirty == 0) return
+        actionStatsDirty = 0
+        val json = actionStats.toJson()
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { java.io.File(filesDir, ACTIONS_FILE).writeText(json) }
+        }
+    }
+
+    private fun updateActionChips(before: CharSequence) {
+        val s = SettingsStore.current
+        if (!s.actionSuggestions || editor.isSensitive) {
+            actionChipsState.value = emptyList()
+            return
+        }
+        // Called up by name first: "/copy" asks, which outranks any guess.
+        val word = TextOps.currentWord(before)
+        val asked = com.example.core.predict.ActionCommands.typed(word, s.actionCommandPrefix)
+        if (asked != null) {
+            val found = com.example.core.predict.ActionCommands.matching(
+                asked, com.example.core.predict.ActionCommands.CATALOGUE, s.actionSuggestionCount.coerceAtLeast(1) + 2
+            )
+            actionChipsState.value = found.map { action ->
+                // Taking a called-up shortcut removes what was typed to call it.
+                val erase = List(word.length) { KeyAction.Backspace(com.example.core.layout.TextUnit.CHARACTER) }
+                com.example.core.predict.ActionChip(
+                    label = com.example.core.predict.ActionStats.label(action),
+                    action = KeyAction.Macro(erase + action),
+                    key = com.example.core.predict.ActionStats.keyOf(action).orEmpty(),
+                    called = true
+                )
+            }
+            return
+        }
+        val context = actionContext()
+        val clipText = runCatching {
+            clipboardManager?.primaryClipDescription?.hasMimeType("text/*") == true
+        }.getOrDefault(false)
+        val picked = actionStats.suggest(
+            context,
+            s.actionSuggestionCount,
+            com.example.core.predict.ActionStats.priors(context, clipText)
+        )
+        actionChipsState.value = picked.map {
+            com.example.core.predict.ActionChip(
+                com.example.core.predict.ActionStats.label(it), it,
+                com.example.core.predict.ActionStats.keyOf(it).orEmpty(),
+                prominent = context.selection
+            )
+        }
     }
 
     /**
@@ -1955,3 +2077,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 private const val MAGNET_BEFORE = 300
 private const val MAGNET_AFTER = 120
 private const val PROPER_NOUNS_FILE = "proper_nouns.json"
+private const val ACTIONS_FILE = "shortcut_stats.json"
+
+/** The keyboard service while it exists — for the tile that shows it without a field. */
+@Volatile
+var liveKeyboard: CustomKeyboardIme? = null
+    internal set

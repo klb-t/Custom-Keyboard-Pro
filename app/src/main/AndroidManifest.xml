@@ -101,6 +101,21 @@
         </service>
 
         <!--
+          The keyboard with no text field, from the quick settings shade: shortcuts and
+          keys sent to the app in front. Works only while this is the current keyboard.
+        -->
+        <service
+            android:name=".ime.KeyboardTile"
+            android:exported="true"
+            android:icon="@drawable/ic_keyboard_tile"
+            android:label="@string/keyboard_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!--
           Hands clipboard files to whatever app is being pasted into.
 
           Needed because our files are ours: an app receiving a paste cannot read a

@@ -6,4 +6,5 @@
     <string name="access_name">Custom Keyboard Pro — actions beyond the field</string>
     <string name="access_description">Lets keys and macros of Custom Keyboard Pro act outside the text field: Back, Home and the other system buttons, tapping and swiping, pressing a button by its label, selecting many items in a list, a mouse pointer for remote desktops, a pocket lock that blocks touches and the volume keys while a talking app keeps running, and reading the text on screen when you ask for it (to copy it, type it, or give it to the AI as context). Nothing is read or done unless a key or macro you set up asks for it, and nothing is stored or sent anywhere by this service.</string>
     <string name="pocket_tile">Pocket lock</string>
+    <string name="keyboard_tile">Keyboard (no field)</string>
 </resources>
