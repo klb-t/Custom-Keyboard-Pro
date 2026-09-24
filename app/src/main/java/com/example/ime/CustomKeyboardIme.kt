@@ -47,6 +47,7 @@ import com.example.core.text.CapitalHow
 import com.example.core.text.CapitalMoment
 import com.example.core.text.Capitalisation
 import com.example.core.text.CursorMagnet
+import com.example.core.engine.Inputs
 import com.example.core.text.CapitalWhen
 import com.example.core.text.ProperNouns
 import com.example.core.layout.KeyDef
@@ -414,6 +415,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
             applyCapitalisation(CapitalMoment.OPENING, sensitive)
             refreshSuggestions()
+            val wires = currentWires()
+            sensorHub.listen(Inputs.sourcesNeeded(wires))
+            if (!restarting) fireInput("keyboard_shown")
             AppLogger.d(tag, "done")
         } catch (crash: Throwable) {
             AppLogger.e(tag, "failed partway through — keyboard may be in a stale state", crash)
@@ -422,6 +426,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         saveProperNouns()
+        sensorHub.stop()
+        fireInput("keyboard_hidden")
         super.onFinishInputView(finishingInput)
         voice.cancel()
         suggestions.clear()
@@ -671,6 +677,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Wired volume keys first: a wire is a more specific wish than the general
+        // "volume keys resize" setting, and nobody wants both from one press.
+        volumeInput(keyCode)?.let { input ->
+            if (isInputViewShown && hasWire(input)) {
+                // Held, the key repeats and so does the wire — which is what makes
+                // "volume down moves the cursor left" feel like an arrow key.
+                fireInput(input)
+                return true
+            }
+        }
         // Right Alt on a hardware keyboard is AltGr, and on a Polish layout that is
         // how the language is written. The layer already exists and the soft board
         // already reaches it; this is the same layer reached from the other kind of
@@ -742,6 +758,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        volumeInput(keyCode)?.let { input -> if (isInputViewShown && hasWire(input)) return true }
         if (SettingsStore.current.volumeKeysResize &&
             (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
             isInputViewShown
@@ -858,6 +875,49 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val avoidance = com.example.ui.kb.AvoidanceState()
 
     override val notices = com.example.ui.kb.NoticeBoard()
+
+    // -----------------------------------------------------------------------
+    // The engine's inputs: sensors, side keys, the keyboard's own comings and goings
+    // -----------------------------------------------------------------------
+
+    private val sensorHub: com.example.engine.SensorHub by lazy {
+        com.example.engine.SensorHub(this) { fireInput(it) }
+    }
+
+    private var wiresSource: String? = null
+    private var wiresCache: List<com.example.core.engine.Wire> = emptyList()
+
+    private fun currentWires(): List<com.example.core.engine.Wire> {
+        val raw = SettingsStore.current.engineWiresJson
+        if (raw != wiresSource) {
+            wiresSource = raw
+            wiresCache = Inputs.parse(raw)
+        }
+        return wiresCache
+    }
+
+    private fun hasWire(input: String): Boolean = Inputs.firing(currentWires(), input, currentPackage).isNotEmpty()
+
+    private fun volumeInput(keyCode: Int): String? = when (keyCode) {
+        KeyEvent.KEYCODE_VOLUME_UP -> "volume_up"
+        KeyEvent.KEYCODE_VOLUME_DOWN -> "volume_down"
+        else -> null
+    }
+
+    /** Runs every wire for [input] here, as if its action were a key being pressed. */
+    private fun fireInput(input: String) {
+        val wires = Inputs.firing(currentWires(), input, currentPackage)
+        if (wires.isEmpty()) return
+        AppLogger.d("Engine", "$input → ${wires.size} wire(s)")
+        wires.forEach { wire ->
+            val action = wire.parsed
+            if (action == null) {
+                notices.post("A wire on “$input” has an action that could not be read: ${wire.action}")
+            } else {
+                runCatching { perform(action) }.onFailure { AppLogger.e("Engine", "wire on $input failed", it) }
+            }
+        }
+    }
 
     // -----------------------------------------------------------------------
     // A long-press threshold that learns — see LongPressTuner for the rules

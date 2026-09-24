@@ -106,6 +106,15 @@ data class Settings(
      */
     val elementPosesJson: String = "",
 
+    /**
+     * The engine's wiring: when something happens, do something. A JSON list of
+     * {"on": input, "do": action, "in": [packages]}, where the input is one of
+     * [com.example.core.engine.Inputs] (shake, face_down, tilt_left, cover,
+     * volume_down, keyboard_shown…) and the action anything a key can do — including
+     * "do:<verb line>". Empty wires nothing and switches no sensor on.
+     */
+    val engineWiresJson: String = "",
+
     // --- what the keyboard asks the app to keep clear ----------------------
     val insetsMode: InsetsMode = InsetsMode.FULL,
     /**

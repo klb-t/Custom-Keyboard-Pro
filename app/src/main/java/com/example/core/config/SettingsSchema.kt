@@ -339,6 +339,15 @@ object SettingsSchema {
             kind = SettingKind.JSON, group = GROUP_FREE, label = "Where keys were dragged to",
             multiline = true, expert = true
         ),
+        "engineWiresJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Wires: when this happens, do that",
+            multiline = true,
+            help = "A list of {\"on\": …, \"do\": …, \"in\": [apps]}. On: shake, face_down, face_up, " +
+                "tilt_left, tilt_right, tilt_forward, tilt_back, cover, uncover, volume_up, " +
+                "volume_down, keyboard_shown, keyboard_hidden. Do: anything a key can do, e.g. " +
+                "\"cursor:left\", \"do:torch toggle\", \"layout:science\". Sensors are switched on " +
+                "only for the wires that need them, and only while the keyboard is open."
+        ),
         "elementPosesJson" to Meta(
             kind = SettingKind.JSON, group = GROUP_LAYOUTS, label = "Where floating pieces were moved",
             multiline = true, expert = true,
