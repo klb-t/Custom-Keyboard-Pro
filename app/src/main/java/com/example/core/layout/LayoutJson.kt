@@ -123,13 +123,15 @@ object LayoutJson {
             "switchime", "switch_ime" -> KeyAction.SwitchIme
             "hide" -> KeyAction.HideKeyboard
             "presentation" -> KeyAction.Presentation(enumOf(o.optString("mode", o.optString("value", "cycle")), PresentationMode.CYCLE))
+            "do" -> com.example.core.io.Command.parse(o.optString("command", o.optString("value", "")))
+                ?.let { KeyAction.Do(it) } ?: KeyAction.None
             else -> KeyAction.Text(o.optString("text", ""))
         }
     }
 
     private val SHORTHAND_TYPES = setOf(
         "text", "key", "modifier", "layer", "layout", "language", "backspace",
-        "delete", "cursor", "select", "clipboard", "panel", "ai", "dead", "presentation"
+        "delete", "cursor", "select", "clipboard", "panel", "ai", "dead", "presentation", "do"
     )
 
     private val SHORTHAND_FIELD = mapOf(
@@ -137,7 +139,7 @@ object LayoutJson {
         "layout" to "layout", "language" to "locale", "backspace" to "unit",
         "delete" to "unit", "cursor" to "direction", "select" to "unit",
         "clipboard" to "op", "panel" to "panel", "ai" to "task", "dead" to "combining",
-        "presentation" to "mode"
+        "presentation" to "mode", "do" to "command"
     )
 
     fun writeAction(action: KeyAction): Any = when (action) {
@@ -180,6 +182,7 @@ object LayoutJson {
         is KeyAction.SwitchIme -> JSONObject().put("type", "switch_ime")
         is KeyAction.HideKeyboard -> JSONObject().put("type", "hide")
         is KeyAction.Presentation -> JSONObject().put("type", "presentation").put("mode", action.mode.name.lowercase())
+        is KeyAction.Do -> JSONObject().put("type", "do").put("command", action.command.write())
     }
 
     private fun parseKeyCode(raw: Any?): Int = when (raw) {

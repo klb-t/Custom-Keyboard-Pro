@@ -102,6 +102,7 @@ fun SuggestionStrip(
             ToolbarButton("✦", "AI tools", theme) { onToolbar(PanelId.AI_TOOLS) }
             ToolbarButton("⇄", "Cursor", theme) { onToolbar(PanelId.CURSOR) }
             ToolbarButton("⌨", "Layouts", theme) { onToolbar(PanelId.LAYOUT_PICKER) }
+            ToolbarButton("⌖", "Actions beyond the field", theme) { onToolbar(PanelId.IO) }
             Spacer(Modifier.weight(1f))
             if (aiBusy) {
                 PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
@@ -176,7 +177,7 @@ private fun ToolbarButton(glyph: String, label: String, theme: KeyboardTheme, on
  * over the imported one, which silently changes what a neighbouring file compiles to.
  */
 @Composable
-private fun PanelText(
+internal fun PanelText(
     text: String,
     color: Color,
     fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
@@ -196,7 +197,7 @@ private fun PanelText(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun PanelFrame(
+internal fun PanelFrame(
     title: String,
     theme: KeyboardTheme,
     onClose: () -> Unit,

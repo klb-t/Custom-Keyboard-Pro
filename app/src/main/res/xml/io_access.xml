@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the accessibility service asks for, and why each thing.
+
+  Events: only which window is in front, to know the app a read or an action is
+  about. Content is read on demand, never from the event stream.
+  Interactive windows and view ids: so "press the button called X" finds dialogs and
+  split-screen apps too, and so a list item can be told from its neighbour.
+  Gestures: taps, swipes and the pointer's clicks.
+  Screenshots: reserved for reading text drawn as pictures; not used yet.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/access_description"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:canTakeScreenshot="true"
+    android:notificationTimeout="100" />

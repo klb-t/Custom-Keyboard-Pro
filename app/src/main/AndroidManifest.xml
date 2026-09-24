@@ -7,6 +7,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!--
+      Lets "open com.some.app" find apps to start. Since Android 11 an app sees only
+      the packages it declares an interest in; launchable apps are the interest here,
+      and nothing about them is read beyond whether they can be opened.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KeyboardApp"
         android:allowBackup="true"
@@ -42,6 +57,26 @@
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method" />
+        </service>
+
+        <!--
+          Seeing and acting beyond the text field: Back and Home, a pointer for remote
+          desktops, reading the post being answered, selecting many items in a feed.
+          Off until the user switches it on in the system's accessibility settings, and
+          the keyboard works fully without it — each action that needs it says so.
+          Bound only by the system, which is what the permission guarantees.
+        -->
+        <service
+            android:name=".io.IoAccessibilityService"
+            android:exported="true"
+            android:label="@string/access_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/io_access" />
         </service>
 
         <!--

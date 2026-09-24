@@ -3,4 +3,6 @@
     <string name="ime_name">Custom Keyboard Pro</string>
     <string name="subtype_polish">Polski</string>
     <string name="subtype_english">English</string>
+    <string name="access_name">Custom Keyboard Pro — actions beyond the field</string>
+    <string name="access_description">Lets keys and macros of Custom Keyboard Pro act outside the text field: Back, Home and the other system buttons, tapping and swiping, pressing a button by its label, selecting many items in a list, a mouse pointer for remote desktops, and reading the text on screen when you ask for it (to copy it, type it, or give it to the AI as context). Nothing is read or done unless a key or macro you set up asks for it, and nothing is stored or sent anywhere by this service.</string>
 </resources>

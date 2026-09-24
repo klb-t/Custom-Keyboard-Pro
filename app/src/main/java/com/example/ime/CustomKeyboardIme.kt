@@ -850,6 +850,58 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     override val avoidance = com.example.ui.kb.AvoidanceState()
 
+    override val notices = com.example.ui.kb.NoticeBoard()
+
+    /**
+     * What was on screen when the user last asked for it to go to the AI, and when.
+     * Context for the next task — "reply to this" — never its input, and forgotten
+     * once it is old or the user has moved to another app.
+     */
+    private var screenContext: Triple<Long, String?, String>? = null
+
+    private val performer: com.example.io.Performer by lazy {
+        com.example.io.Performer(object : com.example.io.PerformerHost {
+            override val context: Context get() = this@CustomKeyboardIme
+
+            override fun sendKey(keyCode: Int) = sendDownUpKeyEvents(keyCode)
+
+            override fun nearbyText(): String = textForAi()
+
+            override fun commit(text: String) = editor.commitText(text, applyConventions = false)
+
+            override fun copy(text: String, label: String) {
+                putOnClipboard(ClipData.newPlainText(label, text))
+            }
+
+            override fun offerToAi(text: String) {
+                screenContext = Triple(System.currentTimeMillis(), currentPackage, text)
+            }
+
+            override fun notice(text: String, actionLabel: String?, action: (() -> Unit)?) {
+                AppLogger.d("IO", text)
+                if (SettingsStore.current.suggestionsEnabled || openPanelId != null) {
+                    notices.post(text, actionLabel, action)
+                } else {
+                    // No strip to show it on; a toast is the one surface left, and
+                    // an action it cannot carry is named in the text instead.
+                    android.widget.Toast.makeText(
+                        this@CustomKeyboardIme,
+                        if (actionLabel != null) "$text — $actionLabel in the app's settings" else text,
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        })
+    }
+
+    /** The screen text handed to the AI, if it is still about what is in front. */
+    private fun freshScreenContext(): String? {
+        val (at, pkg, text) = screenContext ?: return null
+        val fresh = System.currentTimeMillis() - at < 10 * 60_000L && pkg == currentPackage
+        if (!fresh) screenContext = null
+        return text.takeIf { fresh }
+    }
+
     /**
      * The last key rectangles the UI drew — and the toolbar and rows, which are just
      * as pressable — in window pixels.
@@ -1010,6 +1062,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             is KeyAction.HideKeyboard -> hideKeyboard()
 
             is KeyAction.Presentation -> applyPresentation(action.mode, settings)
+
+            is KeyAction.Do -> performer.run(action.command)
         }
     }
 
@@ -1284,14 +1338,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             return
         }
         val source = textForAi()
-        if (source.isBlank()) return
+        val onScreen = freshScreenContext()
+        // An empty field is fine when the screen says what to answer: "reply to
+        // this post" starts from nothing typed.
+        if (source.isBlank() && onScreen == null) return
 
         state.setFlag(IndicatorKeys.AI_BUSY, true)
         serviceScope.launch {
+            val prompt = task.render(source)
             val response = AiClient.complete(
                 config = AiConfig.from(settings, maxTokens = 800),
                 systemPrompt = task.systemPrompt,
-                userPrompt = task.render(source)
+                userPrompt = if (onScreen == null) prompt else
+                    "For context, this is what is on the screen (do not rewrite it):\n" +
+                        onScreen.take(6000) + "\n\n---\n\n" + prompt
             )
             state.setFlag(IndicatorKeys.AI_BUSY, false)
             response.onSuccess { raw ->

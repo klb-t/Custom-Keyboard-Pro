@@ -94,7 +94,7 @@ enum class ClipboardOp { COPY, CUT, PASTE, PASTE_PLAIN, HISTORY, PIN_CURRENT, CL
 enum class SwitchTarget { NEXT, PREVIOUS }
 
 /** Panels that can be raised above the key surface. */
-enum class PanelId { EMOJI, CLIPBOARD, VOICE, AI_TOOLS, CURSOR, SETTINGS, LAYOUT_PICKER, INDICATORS, NUMPAD }
+enum class PanelId { EMOJI, CLIPBOARD, VOICE, AI_TOOLS, CURSOR, SETTINGS, LAYOUT_PICKER, INDICATORS, NUMPAD, IO }
 
 sealed interface KeyAction {
 
@@ -177,6 +177,15 @@ sealed interface KeyAction {
 
     /** Toggle the one-handed / split / floating presentation. */
     data class Presentation(val mode: PresentationMode) : KeyAction
+
+    /**
+     * Do something outside the text field: press Back, tap a point, skip a track,
+     * tick every checkbox in a feed. Written as a line — "back", "tap 0.5 0.8",
+     * "sweep mode=checkboxes pages=3" — naming a verb from [com.example.core.io.Verbs],
+     * so every output the keyboard has is reachable from every key without a new
+     * action type per output.
+     */
+    data class Do(val command: com.example.core.io.Command) : KeyAction
 }
 
 /**
@@ -360,6 +369,7 @@ data class KeyDef(
         get() = label ?: when (val a = tapAction) {
             is KeyAction.Text -> a.text
             is KeyAction.DeadKey -> a.display
+            is KeyAction.Do -> com.example.core.io.Verbs.glyphFor(a.command)
             else -> ""
         }
 }

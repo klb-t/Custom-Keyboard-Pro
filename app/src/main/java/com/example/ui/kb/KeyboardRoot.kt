@@ -285,18 +285,26 @@ private fun KeyboardRows(
         }
     }
 
+    val notice by host.notices.current.collectAsState()
     if (settings.suggestionsEnabled || panel != null) {
         Box(Modifier.touchTarget("row:toolbar")) {
-            SuggestionStrip(
-                suggestions = if (panel == null) suggestions else emptyList(),
-                settings = settings,
-                theme = theme,
-                aiBusy = aiBusy,
-                onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
-                onReject = { host.suggestions.block(it.text) },
-                onToolbar = { host.openPanel(it) },
-                height = stripHeight
-            )
+            val shown = notice
+            // News takes the strip for a few seconds rather than adding a row: the
+            // keys must not move because something happened.
+            if (shown != null) {
+                NoticeBar(shown, theme, stripHeight) { host.notices.dismiss() }
+            } else {
+                SuggestionStrip(
+                    suggestions = if (panel == null) suggestions else emptyList(),
+                    settings = settings,
+                    theme = theme,
+                    aiBusy = aiBusy,
+                    onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
+                    onReject = { host.suggestions.block(it.text) },
+                    onToolbar = { host.openPanel(it) },
+                    height = stripHeight
+                )
+            }
         }
     }
 
@@ -336,6 +344,7 @@ private fun PanelContent(panel: PanelId, layout: LayoutDef, settings: Settings, 
                 settings = settings,
                 theme = theme
             )
+            PanelId.IO -> IoPanel(theme) { host.openPanel(null) }
             PanelId.SETTINGS -> LaunchedEffect(Unit) {
                 host.openApp()
                 host.openPanel(null)

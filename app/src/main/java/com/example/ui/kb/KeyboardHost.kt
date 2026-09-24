@@ -115,6 +115,9 @@ interface KeyboardHost {
 
     /** How the keyboard is currently getting out of the cursor's way, if at all. */
     val avoidance: AvoidanceState
+
+    /** One line of news for the user, shown where the suggestions are. */
+    val notices: NoticeBoard
 }
 
 /**

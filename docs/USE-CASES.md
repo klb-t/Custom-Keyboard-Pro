@@ -43,14 +43,33 @@ API for it.
 | "the nav bar covers the keyboard" | window insets asked for rather than assumed |
 | "AltGr should give Polish letters" | AltGr as a layer; the characters are a fact about a language |
 | "every permission buys something, none is required" | the ability registry, with an enforced `without` for each |
+| "the floating block drifts, Esc is stretched in landscape" | element geometry: size physical, position as shares of free space, docked panel avoided |
+| "the toolbar does nothing on Workbench" | one set of rows and one panel renderer for every shape of keyboard |
+| "the settings screen is squeezed behind the keyboard" | pieces report where they are; only the docked one reserves space |
+| "select many posts in a feed" | `sweep`: one verb, four ways feeds select (checkboxes, long-press-then-tap, tap, match) |
+| "Back, Home, notifications from the keyboard" | verbs as data, bound to any key as `do:<line>` |
+| "a mouse for a remote desktop" | pointer overlay + trackpad panel; without access, the trackpad moves the text cursor |
+| "the AI should know what post I am answering" | `read_screen to=ai`: screen text as context, never as the input |
+| "media, volume, torch, open an app" | the same verbs; they need no permission at all |
 
-## Waiting on one decision
+## The outputs engine, first half
 
-Reading what is on screen, acting in other apps, and a pointer for a remote desktop all
-need an **accessibility service**: the most powerful permission Android has, able to see
-every app on the phone. There is no narrower way to do any of them — an input method
-reaches the text field and no further. Listed in the ability registry, built by nobody
-yet, because a permission of that reach is the owner's call and not the builder's.
+Everything that leaves the text field is a **verb** in one catalogue
+(`core/io/Verbs.kt`): what it means, what it needs, what it does without that. A line
+such as `tap 0.5 0.8` or `sweep mode=checkboxes pages=3` names one, and any key, macro
+step or toolbar preset can carry it. The platform is touched in exactly one place
+(`io/Performer.kt`), so the catalogue can be listed, searched and tested without a phone.
+
+The accessibility service (`io/IoAccessibilityService.kt`) is what most of them go
+through. It is off until the user switches it on, listens only to which app is in
+front, and reads the screen only when a verb asks. Every verb that needs it still
+answers without it: Back becomes the Back key, scrolling becomes Page Down, the
+trackpad moves the text cursor, and the rest say what they need and offer the screen
+that grants it.
+
+The second half — **inputs** other than keys (sensors, floating controls, timers,
+network messages) wired to these verbs — is the Engine, and it plugs into the same
+catalogue rather than a new one.
 
 ## Not absorbable, and why
 
@@ -69,6 +88,11 @@ surface of the same app**, not another keyboard mode.
 refuse capture. Most do.
 
 ## Open
+
+- The Engine's inputs: sensors, floating controls and potentiometers, timers, network
+  ports and known services — each an input bound to a verb line
+- Reading text drawn as pictures on screen (the service already may take screenshots)
+- A pointer speed and acceleration setting; long-press on the pad itself
 
 - Model parameters in expert mode: standard ones and model-specific ones, separately
 - The suggestion tree: descending is a longer slice, or regenerating from what was taken

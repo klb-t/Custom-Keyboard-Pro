@@ -136,8 +136,7 @@ object Abilities {
             needs = Need.SpecialAccess(
                 AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
                 "Settings › Accessibility"
-            ),
-            built = false
+            )
         ),
         Ability(
             id = ACT_IN_OTHER_APPS,
@@ -149,21 +148,19 @@ object Abilities {
             needs = Need.SpecialAccess(
                 AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
                 "Settings › Accessibility"
-            ),
-            built = false
+            )
         ),
         Ability(
             id = POINTER,
             label = "A pointer for remote desktops",
             gives = "Move and click a cursor from the keyboard, for a remote desktop " +
                 "session where the mouse is the thing you are missing.",
-            without = "Arrow keys, and whatever the remote desktop client offers for " +
-                "touch. Every key the keyboard sends still arrives.",
+            without = "The trackpad panel moves the text cursor instead, arrow keys still " +
+                "arrive, and the remote desktop client's own touch mode still works.",
             needs = Need.SpecialAccess(
                 AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS,
                 "Settings › Accessibility"
-            ),
-            built = false
+            )
         ),
         Ability(
             id = CAPTURE_PLAYBACK,
@@ -184,10 +181,9 @@ object Abilities {
     /**
      * Whether an ability can run right now.
      *
-     * A [Need.SpecialAccess] answers [Availability.OFF] rather than pretending to know:
-     * whether accessibility or an overlay is enabled is answered by the service or the
-     * window manager, not by a permission check, and each of those belongs with the
-     * feature that uses it. Nothing here claims otherwise.
+     * A [Need.SpecialAccess] is answered by whoever actually grants it: for
+     * accessibility, whether our own service is switched on in the system's list;
+     * for anything not built yet, [Availability.OFF] rather than a guess.
      */
     fun availability(context: Context, ability: Ability): Availability = when {
         !ability.built -> Availability.ABSENT
@@ -197,7 +193,10 @@ object Abilities {
                 if (ContextCompat.checkSelfPermission(context, need.name) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
                 ) Availability.ON else Availability.OFF
-            is Need.SpecialAccess -> Availability.OFF
+            is Need.SpecialAccess ->
+                if (need.settingsAction == AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS &&
+                    com.example.io.IoAccessibilityService.isEnabled(context)
+                ) Availability.ON else Availability.OFF
         }
     }
 
