@@ -294,5 +294,5 @@ private fun titleFor(route: String): String = when (route) {
     MainActivity.ROUTE_REQUEST_PANEL -> "Ask for a panel"
     MainActivity.ROUTE_THEME_EDITOR -> "Theme editor"
     MainActivity.ROUTE_SETUP -> "Setting up"
-    else -> if (route.startsWith(MainActivity.ROUTE_PANEL_PREFIX)) "Your panel" else "Custom Keyboard Pro"
+    else -> if (route.startsWith(MainActivity.ROUTE_PANEL_PREFIX)) "Your panel" else "IO Matrix"
 }

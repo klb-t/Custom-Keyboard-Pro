@@ -124,6 +124,13 @@ data class Settings(
      */
     val macrosJson: String = "",
 
+    /**
+     * Converting never sends anything off the phone, even through a provider that is
+     * set up: steps that would are left out of every plan, and a conversion that needs
+     * one says so instead.
+     */
+    val convertLocalOnly: Boolean = false,
+
     // --- pocket lock: touch, screen and keys locked while an app keeps running ----
     /** TOUCH keeps the screen as it is; SCREEN turns it black at the lowest brightness. */
     val pocketMode: com.example.core.io.PocketMode = com.example.core.io.PocketMode.SCREEN,

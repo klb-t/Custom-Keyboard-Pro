@@ -120,7 +120,7 @@ fun DiagnosticsScreen() {
                 onClick = {
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "Custom Keyboard Pro — diagnostics")
+                        putExtra(Intent.EXTRA_SUBJECT, "IO Matrix — diagnostics")
                         putExtra(Intent.EXTRA_TEXT, AppLogger.exportText())
                     }
                     context.startActivity(Intent.createChooser(send, "Share diagnostics"))

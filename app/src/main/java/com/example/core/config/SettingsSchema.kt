@@ -252,11 +252,12 @@ object SettingsSchema {
     const val GROUP_POCKET = "Pocket lock"
     const val GROUP_ENGINE = "Engine: inputs and wires"
     const val GROUP_SPEECH = "Reading aloud"
+    const val GROUP_MATRIX = "Converting and streams"
 
     private val GROUP_ORDER = listOf(
         GROUP_APPEARANCE, GROUP_FREE, GROUP_COVERAGE, GROUP_LAYOUTS, GROUP_TYPING,
         GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_SPEECH, GROUP_CLIPBOARD,
-        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_ENGINE, GROUP_POCKET,
+        GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_ENGINE, GROUP_MATRIX, GROUP_POCKET,
         GROUP_PRIVACY, GROUP_DATA
     )
 
@@ -360,6 +361,12 @@ object SettingsSchema {
                 "volume_down, keyboard_shown, keyboard_hidden. Do: anything a key can do, e.g. " +
                 "\"cursor:left\", \"do:torch toggle\", \"layout:science\". Sensors are switched on " +
                 "only for the wires that need them, and only while the keyboard is open."
+        ),
+        "convertLocalOnly" to Meta(
+            group = GROUP_MATRIX, label = "Convert only on the phone",
+            help = "Reading pictures, transcribing and generating are left out of every conversion, " +
+                "even with a provider set up. Off, they are used only through providers you set up, " +
+                "and every plan says before it runs what it sends where."
         ),
         "pocketMode" to Meta(
             kind = SettingKind.ENUM, group = GROUP_POCKET, label = "What the lock does to the screen",

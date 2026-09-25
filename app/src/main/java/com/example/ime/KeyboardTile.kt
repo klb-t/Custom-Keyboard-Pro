@@ -32,7 +32,7 @@ class KeyboardTile : TileService() {
         SettingsStore.init(this)
         val ime = liveKeyboard
         if (ime == null || !isCurrentKeyboard()) {
-            Toast.makeText(this, "Make Custom Keyboard Pro the current keyboard first", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Make IO Matrix the current keyboard first", Toast.LENGTH_LONG).show()
             val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (Build.VERSION.SDK_INT >= 34) {
                 startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))

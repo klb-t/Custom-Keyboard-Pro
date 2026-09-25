@@ -309,10 +309,11 @@ object Verbs {
                 "can do, and the ones a provider can when one is set up. The result goes into the " +
                 "field or onto the clipboard as a file.",
             params = listOf(
-                Param("to", "text, notes (their names), image, audio, midi, video — or wav, png, jpg, webp.", "midi"),
+                Param("to", "text, notes (their names), midi, image, spectrogram, scalogram, audio, video — or wav, png, jpg, webp.", "midi"),
                 Param("source", "auto (selection, then clipboard), clipboard, field, selection, screen…", "auto"),
                 Param("from", "What the input is, when a file does not say: image, audio, midi, video.", ""),
-                Param("use", "Steps to go through, in order: ocr, transcribe, speak, typeset, draw, sonify, pitch…", ""),
+                Param("use", "Steps to go through, in order: ocr, transcribe, speak (or speak.provider), typeset, draw, " +
+                    "stft, cwt, read_field, render_field, resynthesize, extract_notes, synth…", ""),
                 Param("avoid", "Steps not to use.", ""),
                 Param("time", "Spectrograms: which way time runs — right, left, down (waterfall) or up.", "right"),
                 Param("scale", "Spectrograms: log (musical) or linear frequency axis.", "log"),
@@ -333,11 +334,21 @@ object Verbs {
                 Param("size", "Text set as a picture: letter size in pixels.", "44"),
                 Param("at", "Video: which moment to take a frame from, seconds.", ""),
                 Param("width", "Pictures made: width in pixels.", "1200"),
-                Param("height", "Pictures made: height in pixels.", "600")
+                Param("height", "Pictures made: height in pixels.", "600"),
+                Param("omega", "Wavelets: cycles in each one — more is finer in pitch, coarser in time.", "6"),
+                Param("window", "Fourier: samples per moment, a power of two.", "2048")
             ),
             group = GROUP_OPEN,
             without = "Needs nothing for what the phone can do itself; reading pictures, transcribing " +
                 "and generating need a provider, and say which."
+        ),
+        VerbSpec(
+            id = "provenance", glyph = "ⓘ", label = "Where it came from",
+            help = "What a file on the clipboard that was made here went through: where it started, every " +
+                "step, what each one assumed, estimated, threw away or made up, and whether anything " +
+                "left the phone on the way.",
+            group = GROUP_OPEN,
+            without = "Needs nothing; a file made elsewhere says it carries no history."
         ),
         VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",

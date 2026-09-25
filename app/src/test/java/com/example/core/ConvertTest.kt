@@ -1,21 +1,17 @@
 package com.example.core
 
-import com.example.core.convert.ConvertGraph
-import com.example.core.convert.Kind
 import com.example.core.convert.Luma
 import com.example.core.convert.Lyric
 import com.example.core.convert.Midi
 import com.example.core.convert.Note
 import com.example.core.convert.NoteText
 import com.example.core.convert.PicturePrep
-import com.example.core.convert.Rules
 import com.example.core.convert.SingAlong
 import com.example.core.convert.Spectro
-import com.example.core.convert.Step
 import com.example.core.convert.Synth
 import com.example.core.convert.TimeAxis
 import com.example.core.convert.Wav
-import com.example.core.convert.Where
+import com.example.core.matrix.Interpret
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -36,8 +32,6 @@ class ConvertTest {
         Note(67, 1.0, 0.9, 60),
         Note(72, 1.0, 0.9, 60)
     )
-
-    private fun ids(path: List<Step>?) = path?.map { it.id }
 
     // ------------------------------------------------------------------
     // MIDI
@@ -325,137 +319,13 @@ class ConvertTest {
         assertTrue(SingAlong.lay(listOf("a"), emptyList()).isEmpty())
     }
 
-    // ------------------------------------------------------------------
-    // Planning
-    // ------------------------------------------------------------------
-
-    /** Plans the way the runner does: [providers] says which provider steps are set up. */
-    private fun plan(
-        from: Kind,
-        to: Kind,
-        providers: Set<String> = emptySet(),
-        isNotes: Boolean = false,
-        use: String? = null,
-        avoid: String? = null
-    ): List<Step>? {
-        val requested = Rules.ids(use)
-        val avoided = Rules.ids(avoid).toSet()
-        val usable: (Step) -> Boolean = { step ->
-            Rules.allows(step, from, isNotes, requested.toSet(), avoided) { s ->
-                s.where !is Where.Provider || s.id in providers
-            }
-        }
-        val through = requested.mapNotNull { ConvertGraph.byId(it) }
-        return if (through.isEmpty()) ConvertGraph.plan(from, to, usable) else ConvertGraph.planThrough(from, to, through, usable)
-    }
-
-    @Test
-    fun `the user's example - a spectrogram picture into MIDI - needs nothing but the phone`() {
-        assertEquals(listOf("spectrogram_notes"), ids(plan(Kind.IMAGE, Kind.MIDI)))
-    }
-
-    @Test
-    fun `a picture heard is the picture played, not rounded to notes`() {
-        assertEquals(listOf("sonify"), ids(plan(Kind.IMAGE, Kind.AUDIO)))
-        assertEquals(listOf("spectrogram_notes", "synth"), ids(plan(Kind.IMAGE, Kind.AUDIO, avoid = "sonify")))
-    }
-
-    @Test
-    fun `text out of a picture is reading it, never the names of notes in it`() {
-        assertEquals(listOf("ocr"), ids(plan(Kind.IMAGE, Kind.TEXT, providers = setOf("ocr"))))
-        assertNull(plan(Kind.IMAGE, Kind.TEXT))
-    }
-
-    @Test
-    fun `text out of a recording is what was said, and its notes only when asked`() {
-        assertEquals(listOf("transcribe"), ids(plan(Kind.AUDIO, Kind.TEXT, providers = setOf("transcribe"))))
-        assertNull(plan(Kind.AUDIO, Kind.TEXT))
-        assertEquals(listOf("pitch", "notes_out"), ids(plan(Kind.AUDIO, Kind.TEXT, use = "notes_out")))
-    }
-
-    @Test
-    fun `prose is spoken and a melody is played`() {
-        assertEquals(listOf("speak"), ids(plan(Kind.TEXT, Kind.AUDIO)))
-        assertEquals(listOf("notes_in", "synth"), ids(plan(Kind.TEXT, Kind.AUDIO, isNotes = true)))
-    }
-
-    @Test
-    fun `the phone is preferred to a provider, and a provider can be asked for`() {
-        assertEquals(listOf("speak"), ids(plan(Kind.TEXT, Kind.AUDIO, providers = setOf("speak_provider"))))
-        assertEquals(listOf("speak_provider"), ids(plan(Kind.TEXT, Kind.AUDIO, providers = setOf("speak_provider"), use = "speak_provider")))
-        assertEquals(listOf("typeset"), ids(plan(Kind.TEXT, Kind.IMAGE, providers = setOf("draw"))))
-        assertEquals(listOf("draw"), ids(plan(Kind.TEXT, Kind.IMAGE, providers = setOf("draw"), use = "draw")))
-    }
-
-    @Test
-    fun `text hidden in sound goes through a picture of it`() {
-        assertEquals(listOf("typeset", "sonify"), ids(plan(Kind.TEXT, Kind.AUDIO, use = "typeset")))
-    }
-
-    @Test
-    fun `a video gives up its sound and its pictures`() {
-        assertEquals(listOf("soundtrack"), ids(plan(Kind.VIDEO, Kind.AUDIO)))
-        assertEquals(listOf("frame"), ids(plan(Kind.VIDEO, Kind.IMAGE)))
-        assertEquals(listOf("soundtrack", "transcribe"), ids(plan(Kind.VIDEO, Kind.TEXT, providers = setOf("transcribe", "ocr"))))
-        assertEquals(listOf("soundtrack", "pitch"), ids(plan(Kind.VIDEO, Kind.MIDI)))
-    }
-
-    @Test
-    fun `a MIDI file shows its note names and its picture`() {
-        assertEquals(listOf("notes_out"), ids(plan(Kind.MIDI, Kind.TEXT)))
-        assertEquals(listOf("piano_roll"), ids(plan(Kind.MIDI, Kind.IMAGE)))
-        assertEquals(listOf("synth"), ids(plan(Kind.MIDI, Kind.AUDIO)))
-    }
-
-    @Test
-    fun `nothing to do is an empty plan and an impossible one is none`() {
-        assertEquals(emptyList<Step>(), plan(Kind.AUDIO, Kind.AUDIO))
-        assertNull(plan(Kind.IMAGE, Kind.VIDEO))
-        assertEquals(listOf("film"), ids(plan(Kind.TEXT, Kind.VIDEO, providers = setOf("film"))))
-    }
-
-    @Test
-    fun `the graph's steps are distinct and each one says what it does`() {
-        assertEquals(ConvertGraph.STEPS.size, ConvertGraph.STEPS.map { it.id }.toSet().size)
-        ConvertGraph.STEPS.forEach { s ->
-            assertTrue(s.id, s.label.isNotBlank())
-            assertTrue(s.id, s.cost > 0)
-            assertTrue(s.id, s.from != s.to)
-        }
-        assertEquals("audio → midi → text", ConvertGraph.describe(listOfNotNull(ConvertGraph.byId("pitch"), ConvertGraph.byId("notes_out"))))
-    }
-
     @Test
     fun `melodies written as text are told apart from prose`() {
-        assertTrue(Rules.looksLikeNotes("C4 E4 G4 - C5:2"))
-        assertTrue(Rules.looksLikeNotes("C4+E4+G4:2, A3 | F#3"))
-        assertFalse(Rules.looksLikeNotes("Hello world"))
-        assertFalse(Rules.looksLikeNotes("A4 paper is the size of this page"))
-        assertFalse(Rules.looksLikeNotes(""))
-    }
-
-    @Test
-    fun `steps are named in any separator and unknown ones are ignored`() {
-        assertEquals(listOf("pitch", "notes_out"), Rules.ids("pitch, notes_out"))
-        assertEquals(listOf("typeset", "sonify"), Rules.ids("typeset>sonify teleport"))
-        assertTrue(Rules.ids(null).isEmpty())
-    }
-
-    @Test
-    fun `what to convert to is understood in plain words and formats`() {
-        assertEquals(Kind.IMAGE, Kind.parse("jpg"))
-        assertEquals(Kind.AUDIO, Kind.parse("wav"))
-        assertEquals(Kind.MIDI, Kind.parse("midi"))
-        assertEquals(Kind.TEXT, Kind.parse("notes"))
-        assertNull(Kind.parse("smell"))
-        assertEquals("wav", Rules.format("wav"))
-        assertEquals("jpg", Rules.format("jpeg"))
-        assertNull(Rules.format("audio"))
-        assertTrue(Rules.wantsNoteNames("notes"))
-        assertFalse(Rules.wantsNoteNames("text"))
-        assertEquals(Kind.MIDI, Kind.ofMime("audio/midi"))
-        assertEquals(Kind.AUDIO, Kind.ofMime("audio/ogg"))
-        assertNull(Kind.ofMime("application/pdf"))
+        assertTrue(Interpret.looksLikeNotes("C4 E4 G4 - C5:2"))
+        assertTrue(Interpret.looksLikeNotes("C4+E4+G4:2, A3 | F#3"))
+        assertFalse(Interpret.looksLikeNotes("Hello world"))
+        assertFalse(Interpret.looksLikeNotes("A4 paper is the size of this page"))
+        assertFalse(Interpret.looksLikeNotes(""))
     }
 
     @Test

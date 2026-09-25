@@ -16,8 +16,8 @@ data class Note(val pitch: Int, val start: Double, val duration: Double, val vel
 /** A word sung at a moment, in seconds — what karaoke files carry beside the notes. */
 data class Lyric(val at: Double, val text: String)
 
-/** Notes and the words sung to them. */
-data class Song(val notes: List<Note>, val lyrics: List<Lyric> = emptyList())
+/** Notes and the words sung to them, and what the file says about where it came from. */
+data class Song(val notes: List<Note>, val lyrics: List<Lyric> = emptyList(), val meta: String? = null)
 
 /**
  * Standard MIDI files, written and read — type 0, one track, the subset every
@@ -28,11 +28,16 @@ data class Song(val notes: List<Note>, val lyrics: List<Lyric> = emptyList())
  */
 object Midi {
 
+    /** What starts the text event IO Matrix writes its history into. */
+    const val META_MARK = "io-matrix:"
+
     fun write(
         notes: List<Note>,
         bpm: Double = 120.0,
         ticksPerQuarter: Int = 480,
-        lyrics: List<Lyric> = emptyList()
+        lyrics: List<Lyric> = emptyList(),
+        /** Written as a text event at the start, marked so it is never taken for words. */
+        meta: String? = null
     ): ByteArray {
         val ticksPerSecond = ticksPerQuarter * bpm / 60.0
         // At the same tick: notes end, then the word is shown, then notes start — the
@@ -61,6 +66,14 @@ object Midi {
         val usPerQuarter = (60_000_000.0 / bpm).roundToInt()
         track.write(byteArrayOf(0, 0xFF.toByte(), 0x51, 3,
             (usPerQuarter shr 16).toByte(), (usPerQuarter shr 8).toByte(), usPerQuarter.toByte()))
+        meta?.let { m ->
+            val text = (META_MARK + m).toByteArray(Charsets.UTF_8)
+            track.write(0)
+            track.write(0xFF)
+            track.write(0x01)
+            writeVarLen(track, text.size.toLong())
+            track.write(text)
+        }
         var last = 0L
         events.sortedWith(compareBy<Ev>({ it.tick }, { it.order })).forEach { e ->
             writeVarLen(track, e.tick - last)
@@ -175,10 +188,12 @@ object Midi {
         }
         // Text events also carry titles and copyright notices; they are only taken as
         // words when a file has no lyric events at all, as older karaoke files do.
-        val sung = words.ifEmpty { texts.filter { (_, s) -> !s.startsWith("@") } }
+        val meta = texts.firstOrNull { it.second.startsWith(META_MARK) }?.second?.removePrefix(META_MARK)
+        val sung = words.ifEmpty { texts.filter { (_, s) -> !s.startsWith("@") && !s.startsWith(META_MARK) } }
         return Song(
             notes.sortedBy { it.start },
-            sung.map { (tick, s) -> Lyric(seconds(tick), s) }.sortedBy { it.at }
+            sung.map { (tick, s) -> Lyric(seconds(tick), s) }.sortedBy { it.at },
+            meta
         )
     }
 
@@ -356,16 +371,49 @@ object Synth {
 
 /** 16-bit PCM WAV, written and read. */
 object Wav {
-    fun write(samples: ShortArray, rate: Int): ByteArray {
+    /** [comment], when given, goes into a LIST/INFO "ICMT" chunk, which players ignore. */
+    fun write(samples: ShortArray, rate: Int, comment: String? = null): ByteArray {
         val data = samples.size * 2
-        val out = ByteArrayOutputStream(44 + data)
+        val note = comment?.let { Ascii.escape(it).toByteArray(Charsets.US_ASCII) + 0.toByte() }
+        val noteChunk = note?.let { 4 + 8 + it.size + (it.size and 1) } ?: 0
+        val out = ByteArrayOutputStream(44 + data + noteChunk + 8)
         fun le32(v: Int) = out.write(byteArrayOf(v.toByte(), (v shr 8).toByte(), (v shr 16).toByte(), (v shr 24).toByte()))
         fun le16(v: Int) = out.write(byteArrayOf(v.toByte(), (v shr 8).toByte()))
-        out.write("RIFF".toByteArray()); le32(36 + data); out.write("WAVE".toByteArray())
+        out.write("RIFF".toByteArray()); le32(36 + data + if (note != null) 8 + noteChunk else 0); out.write("WAVE".toByteArray())
         out.write("fmt ".toByteArray()); le32(16); le16(1); le16(1); le32(rate); le32(rate * 2); le16(2); le16(16)
+        if (note != null) {
+            out.write("LIST".toByteArray()); le32(noteChunk); out.write("INFO".toByteArray())
+            out.write("ICMT".toByteArray()); le32(note.size); out.write(note)
+            if ((note.size and 1) == 1) out.write(0)
+        }
         out.write("data".toByteArray()); le32(data)
         samples.forEach { le16(it.toInt()) }
         return out.toByteArray()
+    }
+
+    /** The comment a WAV carries in its INFO list, if it has one. */
+    fun comment(bytes: ByteArray): String? {
+        if (bytes.size < 12 || String(bytes, 0, 4) != "RIFF" || String(bytes, 8, 4) != "WAVE") return null
+        fun le32(at: Int) = (bytes[at].toInt() and 0xFF) or ((bytes[at + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[at + 2].toInt() and 0xFF) shl 16) or (bytes[at + 3].toInt() shl 24)
+        var p = 12
+        while (p + 8 <= bytes.size) {
+            val id = String(bytes, p, 4)
+            val size = le32(p + 4)
+            if (size < 0 || p + 8 + size > bytes.size) return null
+            if (id == "LIST" && size >= 4 && String(bytes, p + 8, 4) == "INFO") {
+                var q = p + 12
+                while (q + 8 <= p + 8 + size) {
+                    val sub = String(bytes, q, 4)
+                    val len = le32(q + 4)
+                    if (len < 0 || q + 8 + len > bytes.size) return null
+                    if (sub == "ICMT") return String(bytes, q + 8, len, Charsets.US_ASCII).trimEnd('\u0000')
+                    q += 8 + len + (len and 1)
+                }
+            }
+            p += 8 + size + (size and 1)
+        }
+        return null
     }
 
     /**

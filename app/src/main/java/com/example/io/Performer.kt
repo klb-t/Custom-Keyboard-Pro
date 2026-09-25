@@ -195,6 +195,7 @@ class Performer(private val host: PerformerHost) {
             "share" -> share(command.arg("text")?.takeIf { it.isNotBlank() } ?: host.nearbyText())
             "system_settings" -> systemSettings(command.arg("page").orEmpty())
             "convert" -> ConvertRunner.run(context, command, host)
+            "provenance" -> ConvertRunner.explain(context, host)
 
             "record" -> host.record(
                 command.arg("state")?.lowercase() ?: "toggle",

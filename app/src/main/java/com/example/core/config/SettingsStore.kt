@@ -141,6 +141,7 @@ object SettingsStore {
         put("controlValuesJson", s.controlValuesJson)
         put("engineWiresJson", s.engineWiresJson)
         put("macrosJson", s.macrosJson)
+        put("convertLocalOnly", s.convertLocalOnly)
         put("pocketMode", s.pocketMode.name)
         put("pocketBlockKeys", s.pocketBlockKeys)
         put("pocketUnlockKeys", s.pocketUnlockKeys)
@@ -346,6 +347,7 @@ object SettingsStore {
             controlValuesJson = o.optString("controlValuesJson", d.controlValuesJson),
             engineWiresJson = o.optString("engineWiresJson", d.engineWiresJson),
             macrosJson = o.optString("macrosJson", d.macrosJson),
+            convertLocalOnly = o.optBoolean("convertLocalOnly", d.convertLocalOnly),
             pocketMode = enumOf(o.optString("pocketMode", d.pocketMode.name), d.pocketMode),
             pocketBlockKeys = o.optBoolean("pocketBlockKeys", d.pocketBlockKeys),
             pocketUnlockKeys = o.optString("pocketUnlockKeys", d.pocketUnlockKeys),

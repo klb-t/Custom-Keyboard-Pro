@@ -1,4 +1,4 @@
-# Custom Keyboard Pro
+# IO Matrix
 
 An Android keyboard where the layout is data, not code — so anything the built-in
 layouts can do, a layout you make can do too.

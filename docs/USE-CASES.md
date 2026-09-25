@@ -97,25 +97,9 @@ the accessibility service).
 
 ## The converter
 
-"Everything into everything" is kept finite by not writing conversions at all. There
-are **kinds** (text, image, audio, MIDI, video) and **steps** between two kinds, each
-saying where it runs: in the app's own arithmetic, in the phone's services, or at a
-provider. A conversion is a path, found by a cheapest-path search over the steps that
-can run right now — so one new step makes every path through it possible at once.
-
-| step | from → to | where |
-|---|---|---|
-| read the picture as a spectrogram of notes | image → MIDI | here |
-| play the picture as a spectrogram (a sine per row) | image → audio | here |
-| draw its spectrogram | audio → image | here |
-| the melody in the sound | audio → MIDI | here |
-| draw the notes as a spectrogram | MIDI → image | here |
-| play the notes / the notes' names / notes from names | MIDI ↔ audio, text | here |
-| set the text as a picture | text → image | here |
-| take the sound / a frame out of a video | video → audio, image | here |
-| read aloud to a file | text → audio | the phone's speech engine |
-| read the text in the picture, write down what is said | image, audio → text | a provider |
-| a provider's voice, a picture or a video of what it describes | text → audio, image, video | a provider |
+Converting is the first vertical slice of the IO Matrix model — types apart from
+formats, transforms apart from who carries them out, a planner that keeps every way,
+and a history carried with every result. See [IO-MATRIX.md](IO-MATRIX.md).
 
 Things that are not obvious:
 
@@ -123,27 +107,22 @@ Things that are not obvious:
   waterfall read from the top) or up (as radios draw it, newest at the top); the
   frequency axis may be logarithmic or linear, over any range, and flipped. All of it
   is a parameter (`time=`, `scale=`, `low=`, `high=`, `flip=`, `seconds=`), as is the
-  part of the picture that is the spectrogram (`area=`, to leave out axes and labels)
-  and whether dark means loud (`invert=`, by itself for mostly light pictures).
-- **Each pixel row belongs to the nearest semitone and to no other.** On a linear
-  axis low semitones are closer together than one row, so some get no row at all —
-  that is what the picture can tell, and reading it as two notes would be worse.
-- **A sung note is a stack of lines.** The note, its octave, its twelfth… The melody
-  step folds the overtones into the note they belong to and keeps the loudest line
-  at each moment (`harmonics=`, `voices=` to change either), at the price of real
-  octaves played together.
-- **"Vocal with its words"** is a MIDI file with lyric events: the melody from the
-  spectrogram, the words from transcription laid over the notes' starts
-  (`lyrics=on`, which needs a transcription provider, because it sends the recording).
-- **Some steps reinterpret rather than convert.** Text read as note names is only
-  used when the text *is* notes, and notes written out as names only when the input
-  was a MIDI file or `to=notes` asks for it — so a recording into text is its words,
-  never the names of the notes in it.
-- **The phone is preferred to a provider**, and the plan — with where it sends things
-  — is told before it runs. `use=` goes through given steps (`use=draw` for an AI
-  picture rather than typeset text), `avoid=` leaves some out.
-- **Text hidden in sound** is text set in one line as a picture, then played as a
-  spectrogram on a linear axis, which is what a spectrogram app shows by default.
+  part of the picture that is the spectrogram (`area=`) and whether dark means loud
+  (`invert=`). Parameters nobody gave are recorded as assumptions; a picture drawn here
+  carries its own, so reading it back assumes nothing.
+- **Each row belongs to the nearest semitone and to no other.** On a linear axis low
+  semitones are closer together than one row, so some get no row at all.
+- **A sung note is a stack of lines.** The melody from a recording folds overtones
+  into their note and keeps the loudest line at each moment (`harmonics=`, `voices=`).
+- **"Vocal with its words"** is a MIDI file with lyric events (`lyrics=on`, which needs
+  a transcription provider, because it sends the recording).
+- **MIDI into text is its words**, not its note names: note names are a way of
+  *keeping* notes (`to=notes`), not a conversion into text.
+- **A spectrogram or a scalogram** (`to=spectrogram`, `to=scalogram`) are two ways to a
+  picture of a sound's field: Fourier (even resolution) or Morlet wavelets (finer in
+  time high up, finer in pitch low down; `omega=` trades one for the other).
+- **Text hidden in sound** (`use=typeset`) is text set in one line, read as a
+  spectrogram on a linear axis, and played.
 
 ## Not absorbable, and why
 
