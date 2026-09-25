@@ -281,9 +281,9 @@ object ConvertRunner {
         if ((type ?: Types.byId(representation?.type)) == Types.TEXT) {
             return textArrival(String(bytes, Charsets.UTF_8), Transports.CLIPBOARD)
         }
-        val form = representation?.takeIf { type == null || it.type == type.id }
-            ?: Representations.writable(type!!.id).firstOrNull()
-            ?: Representation(type.id, type.id, type.label, mime)
+        val form: Representation = representation?.takeIf { type == null || it.type == type.id }
+            ?: type?.let { t -> Representations.writable(t.id).firstOrNull() ?: Representation(t.id, t.id, t.label, mime) }
+            ?: error("not sure what that file is — say from=image, audio, midi or video")
         val earlier = history(bytes, form)
         val facts = Interpret.factsFrom(earlier) + if (form == Representations.SMF && runCatching { Midi.readSong(bytes).lyrics.isNotEmpty() }.getOrDefault(false)) setOf("lyrics") else emptySet()
         return Arrival(Value.Encoded(bytes, form, mime ?: form.mime ?: "application/octet-stream"), Transports.CLIPBOARD, Interpret.file(form, facts), earlier)
