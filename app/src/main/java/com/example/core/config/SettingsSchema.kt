@@ -362,6 +362,34 @@ object SettingsSchema {
                 "\"cursor:left\", \"do:torch toggle\", \"layout:science\". Sensors are switched on " +
                 "only for the wires that need them, and only while the keyboard is open."
         ),
+        "engineStreamsJson" to Meta(
+            kind = SettingKind.JSON, group = GROUP_MATRIX, label = "Streams: values, continuously",
+            multiline = true,
+            help = "A list of {\"id\", \"from\", \"via\": [stages], \"to\": [sinks]}. From: acceleration, " +
+                "control:<element id>, net:<channel>. Stages: tilt wheel|roll|pitch, calibrate [ms], " +
+                "range min max, deadzone size, curve power, smooth, invert, clamp, rate hz. Sinks: " +
+                "udp host:port (sends \"io <id> <values>\" lines — leaves the phone), do <action with {v}>, " +
+                "events level (wires then hear stream:<id>:high / low / center). Example — the phone " +
+                "as a steering wheel for a PC: {\"id\":\"steer\",\"from\":\"acceleration\",\"via\":" +
+                "[\"tilt wheel\",\"calibrate\",\"range -45 45\",\"deadzone 0.05\",\"curve 1.5\",\"smooth\"]," +
+                "\"to\":[\"udp 192.168.1.20:26760\"]}. With the keyboard closed, streams need accessibility on."
+        ),
+        "netListenPort" to Meta(
+            group = GROUP_MATRIX, label = "Listen on port", min = 0f, max = 65535f, expert = true,
+            help = "UDP and TCP both, for lines \"<token> io <channel> <values>\" — streams (from net:<channel>) " +
+                "and wires (on net:<channel>) hear them. 0 listens to nothing; so does a missing token."
+        ),
+        "netToken" to Meta(
+            group = GROUP_MATRIX, label = "Token every line starts with", secret = true, expert = true,
+            help = "At least 8 characters, no spaces. Anything on the same network can reach the port; only " +
+                "lines with this in front are heard, and wrong ones get no answer. It travels unencrypted, " +
+                "so use it on networks you trust."
+        ),
+        "netAllowCommands" to Meta(
+            group = GROUP_MATRIX, label = "Let the network run actions", expert = true,
+            help = "Also accept \"<token> do <verb line>\" — back, tap, type, anything a key can do. Off, the " +
+                "network can only send values."
+        ),
         "convertLocalOnly" to Meta(
             group = GROUP_MATRIX, label = "Convert only on the phone",
             help = "Reading pictures, transcribing and generating are left out of every conversion, " +

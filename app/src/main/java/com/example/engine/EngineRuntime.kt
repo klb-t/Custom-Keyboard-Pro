@@ -25,6 +25,12 @@ import com.example.core.engine.VolumeGestures
 import com.example.core.engine.Wire
 import com.example.core.io.Macros
 import com.example.core.layout.KeyAction
+import com.example.core.layout.LayoutJson
+import com.example.core.matrix.NetLines
+import com.example.core.matrix.NetMessage
+import com.example.core.matrix.Sample
+import com.example.core.matrix.Sink
+import com.example.core.matrix.StreamSource
 import com.example.io.Performer
 import com.example.io.PerformerHost
 import com.example.util.AppLogger
@@ -127,7 +133,12 @@ object EngineRuntime {
             // side — keyboard or accessibility — happens to be alive.
             scope.launch {
                 SettingsStore.state
-                    .map { listOf(it.engineWiresJson, it.knobs, it.pocketUnlockPhrase, it.pocketLockPhrase, it.pocketLockPhraseApps) }
+                    .map {
+                        listOf(
+                            it.engineWiresJson, it.engineStreamsJson, it.knobs, it.pocketUnlockPhrase, it.pocketLockPhrase,
+                            it.pocketLockPhraseApps, it.netListenPort, it.netToken, it.netAllowCommands
+                        )
+                    }
                     .distinctUntilChanged()
                     .drop(1)
                     .collect { settingsChanged() }
@@ -206,9 +217,13 @@ object EngineRuntime {
 
     private fun refresh() {
         val ctx = context ?: return
-        val needed = if (alive()) Inputs.sourcesNeeded(wires(), state) else emptySet()
+        val needed = if (alive()) Inputs.sourcesNeeded(wires(), state) + StreamRunner.sourcesNeeded(state) else emptySet()
 
-        val sensors = hub ?: SensorHub(ctx) { fire(it) }.also { hub = it }
+        val sensors = hub ?: SensorHub(
+            ctx,
+            onInput = { fire(it) },
+            onAcceleration = { t, v -> StreamRunner.feed("acceleration", Sample(t, v), state) }
+        ).also { hub = it }
         sensors.listen(needed)
 
         if (InputSource.VOICE in needed) {
@@ -219,6 +234,21 @@ object EngineRuntime {
         }
 
         if (InputSource.SYSTEM in needed) registerSystem(ctx) else unregisterSystem(ctx)
+
+        // The network is listened to only with a port, a token, and something that
+        // reads from it — never because the feature exists.
+        val s = SettingsStore.current
+        val netWanted = alive() && s.netListenPort in 1..65535 && NetLines.tokenUsable(s.netToken) && (
+            s.netAllowCommands ||
+                wires().any { it.enabled && it.on.startsWith("net:") } ||
+                StreamRunner.states().any { it.stream.enabled && it.stream.source == StreamSource.NETWORK }
+            )
+        if (netWanted) {
+            (net ?: NetListener({ netReceived(it) }, { tell(it) }).also { net = it })
+                .start(s.netListenPort, s.netToken, s.netAllowCommands)
+        } else {
+            net?.stop()
+        }
 
         // With the keyboard open, it gets the keys itself; closed, only the
         // accessibility service can, and only while a wire wants them.
@@ -277,6 +307,31 @@ object EngineRuntime {
             AppLogger.d(TAG, "voice matched ${matching.size} wire(s)")
             matching.forEach { run(it, "voice") }
         }
+    }
+
+    private var net: NetListener? = null
+
+    /** A line from the network, already checked against the token. */
+    private fun netReceived(message: NetMessage) {
+        when (message) {
+            is NetMessage.Values -> {
+                val input = "net:" + message.channel.lowercase()
+                StreamRunner.feed(input, Sample(SystemClock.uptimeMillis(), message.values), state)
+                fireWith(input) { Sink.fill(it, message.values) }
+            }
+            is NetMessage.Do -> LayoutJson.parseAction("do:" + message.line)?.let { dispatch(it) }
+        }
+    }
+
+    /** A floating control moved: its values go to the streams that read it. */
+    fun controlMoved(id: String, values: FloatArray) {
+        StreamRunner.feed("control:$id", Sample(SystemClock.uptimeMillis(), values), state)
+    }
+
+    /** Streams start their calibration again: all of them, or the one called [id]. */
+    fun recenter(id: String?) {
+        StreamRunner.recenter(id)
+        tell(if (id.isNullOrBlank()) "Streams recentred" else "Stream “$id” recentred")
     }
 
     /**

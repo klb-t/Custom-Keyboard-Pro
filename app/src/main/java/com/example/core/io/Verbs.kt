@@ -351,6 +351,21 @@ object Verbs {
             without = "Needs nothing; a file made elsewhere says it carries no history."
         ),
         VerbSpec(
+            id = "recenter", glyph = "⌖", label = "Recenter streams",
+            help = "Whatever a stream reads next becomes its zero again — hold the phone the way that " +
+                "should mean \"straight ahead\" and press it.",
+            params = listOf(Param("stream", "Which stream, by id; all of them when left out.", "steer")),
+            group = GROUP_MEDIA,
+            without = "Needs nothing; with no streams set up it says so."
+        ),
+        VerbSpec(
+            id = "streams", glyph = "≋", label = "What the streams do",
+            help = "Each stream set up, from where through what to where — including which of them send " +
+                "values off the phone.",
+            group = GROUP_MEDIA,
+            without = "Needs nothing."
+        ),
+        VerbSpec(
             id = "record", glyph = "⏺", label = "Record a macro",
             help = "Start or stop recording everything pressed on the keyboard — keys, " +
                 "actions, pauses between actions on other apps — under a name, to play back later.",

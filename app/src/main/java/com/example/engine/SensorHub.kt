@@ -23,7 +23,12 @@ import com.example.core.engine.ProximityGesture
  * not grow because a feature exists. Thresholds come from the knobs, read when
  * listening starts, so a changed setting applies from the next time it does.
  */
-class SensorHub(context: Context, private val onInput: (String) -> Unit) : SensorEventListener {
+class SensorHub(
+    context: Context,
+    private val onInput: (String) -> Unit,
+    /** Every accelerometer reading, for streams: milliseconds, and x, y, z. */
+    private val onAcceleration: ((Long, FloatArray) -> Unit)? = null
+) : SensorEventListener {
 
     private val manager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     private val main = Handler(Looper.getMainLooper())
@@ -80,7 +85,10 @@ class SensorHub(context: Context, private val onInput: (String) -> Unit) : Senso
         val e = event ?: return
         val atMs = e.timestamp / 1_000_000L
         when (e.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> motion?.reading(e.values[0], e.values[1], e.values[2], atMs)?.let(onInput)
+            Sensor.TYPE_ACCELEROMETER -> {
+                onAcceleration?.invoke(atMs, floatArrayOf(e.values[0], e.values[1], e.values[2]))
+                motion?.reading(e.values[0], e.values[1], e.values[2], atMs)?.let(onInput)
+            }
             Sensor.TYPE_PROXIMITY -> {
                 val p = proximity ?: return
                 val fired = p.reading(e.values[0], e.sensor.maximumRange, atMs)

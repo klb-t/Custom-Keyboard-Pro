@@ -108,13 +108,68 @@ creeps in rather than to catch a bug:
   gesture is `detect_gesture: acceleration → event` (an inference with thresholds as
   its assumption), a threshold on a control value is `control → event`.
 
+## Streams: values, continuously
+
+The engine used to reduce the accelerometer to events — shake, tilt left, face down.
+A stream keeps the values: `acceleration → tilt → calibrate → range → dead zone →
+curve → smooth → sink`, each stage an instance of a transform (`tilt`: acceleration →
+control, assuming gravity dominates; `shape`: control → control). Written in
+Settings › Converting and streams:
+
+```json
+[{"id": "steer", "from": "acceleration",
+  "via": ["tilt wheel", "calibrate", "range -45 45", "deadzone 0.05", "curve 1.5", "smooth"],
+  "to": ["udp 192.168.1.20:26760"]}]
+```
+
+- **Sources**: `acceleration`, `control:<element id>` (a floating slider, knob or pad),
+  `net:<channel>` (next).
+- **Sinks**: `udp host:port` sends `io <id> <values>` lines (newest value wins while
+  the network is busy — coarser rather than later); `do <action with {v}>` runs any key
+  action with the value put in, only on real changes and at most ~30 times a second;
+  `events level` turns crossings into engine inputs `stream:<id>:high|low|center`, so
+  wires hear a held tilt as they hear a shake.
+- **Provenance** is kept per stream, not per reading: a hundred readings a second each
+  carrying a history would cost more than the readings. `streams` shows each stream's
+  path and whether it leaves the phone.
+- **The wheel angle** is the rotation about the screen's normal, right turns positive,
+  wrapping at ±180 after calibration — so holding the phone in landscape (−90° at
+  rest) is centred by `calibrate`, and `recenter` does it again.
+- `tools/io_matrix_receiver.py` turns the lines into a virtual Xbox pad on a PC
+  (vgamepad on Windows, uinput on Linux) or prints them.
+
+A wire is the event case of a stream: its source is an event, its only stage "when
+it happens", its sink an action.
+
+## The network, both ways
+
+The phone speaks and hears the same line protocol. Out: a stream's `udp` sink. In:
+with a port and a token set (expert settings), it listens on UDP and TCP both for
+
+```
+<token> io <channel> [<value> …]
+<token> do <verb line>          # only with "Let the network run actions"
+```
+
+`io` lines feed streams `from: net:<channel>` and fire wires `on: net:<channel>` with
+the values put into `{v}`, `{v1}`… So another phone can steer this one, a script can
+press Back, a PC can move a fader — each a stream or a wire, not new code.
+
+A listening socket that can make the phone act is a door, and the defaults keep it
+shut: nothing listens without a port, a token of 8+ characters, and a stream or wire
+that reads the network (or commands allowed); a wrong token gets no answer; tokens are
+compared in constant time; lines are capped at 512 characters, TCP connections at four;
+`do` lines are refused unless separately allowed. The token travels unencrypted, which
+the setting says: trusted networks only.
+
 ## Open, found by the real cases
 
 - **Joins.** "A song → melody with its words" needs two branches of the same recording
   (notes, and transcription) merged. The planner's ways are single paths; the join is
   done as a step of its own and recorded as one. A second real join would justify
   planning over DAGs.
-- **Continuous streams** (`acceleration → tilt → calibrate → dead zone → curve → axis`)
-  and network transports — the next vertical slices.
+- **Streams with the keyboard closed** rely on the accessibility service keeping the
+  process alive; whether every phone delivers accelerometer readings to it in the
+  background is not yet known. A foreground service is the fallback if not.
 - **Colour maps.** Reading a picture as a field assumes brightness rises with level;
   rainbow maps ("jet") break that, and need a colour → level step of their own.

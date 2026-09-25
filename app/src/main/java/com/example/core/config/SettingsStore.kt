@@ -142,6 +142,10 @@ object SettingsStore {
         put("engineWiresJson", s.engineWiresJson)
         put("macrosJson", s.macrosJson)
         put("convertLocalOnly", s.convertLocalOnly)
+        put("engineStreamsJson", s.engineStreamsJson)
+        put("netListenPort", s.netListenPort)
+        put("netToken", s.netToken)
+        put("netAllowCommands", s.netAllowCommands)
         put("pocketMode", s.pocketMode.name)
         put("pocketBlockKeys", s.pocketBlockKeys)
         put("pocketUnlockKeys", s.pocketUnlockKeys)
@@ -348,6 +352,10 @@ object SettingsStore {
             engineWiresJson = o.optString("engineWiresJson", d.engineWiresJson),
             macrosJson = o.optString("macrosJson", d.macrosJson),
             convertLocalOnly = o.optBoolean("convertLocalOnly", d.convertLocalOnly),
+            engineStreamsJson = o.optString("engineStreamsJson", d.engineStreamsJson),
+            netListenPort = o.optInt("netListenPort", d.netListenPort).coerceIn(0, 65535),
+            netToken = o.optString("netToken", d.netToken),
+            netAllowCommands = o.optBoolean("netAllowCommands", d.netAllowCommands),
             pocketMode = enumOf(o.optString("pocketMode", d.pocketMode.name), d.pocketMode),
             pocketBlockKeys = o.optBoolean("pocketBlockKeys", d.pocketBlockKeys),
             pocketUnlockKeys = o.optString("pocketUnlockKeys", d.pocketUnlockKeys),

@@ -1081,6 +1081,10 @@ private fun sendControl(host: KeyboardHost, id: String, def: com.example.core.la
         LayoutJson.parseAction(com.example.core.layout.Controls.fill(def.action, v, def, y))?.let { host.perform(it) }
     }
     com.example.engine.EngineRuntime.fireWith("control:$id") { com.example.core.layout.Controls.fill(it, v, def, y) }
+    com.example.engine.EngineRuntime.controlMoved(
+        id,
+        if (def.kind == com.example.core.layout.ControlKind.XY) floatArrayOf(v.toFloat(), y.toFloat()) else floatArrayOf(v.toFloat())
+    )
 }
 
 /** The pieces that live in the panel at the bottom, stacked in the order given. */

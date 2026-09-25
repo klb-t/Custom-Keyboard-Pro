@@ -72,6 +72,8 @@ private val PRESETS = listOf(
     Preset("convert to=spectrogram", "Sound → spectrogram"),
     Preset("convert to=scalogram", "Sound → scalogram"),
     Preset("provenance", "Where it came from"),
+    Preset("recenter", "Recenter streams"),
+    Preset("streams", "What the streams do"),
     Preset("record toggle", "Record / stop"),
     Preset("play", "Play recording"),
     Preset("back", "Back"),

@@ -131,6 +131,26 @@ data class Settings(
      */
     val convertLocalOnly: Boolean = false,
 
+    /**
+     * Streams: readings shaped stage by stage and sent on as values, not events. A JSON
+     * list of {"id", "from", "via": [stages], "to": [sinks], "when", "in"} — see
+     * [com.example.core.matrix.Stream]. Empty sends nothing and switches no sensor on.
+     */
+    val engineStreamsJson: String = "",
+
+    /**
+     * The port IO Matrix lines are listened for on, UDP and TCP both; 0 listens to
+     * nothing. It listens only with a token of 8 characters or more and while a stream
+     * or wire reads from the network (or commands are allowed).
+     */
+    val netListenPort: Int = 0,
+
+    /** What every line from the network has to start with. Without one, nothing is heard. */
+    val netToken: String = "",
+
+    /** Lines from the network may run verbs ("<token> do back"), not only send values. */
+    val netAllowCommands: Boolean = false,
+
     // --- pocket lock: touch, screen and keys locked while an app keeps running ----
     /** TOUCH keeps the screen as it is; SCREEN turns it black at the lowest brightness. */
     val pocketMode: com.example.core.io.PocketMode = com.example.core.io.PocketMode.SCREEN,

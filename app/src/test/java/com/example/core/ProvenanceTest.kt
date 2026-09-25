@@ -16,9 +16,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /** The history a result carries: what it keeps apart, and that it survives a file. */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ProvenanceTest {
 
     private val read = Record(

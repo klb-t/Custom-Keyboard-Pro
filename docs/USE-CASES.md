@@ -68,6 +68,8 @@ API for it.
 | "read with a better voice" | the catalogue's speech capability; placeholders get defaults and known choices |
 | "floating controls, potentiometers" | controls as elements: slider, knob, pad, switch — an action with `{v}` in it, and an engine input |
 | "any setting from a key, a knob or a wire" | the `set` and `toggle_setting` verbs, through the settings schema's own checks |
+| "the phone as a steering wheel for a game streamed from elsewhere" | streams: acceleration → tilt → calibrate → dead zone → curve → UDP, and a receiver that makes it a virtual pad |
+| "a model of information, not of formats" | IO Matrix: types, representations, transports and transforms kept apart; provenance carried with results ([IO-MATRIX.md](IO-MATRIX.md)) |
 | "a converter of everything into everything — a waterfall spectrogram JPEG into MIDI, a vocal with its words" | `convert`: a graph of small steps (`core/convert/ConvertGraph.kt`) and a planner that finds the cheapest path through the ones that can run now |
 
 ## The outputs engine, first half

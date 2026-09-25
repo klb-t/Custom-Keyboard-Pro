@@ -196,6 +196,20 @@ class Performer(private val host: PerformerHost) {
             "system_settings" -> systemSettings(command.arg("page").orEmpty())
             "convert" -> ConvertRunner.run(context, command, host)
             "provenance" -> ConvertRunner.explain(context, host)
+            "recenter" -> if (com.example.engine.StreamRunner.states().isEmpty()) {
+                host.notice("No streams set up — see Settings › Converting and streams")
+            } else com.example.engine.EngineRuntime.recenter(command.arg("stream"))
+            "streams" -> {
+                val all = com.example.engine.StreamRunner.states().map { it.stream }
+                if (all.isEmpty()) {
+                    host.notice("No streams set up — see Settings › Converting and streams")
+                } else {
+                    val text = all.joinToString("\n") { (if (it.enabled) "" else "(off) ") + it.id + ": " + it.describe() }
+                    host.notice("${all.size} stream${if (all.size == 1) "" else "s"}: " + all.first().describe(), actionLabel = "Copy all") {
+                        host.copy(text, "Streams")
+                    }
+                }
+            }
 
             "record" -> host.record(
                 command.arg("state")?.lowercase() ?: "toggle",
