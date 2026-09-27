@@ -41,3 +41,17 @@ gradle :app:testDebugUnitTest :app:assembleDebug
 
 The active implementation is on `claude/keyboard-app-all-features-78fkrd`.
 Inspect the remote before pushing to avoid overwriting concurrent work.
+
+## Resuming interrupted work
+
+Read `docs/RESUME.md` before extending an interrupted task. GitHub is the durable
+checkpoint; a chat transcript or a scratch checkout is not the only source of truth.
+Update that file at each completed feature with its validation state and the next
+concrete step. Publish coherent, reviewable checkpoints instead of accumulating
+hours of changes only in the temporary workspace. Do not label untested code as
+verified. Preserve the last working APK while a new build is being checked.
+
+Keep command output bounded and save long build logs to files. Start long commands
+as resumable sessions; do not block the conversation waiting for them. Report real
+progress regularly. These measures preserve work and responsiveness; they do not
+claim to prevent failures in the ChatGPT client or service.
