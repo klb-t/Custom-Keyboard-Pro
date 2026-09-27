@@ -60,6 +60,7 @@ class ClipboardRecoveryTest {
         assertArrayEquals(byteArrayOf(1, 2, 3, 4), ClipStore.fileFor(reopened.newestClip()!!)!!.readBytes())
         assertTrue(reopened.newestClip()!!.timestamp > 1)
         file.delete()
+        Unit
     }
 
     @Test fun `trash expiry removes only expired deleted entries and their bytes`() = runBlocking {
