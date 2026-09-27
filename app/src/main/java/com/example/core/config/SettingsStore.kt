@@ -350,6 +350,7 @@ object SettingsStore {
         put("syncMaxImageMb", s.syncMaxImageMb)
         put("clipboardTrashHours", s.clipboardTrashHours)
         put("screenshotToClipboard", s.screenshotToClipboard)
+        put("clipboardNativeFileFallback", s.clipboardNativeFileFallback)
         put("clipboardMaxItems", s.clipboardMaxItems)
         put("clipboardIgnorePasswordFields", s.clipboardIgnorePasswordFields)
         put("clipboardKeepFiles", s.clipboardKeepFiles)
@@ -587,6 +588,7 @@ object SettingsStore {
             syncMaxImageMb = o.optInt("syncMaxImageMb", d.syncMaxImageMb).coerceIn(1, 8),
             clipboardTrashHours = o.optInt("clipboardTrashHours", d.clipboardTrashHours).coerceIn(1, 168),
             screenshotToClipboard = o.optBoolean("screenshotToClipboard", d.screenshotToClipboard),
+            clipboardNativeFileFallback = o.optBoolean("clipboardNativeFileFallback", d.clipboardNativeFileFallback),
             clipboardMaxItems = o.optInt("clipboardMaxItems", d.clipboardMaxItems),
             clipboardIgnorePasswordFields = o.optBoolean("clipboardIgnorePasswordFields", d.clipboardIgnorePasswordFields),
             clipboardKeepFiles = o.optBoolean("clipboardKeepFiles", d.clipboardKeepFiles),

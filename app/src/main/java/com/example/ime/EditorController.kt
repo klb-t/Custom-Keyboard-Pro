@@ -538,6 +538,31 @@ class EditorController(
     fun cut() = contextMenu(android.R.id.cut)
     fun paste() = contextMenu(android.R.id.paste)
 
+    /** Rich content goes through the active editor's advertised MIME contract. */
+    fun pasteClip(clip: android.content.ClipData?): Boolean {
+        val ic = connection() ?: return false
+        val info = editorInfo()
+        if (android.os.Build.VERSION.SDK_INT >= 25 && info != null && clip?.itemCount == 1) {
+            val uri = clip.getItemAt(0).uri
+            val advertised = androidx.core.view.inputmethod.EditorInfoCompat.getContentMimeTypes(info)
+            val matches = (0 until clip.description.mimeTypeCount).any { i ->
+                advertised.any { android.content.ClipDescription.compareMimeTypes(clip.description.getMimeType(i), it) }
+            }
+            if (uri?.scheme == "content" && matches) {
+                val accepted = runCatching {
+                    ic.finishComposingText()
+                    ic.commitContent(android.view.inputmethod.InputContentInfo(uri, clip.description, null),
+                        InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)
+                }.getOrDefault(false)
+                if (accepted) { forgetHistory(); return true }
+            }
+        }
+        val fileOnly = clip?.itemCount == 1 && clip.getItemAt(0).uri != null && clip.getItemAt(0).text.isNullOrEmpty()
+        // Native text fields may stringify a URI; permit that fallback only by policy.
+        if (fileOnly && !settings().clipboardNativeFileFallback) return false
+        return paste()
+    }
+
     /**
      * Undo, done by the keyboard rather than asked of the app.
      *

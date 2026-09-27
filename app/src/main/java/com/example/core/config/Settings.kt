@@ -543,6 +543,7 @@ data class Settings(
     val syncMaxImageMb: Int = 2,
     val clipboardTrashHours: Int = 24,
     val screenshotToClipboard: Boolean = true,
+    val clipboardNativeFileFallback: Boolean = false,
     val clipboardMaxItems: Int = 200,
     val clipboardIgnorePasswordFields: Boolean = true,
     /**

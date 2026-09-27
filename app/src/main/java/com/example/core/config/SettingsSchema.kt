@@ -834,6 +834,7 @@ object SettingsSchema {
         "syncMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Sync: recent entries per device", min = 10f, max = 1000f),
         "syncMaxImageMb" to Meta(group = GROUP_CLIPBOARD, label = "Sync: maximum image MiB", min = 1f, max = 8f),
         "clipboardTrashHours" to Meta(group = GROUP_CLIPBOARD, label = "Keep deleted clips in Trash (hours)", min = 1f, max = 168f, help = "Manual deletion is recoverable until this interval expires. Bulk clearing always needs confirmation and preserves pinned entries."),
+        "clipboardNativeFileFallback" to Meta(group = GROUP_CLIPBOARD, label = "Native paste if rich file paste fails", help = "Try the receiving app's ordinary Paste action if it does not accept the file through its MIME contract. A plain text field may insert a URI instead of an image. Off by default."),
         "screenshotToClipboard" to Meta(group = GROUP_CLIPBOARD, label = "Screenshots to clipboard history", help = "The Screenshot action captures image bytes through Accessibility on Android 11+. Otherwise use the system screenshot Share action or Add image in the clipboard panel."),
         "clipboardMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Maximum entries", min = 10f, max = 2000f),
         "clipboardIgnorePasswordFields" to Meta(group = GROUP_CLIPBOARD, label = "Never record from password fields"),

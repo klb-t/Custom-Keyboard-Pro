@@ -2049,28 +2049,16 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         selectLayout(candidates[next].id)
     }
 
-    /**
-     * Paste, or read the thing being pasted.
-     *
-     * A picture or a recording on the clipboard is almost never wanted *as* a picture
-     * in a text field — there is nowhere for it to go. What the person wants is what is
-     * written in it, and paste is the moment they ask for it without knowing there was
-     * anything to ask.
-     *
-     * Everything about this is conditional on the setting being on and a provider being
-     * configured; with either missing this is an ordinary paste and nothing goes
-     * anywhere. When it does run, a failure falls back to the ordinary paste rather
-     * than leaving the user with a tap that did nothing.
-     */
+    /** Native rich-content paste first when conversion is off; conversion remains an explicit policy. */
     private fun pasteOrConvert() {
         val clip = clipboardManager?.primaryClip
         if (!PasteConversion.canConvert(this, clip, SettingsStore.current)) {
-            editor.paste()
+            pasteNativeClip(clip)
             return
         }
         if (editor.isSensitive) {
             // A password field is not somewhere a document gets uploaded on the way in.
-            editor.paste()
+            pasteNativeClip(clip)
             return
         }
 
@@ -2095,8 +2083,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                         refreshSuggestions()
                     }
                 },
-                onFailure = { editor.paste() }
+                onFailure = { pasteNativeClip(clip) }
             )
+        }
+    }
+
+    private fun pasteNativeClip(clip: ClipData?) {
+        if (!editor.pasteClip(clip) && clip != null && (0 until clip.itemCount).any { clip.getItemAt(it).uri != null }) {
+            notices.post("This app did not accept the file. It remains in Clipboard; use the app's attachment or paste action.")
         }
     }
 

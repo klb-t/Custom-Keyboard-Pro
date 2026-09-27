@@ -10,6 +10,11 @@ Room migration 3→4 preserves content and initializes stable IDs for future mer
 
 Clipboard accepts image shares, multiple images and explicit system-document picks.
 It stores bytes, not a temporary grant. Bounded thumbnails decode on an IO thread.
+Single-image/file paste uses the current editor's advertised MIME types and Android
+commitContent read grant on API 25+. A refusal produces a notice instead of URI
+text. Expert setting `clipboardNativeFileFallback` explicitly permits ordinary Paste
+for apps that support it; a plain text receiver may then stringify the URI. Explicit paste-to-text conversion retains
+its existing independent setting. Multi-item clips retain their summary-first policy.
 The explicit Screenshot command uses accessibility capture on Android 11+, and
 window capture on Android 14+ when possible. Protected-window refusals remain
 refusals. Android 9–10 uses system capture; share the result into IO Matrix. Other
