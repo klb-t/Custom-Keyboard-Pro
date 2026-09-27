@@ -46,6 +46,7 @@ data class VaultEntry(
     val origin: VaultOrigin? = null
 ) {
     fun validate() {
+        require(id.isNotBlank() && id.length <= 128) { "Invalid vault entry ID." }
         require(label.isNotBlank() && label.length <= 200) { "A label of at most 200 characters is required." }
         require(username.length <= 1000 && password.length <= 4096) { "Entry is too long." }
         require(website.isBlank() || VaultOrigin.https(website) != null) { "Use an exact HTTPS origin, for example https://example.com." }

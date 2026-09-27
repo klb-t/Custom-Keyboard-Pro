@@ -13,8 +13,8 @@ android {
     applicationId = "com.aistudio.qwertykey.xyzabc"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "4.1"
+    versionCode = 6
+    versionName = "4.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -87,6 +87,8 @@ dependencies {
   // The only network client. Model and speech providers are spoken to directly over
   // HTTP with org.json, so there is no SDK to update when a provider changes.
   implementation(libs.okhttp)
+  // Standard authenticated, password-protected JWE archives; no custom cipher format.
+  implementation(libs.nimbus.jose)
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

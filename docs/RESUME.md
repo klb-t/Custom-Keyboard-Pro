@@ -23,12 +23,22 @@ of the client freeze is unknown; do not claim that changing this repository fixe
 1. Add an explicit encrypted vault backup/restore workflow so device loss does not
    make the new vault unusable as a long-term store. Keep standard cryptography,
    authenticated access, private input, bounded parsing and review-before-import.
-2. Implement notification access as an actual optional source with shared settings,
-   privacy defaults and profiles. Permission alone is not an integration.
-3. Run the full existing suite, new focused regressions and Android lint, publish
+2. User's 00:31 follow-up: prevent one-tap clipboard-history deletion, include
+   screenshots as clipboard content, and fix keyboard/editor/navigation-bar
+   occlusion (reported in the ChatGPT Android app). Keep monitoring viewport changes.
+3. Design and implement feasible multi-device sharing of history, clipboard and
+   settings without an application server, initially through the same Google
+   account. Handle concurrent edits and account setup explicitly; do not invent an
+   OAuth client ID or claim Google integration before the actual grant works.
+4. Implement notification access as an optional source after these concrete user
+   regressions. Permission alone is not an integration.
+5. Run the full existing suite, new focused regressions and Android lint, publish
    the next APK, and record exact results here. Keep the signing identity unchanged.
 
-No executable changes for these next steps have been verified yet.
+Vault backup/restore and safer release publication are being implemented for 4.2;
+their source must pass compilation, focused tests and the full gate before being
+called verified. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
+strict input/work-factor bounds and explicit merge choices. UI locks on leaving.
 
 ## Recovery procedure
 

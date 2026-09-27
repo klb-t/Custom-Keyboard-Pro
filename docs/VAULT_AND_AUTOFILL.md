@@ -65,8 +65,8 @@ links to Android's contactless-payment settings for existing wallet providers.
   accessibility service. Hardware-backed key availability depends on the device.
 
 Changing/removing the device screen lock, key invalidation, uninstalling or clearing app
-data may make the local vault unrecoverable. There is no cloud sync, encrypted backup/restore,
-master-password recovery, passkey provider, browser database extraction, direct third-party
+data may make the local vault unrecoverable. [Encrypted backup/restore](VAULT_BACKUP.md) now supports recovery into an accessible/new vault with a separate passphrase. There is no automatic cloud sync,
+forgotten-passphrase recovery, passkey provider, browser database extraction, direct third-party
 vault access or standalone-manager API synchronization in this implementation. Android's
 conventional Autofill service is user-selected; enabling IO Matrix may replace the currently
 selected manager. CSV import and system settings are the supported interoperability paths.

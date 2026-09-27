@@ -63,6 +63,9 @@ import com.example.core.vault.VaultOrigin
 import com.example.core.vault.VaultSession
 import com.example.core.vault.VaultStore
 import com.example.core.vault.VaultTargets
+import com.example.core.vault.VaultBackup
+import com.example.core.vault.VaultImports
+import com.example.core.vault.VaultMergeMode
 import com.example.core.vault.readBytesBounded
 import com.example.core.security.PrivateInputContract
 import com.example.core.config.SettingsStore
@@ -73,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 
 /** Intentionally separate from the general settings activity and its saved state/logger. */
 class VaultActivity : ComponentActivity() {
@@ -81,7 +85,11 @@ class VaultActivity : ComponentActivity() {
     private var entries by mutableStateOf<List<VaultEntry>>(emptyList())
     private var importPreview by mutableStateOf<List<VaultEntry>>(emptyList())
     private var message by mutableStateOf("Unlock with your device screen lock.")
-    private var pendingImport: Uri? = null
+    private enum class FileMode { CSV_IMPORT, BACKUP_IMPORT, BACKUP_EXPORT }
+    private data class FileRequest(val mode: FileMode, val uri: Uri)
+    private var pendingFile: FileRequest? = null
+    private var transfer by mutableStateOf<FileRequest?>(null)
+    private var transferBusy by mutableStateOf(false)
     private var importJob: Job? = null
     private var fillRequest: VaultFillRequest? = null
     private var invalidFill = false
@@ -98,23 +106,36 @@ class VaultActivity : ComponentActivity() {
                 message = "Unlocked for $seconds seconds; leaving this screen locks it."
                 handler.removeCallbacks(expiry)
                 handler.postDelayed(expiry, (opened.expiresAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
-                pendingImport?.let { uri ->
-                    pendingImport = null
-                    readImport(uri, opened)
+                pendingFile?.let { request ->
+                    pendingFile = null
+                    if (request.mode == FileMode.CSV_IMPORT) readImport(request.uri, opened)
+                    else transfer = request
                 }
             } catch (_: Exception) {
+                pendingFile = null
                 lock()
                 message = "Could not unlock or read the selected file. Existing vault data is preserved. Check the CSV format, device lock and Keystore availability."
             }
         } else {
-            pendingImport = null
+            pendingFile = null
             lock()
             message = "Authentication cancelled."
         }
     }
 
     private val importFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) { pendingImport = uri; authenticate() }
+        if (uri != null) requestFile(FileMode.CSV_IMPORT, uri)
+    }
+    private val importBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) requestFile(FileMode.BACKUP_IMPORT, uri)
+    }
+    private val exportBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/jose")) { uri ->
+        if (uri != null) requestFile(FileMode.BACKUP_EXPORT, uri)
+    }
+
+    private fun requestFile(mode: FileMode, uri: Uri) {
+        pendingFile = FileRequest(mode, uri)
+        authenticate()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -143,7 +164,7 @@ class VaultActivity : ComponentActivity() {
                         Text("This Autofill request expired. Return to the form and request Autofill again.")
                         Button(onClick = { finish() }) { Text("Close") }
                     } else if (session == null) {
-                        Text("Protected by Android Keystore. Vault data is excluded from backups. No recovery or sync is available; keep an independent copy in your existing manager.")
+                        Text("Protected by Android Keystore and excluded from automatic device backups. Create an encrypted backup with a separate passphrase before relying on this vault. That file and passphrase let you restore it on another phone; neither can be recovered for you.")
                         Button(onClick = ::authenticate) { Text("Unlock") }
                         OutlinedButton(onClick = { finish() }) { Text("Close") }
                     } else {
@@ -184,6 +205,8 @@ class VaultActivity : ComponentActivity() {
         session = null
         entries = emptyList()
         importPreview = emptyList()
+        transfer = null
+        transferBusy = false
     }
 
     private fun readImport(uri: Uri, opened: VaultSession) {
@@ -223,6 +246,7 @@ class VaultActivity : ComponentActivity() {
 
     @Composable
     private fun VaultEditorList() {
+        transfer?.let { request -> BackupForm(request); return }
         var editing by remember { mutableStateOf<VaultEntry?>(null) }
         var delete by remember { mutableStateOf<VaultEntry?>(null) }
         var confirmBinding by remember { mutableStateOf<VaultEntry?>(null) }
@@ -244,13 +268,21 @@ class VaultActivity : ComponentActivity() {
             }
             OutlinedButton(onClick = { importFile.launch(arrayOf("text/*", "application/csv", "application/octet-stream")) }) { Text("Import login CSV") }
             Text("CSV imports: Chrome, Firefox or Bitwarden. Import reads the file once and does not retain permission. Delete plaintext exports yourself after checking the result.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { exportBackup.launch("io-matrix-vault.jwe") }) { Text("Create encrypted backup") }
+            OutlinedButton(onClick = { importBackup.launch(arrayOf("application/jose", "application/octet-stream", "text/plain")) }) { Text("Restore encrypted backup") }
             if (importPreview.isNotEmpty()) {
+                var mergeMode by remember(importPreview) { mutableStateOf(VaultMergeMode.KEEP_EXISTING) }
+                val plan = remember(entries, importPreview, mergeMode) { runCatching { VaultImports.merge(entries, importPreview, mergeMode) } }
                 Text("Import preview (${importPreview.size})", style = MaterialTheme.typography.titleMedium)
-                importPreview.take(10).forEach { Text("${it.label} · ${it.username}") }
+                importPreview.take(10).forEach { Text(it.label) }
                 if (importPreview.size > 10) Text("…and ${importPreview.size - 10} more")
-                Button(onClick = {
+                com.example.ui.settings.ChoiceRow("Matching backup IDs", options = VaultMergeMode.entries.toList(), selected = mergeMode,
+                    optionLabel = { it.label }, onSelect = { mergeMode = it })
+                plan.fold(onSuccess = { Text("${it.added} new · ${it.replaced} replaced · ${it.skipped} kept unchanged. Imported entries need a fresh Autofill target binding.") },
+                    onFailure = { Text("Import exceeds capacity or contains invalid data. Nothing will be changed.") })
+                Button(enabled = plan.isSuccess, onClick = {
                     try {
-                        persist(entries + importPreview)
+                        persist(VaultImports.merge(entries, importPreview, mergeMode).entries)
                         importPreview = emptyList()
                         message = "Imported. Edit each login to bind it to an app/browser before Autofill."
                     } catch (_: Exception) { message = "Import could not be saved. Unlock again or check the vault capacity. No entries were imported." }
@@ -289,12 +321,70 @@ class VaultActivity : ComponentActivity() {
         }
         delete?.let { entry ->
             AlertDialog(onDismissRequest = { delete = null }, title = { Text("Delete ${entry.label}?") },
-                text = { Text("There is no vault recovery or undo.") },
+                text = { Text("There is no undo. An encrypted backup made before this deletion can restore the entry.") },
                 confirmButton = { TextButton(onClick = {
                     try { persist(entries.filterNot { it.id == entry.id }); delete = null; message = "Entry deleted." }
                     catch (_: Exception) { delete = null; message = "Could not delete. Unlock again." }
                 }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { delete = null }) { Text("Cancel") } })
         }
+    }
+
+    @Composable
+    private fun BackupForm(request: FileRequest) {
+        var passphrase by remember(request) { mutableStateOf("") }
+        var confirmation by remember(request) { mutableStateOf("") }
+        val exporting = request.mode == FileMode.BACKUP_EXPORT
+        Text(if (exporting) "Encrypt a portable backup" else "Unlock the selected backup", style = MaterialTheme.typography.titleMedium)
+        Text("Use a long, unique backup passphrase, separate from your device PIN. Store it independently of the backup file. Losing it prevents recovery. App/browser Autofill bindings are not transferred.")
+        VaultInput("Backup passphrase", passphrase, { passphrase = it }, secret = true, limit = 1024)
+        if (exporting) VaultInput("Repeat backup passphrase", confirmation, { confirmation = it }, secret = true, limit = 1024)
+        Button(enabled = !transferBusy && passphrase.length >= 12 && (!exporting || passphrase == confirmation), onClick = {
+            val secret = passphrase.toCharArray()
+            passphrase = ""; confirmation = ""
+            runBackup(request, secret)
+        }) { Text(if (transferBusy) "Working…" else if (exporting) "Encrypt and save backup" else "Decrypt and review entries") }
+        TextButton(onClick = { importJob?.cancel(); transfer = null; transferBusy = false }) { Text("Cancel") }
+    }
+
+    private fun runBackup(request: FileRequest, passphrase: CharArray) {
+        val opened = session ?: run { passphrase.fill('\u0000'); return }
+        transferBusy = true
+        importJob = lifecycleScope.launch {
+            try {
+                if (request.mode == FileMode.BACKUP_EXPORT) {
+                    val snapshot = opened.entries()
+                    withContext(Dispatchers.IO) {
+                        val archive = VaultBackup.encrypt(snapshot, passphrase)
+                        try {
+                            ensureActive(); opened.checkActive()
+                            contentResolver.openOutputStream(request.uri, "wt")?.use { it.write(archive); it.flush() }
+                                ?: error("Cannot write selected document")
+                        } finally { archive.fill(0) }
+                    }
+                    if (session === opened) {
+                        opened.checkActive()
+                        transfer = null
+                        message = "Encrypted backup written. Test Restore with this file and passphrase before removing older copies; cancel after reviewing the preview."
+                    }
+                } else {
+                    val restored = withContext(Dispatchers.IO) {
+                        val archive = contentResolver.openInputStream(request.uri)?.use { it.readBytesBounded(VaultBackup.MAX_BYTES) }
+                            ?: error("Cannot read selected document")
+                        try { ensureActive(); VaultBackup.decrypt(archive, passphrase) }
+                        finally { archive.fill(0) }
+                    }
+                    if (session === opened) {
+                        opened.checkActive()
+                        transfer = null
+                        importPreview = restored
+                        message = "Backup authenticated: ${restored.size} entries. Review the merge before confirming; existing entries are unchanged."
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (session === opened) message = "Backup operation did not finish. Check the passphrase, selected file, available storage and session timeout. Existing vault entries are unchanged; an incomplete export may need to be recreated."
+            } finally { passphrase.fill('\u0000'); if (session === opened) transferBusy = false }
+        }.also { job -> job.invokeOnCompletion { passphrase.fill('\u0000') } }
     }
 
     @Composable

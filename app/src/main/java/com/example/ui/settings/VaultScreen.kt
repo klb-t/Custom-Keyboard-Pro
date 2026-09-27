@@ -32,7 +32,7 @@ fun VaultScreen() {
             ActionRow("Open vault", "Unlock, add, edit or import logins and payment-card details", onClick = {
                 launch(Intent(context, VaultActivity::class.java))
             })
-            InfoRow("Locks when you leave and after ${settings.vaultSessionSeconds.coerceIn(15, 60)} seconds (configurable in expert settings). Password/card fields block Copy and Cut even when revealed. No CVV storage, cloud sync or plaintext export. Removing the app or changing/removing the device lock may make the vault unrecoverable. Keep your existing manager until you have verified your entries.")
+            InfoRow("Locks when you leave and after ${settings.vaultSessionSeconds.coerceIn(15, 60)} seconds (configurable in expert settings). Password/card fields block Copy and Cut even when revealed. Use Create encrypted backup in the unlocked vault, then test Restore before relying on it. Recovery on another phone requires that file and its separate passphrase. No CVV storage, automatic cloud sync or plaintext export.")
         }
         SettingsSection("Choose your password manager") {
             if (Build.VERSION.SDK_INT >= 26) {

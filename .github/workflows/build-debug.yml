@@ -15,6 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     # Only what the release step needs. The default would do, but saying it here means
     # the token cannot quietly gain more when GitHub changes its defaults.
@@ -87,6 +88,9 @@ jobs:
             exit 1
           fi
 
+      - name: Android lint
+        run: gradle :app:lintDebug --console=plain
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --console=plain
 
@@ -103,9 +107,9 @@ jobs:
       # one makes every green build undeliverable. A release asset is a plain .apk on a
       # plain page: one tap to install, no account, no unzipping.
       #
-      # Rolling rather than versioned: the tag is the branch, deleted and recreated each
-      # time, so the link never changes and never points at a stale build. Marked as a
-      # prerelease because that is what a debug build is.
+      # Publish a commit-addressed release first. A failed upload must not remove the
+      # previous working APK. The rolling page remains available, with older assets
+      # retained so links in earlier conversations keep working.
       - name: Publish the APK somewhere a phone can reach it
         if: success() && github.event_name == 'push'
         env:
@@ -117,24 +121,42 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
 
           tag="build-$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')"
+          stable="build-${GITHUB_SHA}"
           subject="$(git log -1 --pretty=%s)"
-
-          # Deleted first so the tag follows the build rather than staying pinned to
-          # whichever commit happened to create the release.
-          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$tag" "$apk" \
-            --title "Latest build — $GITHUB_REF_NAME" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --notes "Debug build of \`$short\`, tests green.
-
-          $subject
-
-          Install: tap the .apk below. Android will ask you to allow installing from
-          this browser the first time. This branch preserves its package and signing key
-          so compatible earlier builds can be updated in place. If Android reports a
-          signature mismatch, preserve your data before replacing the installed app;
-          uninstalling deletes local settings and the device-bound vault."
+          export APK_FILE="$apk" RELEASE_SUBJECT="$subject"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path('release-notes.md').write_text(
+              f"Debug build of `{os.environ['GITHUB_SHA'][:7]}`; tests and Android lint passed.\n\n"
+              f"{os.environ['RELEASE_SUBJECT']}\n\n"
+              f"Install `{os.environ['APK_FILE']}` below. Compatible earlier builds can be updated "
+              "in place; the package and signing identity are preserved. If Android reports "
+              "a signature mismatch, preserve your data before replacing the app. Uninstalling "
+              "deletes local settings and the device-bound vault.\n"
+          )
+          PY
+          if gh release view "$stable" >/dev/null 2>&1; then
+            # Idempotent reruns: preserve a completed archive; finish an interrupted upload.
+            if ! gh release view "$stable" --json assets --jq '.assets[].name' | grep -Fxq "$apk"; then
+              gh release upload "$stable" "$apk"
+            fi
+          else
+            gh release create "$stable" "$apk" --target "$GITHUB_SHA" --prerelease \
+              --title "IO Matrix — $short" --notes-file release-notes.md
+          fi
+          gh release edit "$stable" --draft=false --prerelease
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fxq "$apk"; then
+              gh release upload "$tag" "$apk"
+            fi
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" \
+              -f sha="$GITHUB_SHA" -F force=true
+            gh release edit "$tag" --target "$GITHUB_SHA" --title "Latest build — $GITHUB_REF_NAME" --notes-file release-notes.md
+          else
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --prerelease \
+              --title "Latest build — $GITHUB_REF_NAME" --notes-file release-notes.md
+          fi
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
