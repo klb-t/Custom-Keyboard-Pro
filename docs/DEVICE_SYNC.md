@@ -35,9 +35,15 @@ lexical device ID. Same revision with different content is rejected. Merge is
 commutative, associative and idempotent for well-formed replicas. A joining phone's
 settings defaults have revision zero so existing shared choices win the preview.
 
-Manual clipboard deletions and later local purges create durable tombstones. An old
+Manual clipboard deletions create a durable Room deletion journal, independent of
+Trash file retention. Room migration 4→5 also records already-trashed entries.
+Automatic age/capacity cleanup stays local by default; expert policy
+`syncPropagatePruning` can deliberately share it. Re-copying repeated text records
+the superseded ID so it does not grow duplicate copies on other devices. An old
 phone cannot resurrect an entry by uploading its old snapshot. Explicit Restore is
-a new revision. Incoming deletion moves existing local entries to recoverable Trash.
+a new revision. Incoming deletion moves existing local entries to recoverable Trash. Restore clears
+the local deletion journal entry and creates a new sync revision. Preview includes
+retained deletion-marker counts as well as live entries.
 Each device writes only its own Drive snapshot, avoiding read/overwrite loss across
 devices. Rerun sync to receive another phone's simultaneous update. Tombstones are
 not silently expired; at the record safety limit sync stops and preserves files.

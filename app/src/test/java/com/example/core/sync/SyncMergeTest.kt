@@ -40,12 +40,13 @@ class SyncMergeTest {
         assertFalse(SyncMerge.merge(deleted, restored.records).getValue(key).deleted)
         assertEquals(7L, restored.clock)
     }
-    @Test fun `only observed disappearances are deleted and disabled clipboard cannot emit deletion`() {
+    @Test fun `automatic pruning is local unless explicitly selected and disabled clipboard never emits it`() {
         val existing = record("kept", 5)
         val state = SyncState(a, 5, mapOf(key to existing))
         assertFalse(SyncMerge.capture(state, emptyMap(), emptySet(), true).records.getValue(key).deleted)
         val observed = state.copy(observed = mapOf(key to existing.fingerprint()))
-        assertTrue(SyncMerge.capture(observed, emptyMap(), emptySet(), true).records.getValue(key).deleted)
+        assertFalse(SyncMerge.capture(observed, emptyMap(), emptySet(), true).records.getValue(key).deleted)
+        assertTrue(SyncMerge.capture(observed, emptyMap(), emptySet(), true, propagatePruning = true).records.getValue(key).deleted)
         assertFalse(SyncMerge.capture(observed, emptyMap(), emptySet(), false).records.getValue(key).deleted)
     }
     @Test fun `new phone defaults do not defeat configured settings on the existing phone`() {

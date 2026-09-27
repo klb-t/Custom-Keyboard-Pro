@@ -6,7 +6,10 @@ Manual deletes move to persistent Trash, retaining owned image bytes. Undo works
 the current panel and Restore works after reopening/restarting. Default retention
 is 24 hours (expert range 1–168); expiration is swept when the keyboard starts.
 Automatic history capacity/age policies remain separate and are still configurable.
-Room migration 3→4 preserves content and initializes stable IDs for future merging.
+Room migration 3→4 preserves content and initializes stable IDs for merging; 4→5
+adds durable deletion intent independent of Trash expiry. Local age/capacity cleanup
+stays local during sync by default, so one phone cannot silently trim another
+phone's history.
 
 Clipboard accepts image shares, multiple images and explicit system-document picks.
 It stores bytes, not a temporary grant. Bounded thumbnails decode on an IO thread.
@@ -39,3 +42,8 @@ let an IME move their text field directly. Use FULL insets / RESERVE_SPACE, or a
 floating position. Real acceptance still requires ChatGPT Android, split-screen,
 rotation, gesture/three-button navigation, OEMs and image paste into a receiving app.
 Unit/CI success is not a claim that these device checks happened.
+
+File bytes are removed only after successful database transactions and only when no
+remaining row references them. A failed trim cannot destroy a retained picture.
+Text deduplication cannot match an image merely because its display label is the
+same text. Syncing metadata of an unchanged image preserves its existing file URI.

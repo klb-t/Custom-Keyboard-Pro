@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ClipboardEntity::class, WordEntity::class, BigramEntity::class, ShortcutEntity::class],
-    version = 4,
+    entities = [ClipboardEntity::class, WordEntity::class, BigramEntity::class, ShortcutEntity::class, ClipboardDeletionEntity::class],
+    version = 5,
     exportSchema = false
 )
 abstract class KeyboardDatabase : RoomDatabase() {
@@ -31,10 +31,17 @@ abstract class KeyboardDatabase : RoomDatabase() {
                     KeyboardDatabase::class.java,
                     NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }
+
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS clipboard_deletions (syncId TEXT NOT NULL, modifiedAt INTEGER NOT NULL, cause TEXT NOT NULL, PRIMARY KEY(syncId))")
+                db.execSQL("INSERT OR REPLACE INTO clipboard_deletions SELECT syncId, deletedAt, 'MANUAL' FROM clipboard_items WHERE deletedAt > 0 AND syncId <> ''")
+            }
+        }
 
         internal val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {

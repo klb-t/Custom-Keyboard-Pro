@@ -107,4 +107,62 @@ class ClipboardRecoveryTest {
             }
         }
     }
+    @Test fun `migration retains old manual deletion intent separately from trash`() {
+        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
+            androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context).name(null)
+                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(4) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("CREATE TABLE clipboard_items(syncId TEXT, deletedAt INTEGER)")
+                        db.execSQL("INSERT INTO clipboard_items VALUES ('removed-aaaaaaaa', 50), ('active-aaaaaaaaa', 0)")
+                    }
+                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+                }).build())
+        helper.use {
+            val sql = helper.writableDatabase
+            KeyboardDatabase.MIGRATION_4_5.migrate(sql)
+            sql.execSQL("DELETE FROM clipboard_items WHERE deletedAt > 0")
+            sql.query("SELECT syncId, modifiedAt, cause FROM clipboard_deletions").use { c ->
+                assertTrue(c.moveToFirst()); assertEquals("removed-aaaaaaaa", c.getString(0))
+                assertEquals(50L, c.getLong(1)); assertEquals("MANUAL", c.getString(2))
+                assertFalse(c.moveToNext())
+            }
+        }
+    }
+    @Test fun `replacing repeated text keeps one active copy and records superseded identity`() = runBlocking {
+        repo.rememberClip(ClipboardEntity.TYPE_TEXT, "first", 100)
+        val first = repo.newestClip()!!
+        repo.rememberClip(ClipboardEntity.TYPE_TEXT, "second", 100)
+        repo.rememberClip(ClipboardEntity.TYPE_TEXT, "first", 100)
+        assertEquals(2, db.clipboardDao().count())
+        assertEquals(listOf(first.syncId), db.clipboardDao().syncDeletions().map { it.syncId })
+    }
+
+    @Test fun `copying a pictures label as text never deduplicates image entries`() = runBlocking {
+        val file = File(ClipStore.dir(context), "label.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        repo.rememberClipEntry(ClipboardEntity(type = ClipboardEntity.TYPE_FILE, content = "Screenshot", mime = "image/png", filePath = file.path), 100)
+        repo.rememberClip(ClipboardEntity.TYPE_TEXT, "Screenshot", 100)
+        assertEquals(2, db.clipboardDao().count())
+        assertTrue(file.exists())
+        assertTrue(db.clipboardDao().syncDeletions().isEmpty())
+    }
+    @Test fun `a failed trim transaction cannot delete retained image bytes`() = runBlocking {
+        val file = File(ClipStore.dir(context), "rollback.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val id = db.clipboardDao().insert(ClipboardEntity(type = ClipboardEntity.TYPE_FILE, content = "keep", filePath = file.path, timestamp = 1))
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER deny_clip_delete BEFORE DELETE ON clipboard_items BEGIN SELECT RAISE(ABORT, 'test rollback'); END")
+        assertTrue(runCatching { repo.rememberClip(ClipboardEntity.TYPE_TEXT, "new", 1) }.isFailure)
+        assertNotNull(db.clipboardDao().byId(id))
+        assertEquals(1, db.clipboardDao().count())
+        assertTrue(file.exists())
+    }
+
+    @Test fun `copies within the same millisecond still paste and trim in insertion order`() = runBlocking {
+        val dao = db.clipboardDao()
+        val first = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "first", timestamp = 100))
+        val second = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "second", timestamp = 100))
+        assertEquals(second, dao.newest()!!.id)
+        assertEquals(listOf(first), dao.overflowing(1).map { it.id })
+        dao.trimTo(1)
+        assertEquals(second, dao.newest()!!.id)
+    }
+
 }

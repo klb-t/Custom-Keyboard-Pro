@@ -101,3 +101,11 @@ data class ShortcutEntity(
     /** Expand as soon as the shortcut is completed, rather than offering it. */
     val automatic: Boolean = false
 )
+
+/** Durable deletion intent, independent of the recoverable bytes retained in Trash. */
+@Entity(tableName = "clipboard_deletions")
+data class ClipboardDeletionEntity(
+    @PrimaryKey val syncId: String,
+    val modifiedAt: Long,
+    val cause: String
+)

@@ -36,18 +36,20 @@ class KeyboardRepository(context: Context, private val db: KeyboardDatabase = Ke
     suspend fun trashClipboard(plan: ClipboardClearPlan): Int = db.withTransaction {
         val batch = java.util.UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
-        plan.ids.distinct().chunked(400).sumOf { clipboard.trash(it, now, batch, false) }
+        val count = plan.ids.distinct().chunked(400).sumOf { clipboard.trash(it, now, batch, false) }
+        clipboard.recordDeletedBatch(batch)
+        count
     }
 
-    suspend fun restoreClip(id: Long): Boolean = clipboard.restore(id, System.currentTimeMillis()) > 0
-
-    suspend fun rememberClip(type: String, content: String, maxItems: Int) {
-        if (content.isBlank()) return
-        if (clipboard.newest()?.content == content) return
-        clipboard.deleteByContent(content)
-        clipboard.insert(ClipboardEntity(type = type, content = content))
-        if (maxItems > 0) clipboard.trimTo(maxItems)
+    suspend fun restoreClip(id: Long): Boolean = db.withTransaction {
+        val entry = clipboard.byId(id) ?: return@withTransaction false
+        val restored = clipboard.restore(id, System.currentTimeMillis()) > 0
+        if (restored) clipboard.clearDeletion(entry.syncId)
+        restored
     }
+
+    suspend fun rememberClip(type: String, content: String, maxItems: Int) =
+        rememberClipEntry(ClipboardEntity(type = type, content = content), maxItems)
 
     /**
      * Remembers an entry that already knows what it is — a file we took a copy of, a
@@ -58,36 +60,54 @@ class KeyboardRepository(context: Context, private val db: KeyboardDatabase = Ke
      * ever copied, long after its history entry was gone.
      */
     suspend fun rememberClipEntry(entry: ClipboardEntity, maxItems: Int) {
-        if (entry.content.isBlank() && entry.filePath.isNullOrBlank()) return
-        if (entry.isText) {
-            if (clipboard.newest()?.content == entry.content) return
-            clipboard.deleteByContent(entry.content)
+        var removed = emptyList<ClipboardEntity>()
+        db.withTransaction {
+            if (entry.content.isBlank() && entry.filePath.isNullOrBlank()) return@withTransaction
+            if (entry.isText) {
+                if (clipboard.newest()?.let { it.isText && it.content == entry.content } == true) return@withTransaction
+                clipboard.recordReplacedContent(entry.content, System.currentTimeMillis())
+                clipboard.deleteByContent(entry.content)
+            }
+            clipboard.insert(entry)
+            if (maxItems > 0) {
+                removed = clipboard.overflowing(maxItems)
+                clipboard.trimTo(maxItems)
+            }
         }
-        clipboard.insert(entry)
-        if (maxItems > 0) {
-            val doomed = clipboard.overflowing(maxItems)
-            doomed.forEach { ClipStore.delete(it) }
-            clipboard.trimTo(maxItems)
-        }
+        // Database rollback must never leave a retained row pointing at deleted bytes.
+        releaseClipboardFiles(removed)
     }
 
     suspend fun newestClip(): ClipboardEntity? = clipboard.newest()
 
-    suspend fun deleteClip(id: Long) {
-        clipboard.trash(listOf(id), System.currentTimeMillis(), java.util.UUID.randomUUID().toString(), true)
+    suspend fun deleteClip(id: Long) = db.withTransaction {
+        val batch = java.util.UUID.randomUUID().toString()
+        clipboard.trash(listOf(id), System.currentTimeMillis(), batch, true)
+        clipboard.recordDeletedBatch(batch)
     }
     suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned, System.currentTimeMillis())
     suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content, System.currentTimeMillis())
     suspend fun sweepClipboard(retentionDays: Int) {
         val trashBefore = System.currentTimeMillis() - com.example.core.config.SettingsStore.current.clipboardTrashHours.coerceIn(1, 168) * 3_600_000L
-        db.withTransaction {
-            clipboard.expiredTrash(trashBefore).forEach { ClipStore.delete(it) }
+        val removed = db.withTransaction {
+            clipboard.recordExpiredTrash(trashBefore)
+            val trash = clipboard.expiredTrash(trashBefore)
             clipboard.purgeTrash(trashBefore)
+            val old = if (retentionDays > 0) {
+                val before = System.currentTimeMillis() - retentionDays * 24L * 3600L * 1000L
+                clipboard.olderThan(before).also { clipboard.deleteOlderThan(before) }
+            } else emptyList()
+            trash + old
         }
-        if (retentionDays <= 0) return
-        val before = System.currentTimeMillis() - retentionDays * 24L * 3600L * 1000L
-        clipboard.olderThan(before).forEach { ClipStore.delete(it) }
-        clipboard.deleteOlderThan(before)
+        releaseClipboardFiles(removed)
+    }
+
+    internal suspend fun releaseClipboardFiles(removed: List<ClipboardEntity>) {
+        if (removed.none { it.filePath != null }) return
+        val retained = clipboard.filePaths().toSet()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            removed.filter { it.filePath !in retained }.forEach { ClipStore.delete(it) }
+        }
     }
 
     /** Every file still spoken for, so orphans can be told apart from the rest. */

@@ -16,7 +16,7 @@ import java.util.UUID
 /** Manual, reviewed sync. Caller runs disk/crypto on IO; no background upload. */
 class SyncRepository(private val context: Context, private val db: KeyboardDatabase = KeyboardDatabase.get(context)) {
     data class Plan(val remote: Map<String, SyncRecord>, val settings: Settings,
-        val changedSettings: List<String>, val changedClips: Int, val deletions: Int, val sharedClips: Int, val sharedSettings: Int, val reviewedLocal: Map<String, String>)
+        val changedSettings: List<String>, val changedClips: Int, val deletions: Int, val sharedClips: Int, val sharedSettings: Int, val sharedDeletions: Int, val reviewedLocal: Map<String, String>)
     private data class Local(val values: Map<String, JSONObject?>, val ids: Set<String>, val rows: Map<String, ClipboardEntity>)
     private val stateFile get() = AtomicFile(File(context.noBackupFilesDir, "sync-state-v1.jwe"))
     private fun deviceId(): String {
@@ -46,11 +46,14 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             json.keys().forEach { key -> values["setting:$key"] = JSONObject().put("v", json.get(key)) }
         }
         val all = if (settings.syncClipboard) db.clipboardDao().syncEntries() else emptyList()
-        require(all.size <= 10_000) { "Clipboard is too large for this sync version; no data changed." }
+        val deletions = if (settings.syncClipboard) db.clipboardDao().syncDeletions() else emptyList()
+        require(all.size <= 10_000 && deletions.size <= 10_000) { "Clipboard is too large for this sync version; no data changed." }
+        deletions.forEach { values["clip:${it.syncId}"] = null }
         var count = 0
         var imageBytes = 0L
         all.forEach { clip ->
             val key = "clip:${clip.syncId}"
+            if (key in values) return@forEach // Durable deletion intent wins until an explicit restore.
             if (clip.deletedAt > 0) { values[key] = null; return@forEach }
             if (clip.type !in listOf(ClipboardEntity.TYPE_TEXT, ClipboardEntity.TYPE_FILE)) return@forEach
             if (count >= settings.syncMaxItems && key !in tracked) return@forEach
@@ -74,7 +77,7 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             SyncClip.validate(value)
             values[key] = value; count++
         }
-        return Local(values, all.map { "clip:${it.syncId}" }.toSet(), all.associateBy { it.syncId })
+        return Local(values, (all.map { "clip:${it.syncId}" } + deletions.map { "clip:${it.syncId}" }).toSet(), all.associateBy { it.syncId })
     }
 
     suspend fun prepare(remote: List<SyncState>, passphrase: CharArray): Plan = mutex.withLock {
@@ -82,7 +85,7 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
         require(settings.syncClipboard || settings.syncSettings) { "Select clipboard or settings in expert sync options." }
         val current = load(passphrase)
         val local = local(settings, current.records.keys)
-        val captured = SyncMerge.capture(current, local.values, local.ids, settings.syncClipboard, remote.any { r -> r.records.keys.any { it.startsWith("setting:") } })
+        val captured = SyncMerge.capture(current, local.values, local.ids, settings.syncClipboard, remote.any { r -> r.records.keys.any { it.startsWith("setting:") } }, settings.syncPropagatePruning)
         val incoming = SyncMerge.merge(*remote.map { it.records.filterValues { record -> allowed(record, settings) && (record.key !in local.ids || record.key in local.values) } }.toTypedArray())
         val merged = SyncMerge.merge(captured.records, incoming)
         val changed = merged.values.filter { permitted(it.key, settings) && it.fingerprint() != captured.records[it.key]?.fingerprint() }
@@ -90,6 +93,7 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             changed.count { it.key.startsWith("clip:") && !it.deleted }, changed.count { it.key.startsWith("clip:") && it.deleted },
             merged.values.count { allowed(it, settings) && it.key.startsWith("clip:") && !it.deleted },
             merged.values.count { allowed(it, settings) && it.key.startsWith("setting:") },
+            merged.values.count { allowed(it, settings) && it.deleted },
             local.values.mapValues { (_, value) -> SyncJson.hash(value?.let(SyncJson::canonical) ?: "deleted") })
     }
 
@@ -103,7 +107,7 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             val current = if (key in nowLocal.values) SyncJson.hash(nowLocal.values[key]?.let(SyncJson::canonical) ?: "deleted") else null
             check(current == plan.reviewedLocal[key]) { "Clipboard changed after preview; preview again to protect your edit." }
         }
-        val captured = SyncMerge.capture(before, nowLocal.values, nowLocal.ids, settings.syncClipboard, plan.remote.keys.any { it.startsWith("setting:") })
+        val captured = SyncMerge.capture(before, nowLocal.values, nowLocal.ids, settings.syncClipboard, plan.remote.keys.any { it.startsWith("setting:") }, settings.syncPropagatePruning)
         val merged = SyncMerge.merge(captured.records, plan.remote)
         val changed = merged.values.filter { permitted(it.key, settings) && it.fingerprint() != captured.records[it.key]?.fingerprint() }
         // Require a fresh review if settings changed while preview was open. Clipboard
@@ -122,7 +126,10 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
                     require(settings.syncImages) { "Incoming images are disabled; preview with a matching scope." }
                     val bytes = SyncClip.bytes(v)
                     require(bytes.size <= settings.syncMaxImageMb * 1024 * 1024) { "An incoming image exceeds your sync limit." }
-                    File(ClipStore.dir(context), "${UUID.randomUUID()}${ClipStore.extensionFor(v.getString("mime"))}")
+                    val previousFile = nowLocal.rows[r.key.removePrefix("clip:")]?.let(ClipStore::fileFor)
+                    if (previousFile != null && previousFile.length() == bytes.size.toLong() &&
+                        previousFile.inputStream().use { readBounded(it, SyncClip.MAX_IMAGE_BYTES) }.contentEquals(bytes)) previousFile
+                    else File(ClipStore.dir(context), "${UUID.randomUUID()}${ClipStore.extensionFor(v.getString("mime"))}")
                         .also { staged += it; it.writeBytes(bytes) }
                 } else null
                 r.key to ClipboardEntity(type = v.getString("type"), content = v.getString("content"),
@@ -147,11 +154,18 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
                 }
                 changed.filter { it.key.startsWith("clip:") }.forEach { r ->
                     val previous = dao.bySyncId(r.key.removePrefix("clip:"))
-                    if (r.deleted) previous?.let { dao.trash(listOf(it.id), System.currentTimeMillis(), "sync", true) }
-                    else dao.insert(replacements.getValue(r.key).copy(id = previous?.id ?: 0))
+                    if (r.deleted) {
+                        previous?.let { dao.trash(listOf(it.id), System.currentTimeMillis(), "sync", true) }
+                        dao.recordDeletion(ClipboardDeletionEntity(r.key.removePrefix("clip:"), System.currentTimeMillis(), "REMOTE"))
+                    } else {
+                        dao.insert(replacements.getValue(r.key).copy(id = previous?.id ?: 0))
+                        dao.clearDeletion(r.key.removePrefix("clip:"))
+                    }
                 }
             }
             staged.clear() // These files are now owned by database entries.
+            KeyboardRepository(context, db).releaseClipboardFiles(changed.filter { it.key.startsWith("clip:") && !it.deleted }
+                .mapNotNull { nowLocal.rows[it.key.removePrefix("clip:")] })
             if (patch.length() > 0) {
                 SettingsStore.update { base ->
                     patch.keys().forEach { key ->
@@ -169,8 +183,8 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
         } finally { staged.forEach { it.delete() } }
     }
 
-    private fun sameScope(a: Settings, b: Settings) = listOf(a.syncClipboard, a.syncSettings, a.syncImages, a.syncMaxItems, a.syncMaxImageMb) ==
-        listOf(b.syncClipboard, b.syncSettings, b.syncImages, b.syncMaxItems, b.syncMaxImageMb)
+    private fun sameScope(a: Settings, b: Settings) = listOf(a.syncClipboard, a.syncSettings, a.syncImages, a.syncPropagatePruning, a.syncMaxItems, a.syncMaxImageMb) ==
+        listOf(b.syncClipboard, b.syncSettings, b.syncImages, b.syncPropagatePruning, b.syncMaxItems, b.syncMaxImageMb)
 
     companion object {
         private val mutex = Mutex()

@@ -32,14 +32,14 @@ object SyncMerge {
         return result
     }
 
-    /** Missing clipboard IDs become tombstones only if this device had observed them. */
+    /** Manual tombstones arrive as data; missing rows propagate only by explicit pruning policy. */
     fun capture(state: SyncState, local: Map<String, JSONObject?>, presentClipboardIds: Set<String>,
-        clipboardEnabled: Boolean, joiningExistingSettings: Boolean = false): SyncState {
+        clipboardEnabled: Boolean, joiningExistingSettings: Boolean = false, propagatePruning: Boolean = false): SyncState {
         var clock = maxOf(state.clock, state.records.values.maxOfOrNull { it.stamp.tick } ?: 0)
         val records = state.records.toMutableMap()
         val observed = state.observed.toMutableMap()
         val candidates = local.toMutableMap()
-        if (clipboardEnabled) state.observed.keys.filter { it.startsWith("clip:") && it !in presentClipboardIds }
+        if (clipboardEnabled && propagatePruning) state.observed.keys.filter { it.startsWith("clip:") && it !in presentClipboardIds }
             .forEach { candidates[it] = null }
         candidates.forEach { (key, value) ->
             val hash = SyncJson.hash(value?.let(SyncJson::canonical) ?: "deleted")

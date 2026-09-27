@@ -346,6 +346,7 @@ object SettingsStore {
         put("syncClipboard", s.syncClipboard)
         put("syncSettings", s.syncSettings)
         put("syncImages", s.syncImages)
+        put("syncPropagatePruning", s.syncPropagatePruning)
         put("syncMaxItems", s.syncMaxItems)
         put("syncMaxImageMb", s.syncMaxImageMb)
         put("clipboardTrashHours", s.clipboardTrashHours)
@@ -584,6 +585,7 @@ object SettingsStore {
             syncClipboard = o.optBoolean("syncClipboard", d.syncClipboard),
             syncSettings = o.optBoolean("syncSettings", d.syncSettings),
             syncImages = o.optBoolean("syncImages", d.syncImages),
+            syncPropagatePruning = o.optBoolean("syncPropagatePruning", d.syncPropagatePruning),
             syncMaxItems = o.optInt("syncMaxItems", d.syncMaxItems).coerceIn(10, 1000),
             syncMaxImageMb = o.optInt("syncMaxImageMb", d.syncMaxImageMb).coerceIn(1, 8),
             clipboardTrashHours = o.optInt("clipboardTrashHours", d.clipboardTrashHours).coerceIn(1, 168),

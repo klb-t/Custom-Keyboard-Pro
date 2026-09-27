@@ -6,8 +6,8 @@ Branch: `claude/keyboard-app-all-features-78fkrd`.
 
 ## Last verified release
 
-4.4 / version code 8, commit `67c2e9b4b5d2ba0782a59598480066a89b869fcf`.
-GitHub Actions run `36358399823` passed compile, tests, lint, build and publication.
+4.4.1 / version code 9, commit `17842a146db8854273e080add948a1b2a7321f86`.
+GitHub Actions run `36359443296` passed compile, tests, lint, build and publication.
 The rolling release preserves previous assets; commit-specific releases are immutable checkpoints.
 See `HANDOFF_2026-09-27.md` and `VAULT_BACKUP.md` for scope.
 
@@ -41,8 +41,11 @@ physical device checks remain. See `CLIPBOARD_WORKSPACE.md`.
 4.4 adds manually reviewed, encrypted device sync via file and Google Drive app-data.
 4.4 passed the full gate: 685 tests, zero failures/errors, one existing skip, Android
 lint, APK build and publication. The content-capture API guard is corrected to API 30.
-4.4.1 adds the missing rich-content paste path for screenshot/image receivers and
-an explicit native-paste fallback setting; its final gate is pending.
+4.4.1 passed the complete CI gate with rich-content paste for screenshot/image
+receivers and an explicit native-paste fallback setting.
+4.4.2 separates manual deletion from automatic local history cleanup. Room 4→5
+preserves deletion intent after Trash expiry; local pruning no longer clears other
+devices by default. Its complete CI/device acceptance gate is pending.
 Google account consent cannot be verified here; the app
 shows actual package/signing identity and setup steps, and does not invent a client ID.
 Read `DEVICE_SYNC.md` for data/merge/privacy limits and precise acceptance gates. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,

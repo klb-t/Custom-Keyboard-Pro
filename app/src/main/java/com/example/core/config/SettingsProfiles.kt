@@ -34,7 +34,7 @@ object SettingsProfiles {
     // Arbitrary code, endpoints and private data can embed credentials without a field
     // called "password". Portable snapshots omit these instead of guessing by regex.
     private val localOnlyKeys = setOf(
-        "syncClipboard", "syncSettings", "syncImages", "syncMaxItems", "syncMaxImageMb",
+        "syncClipboard", "syncSettings", "syncImages", "syncPropagatePruning", "syncMaxItems", "syncMaxImageMb",
         "providerProfilesJson", "customProvidersJson", "fetchedProvidersJson", "discoveredModelsJson",
         "engineWiresJson", "engineStreamsJson", "macrosJson", "ioActionProfilesJson",
         "wordListSourcesJson", "aiCustomTasksJson", "generatedPanelsJson", "properNouns",

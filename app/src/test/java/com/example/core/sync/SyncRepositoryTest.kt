@@ -79,4 +79,42 @@ class SyncRepositoryTest {
         assertTrue(db.clipboardDao().newest()!!.pinned)
     }
 
+    @Test fun `manual deletion is shared after trash bytes have expired`() = runBlocking {
+        repo.apply(repo.prepare(listOf(remote(5, "delete deliberately")), password), password)
+        val clip = db.clipboardDao().newest()!!
+        val clipboard = KeyboardRepository(context, db)
+        clipboard.deleteClip(clip.id)
+        db.clipboardDao().purgeTrash(Long.MAX_VALUE)
+        assertNull(db.clipboardDao().byId(clip.id))
+        assertTrue(db.clipboardDao().syncDeletions().any { it.syncId == clip.syncId })
+        val snapshot = SyncJson.open(repo.apply(repo.prepare(emptyList(), password), password), password)
+        assertTrue(snapshot.records.getValue("clip:$id").deleted)
+        assertTrue(snapshot.records.getValue("clip:$id").stamp.tick > 5)
+    }
+    @Test fun `local capacity cleanup never silently deletes another phones history`() = runBlocking {
+        repo.apply(repo.prepare(listOf(remote(5, "keep on other phone")), password), password)
+        db.clipboardDao().trimTo(0)
+        assertEquals(0, db.clipboardDao().count())
+        assertTrue(db.clipboardDao().syncDeletions().isEmpty())
+        val snapshot = SyncJson.open(repo.apply(repo.prepare(emptyList(), password), password), password)
+        assertFalse(snapshot.records.getValue("clip:$id").deleted)
+        assertEquals(0, db.clipboardDao().count())
+    }
+
+    @Test fun `syncing an image pin preserves the existing bytes and file grant path`() = runBlocking {
+        fun image(tick: Long, pinned: Boolean): SyncState {
+            val value = JSONObject().put("type", "FILE").put("content", "Screenshot").put("label", "Screenshot")
+                .put("timestamp", 100).put("pinned", pinned).put("mime", "image/png")
+                .put("data", android.util.Base64.encodeToString(byteArrayOf(1, 2, 3), android.util.Base64.NO_WRAP))
+            return SyncState(peer, tick, mapOf("clip:$id" to SyncRecord("clip:$id", SyncStamp(tick, peer), value)))
+        }
+        repo.apply(repo.prepare(listOf(image(5, false)), password), password)
+        val path = db.clipboardDao().newest()!!.filePath
+        repo.apply(repo.prepare(listOf(image(6, true)), password), password)
+        val current = db.clipboardDao().newest()!!
+        assertTrue(current.pinned)
+        assertEquals(path, current.filePath)
+        assertArrayEquals(byteArrayOf(1, 2, 3), java.io.File(path!!).readBytes())
+    }
+
 }

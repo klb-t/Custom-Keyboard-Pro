@@ -830,6 +830,7 @@ object SettingsSchema {
         "clipboardRetentionDays" to Meta(group = GROUP_CLIPBOARD, label = "Keep for (days, 0 = forever)", min = 0f, max = 365f),
         "syncClipboard" to Meta(group = GROUP_CLIPBOARD, label = "Sync: clipboard history", help = "Included only when you explicitly run encrypted device sync. Nothing uploads automatically."),
         "syncSettings" to Meta(group = GROUP_CLIPBOARD, label = "Sync: portable settings", help = "Credentials, provider accounts and opaque command data stay local."),
+        "syncPropagatePruning" to Meta(group = GROUP_CLIPBOARD, label = "Sync: propagate automatic history cleanup", help = "Off keeps age/capacity cleanup local to this phone. On shares those deletions too. Manual deletes and replacement of repeated text always synchronize, even after Trash expires."),
         "syncImages" to Meta(group = GROUP_CLIPBOARD, label = "Sync: images and screenshots", help = "Copies image bytes inside the encrypted sync file."),
         "syncMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Sync: recent entries per device", min = 10f, max = 1000f),
         "syncMaxImageMb" to Meta(group = GROUP_CLIPBOARD, label = "Sync: maximum image MiB", min = 1f, max = 8f),

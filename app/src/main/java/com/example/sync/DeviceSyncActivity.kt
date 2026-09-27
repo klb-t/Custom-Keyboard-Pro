@@ -73,6 +73,7 @@ class DeviceSyncActivity : ComponentActivity() {
                 ScopeOption("Clipboard history", settings.syncClipboard) { SettingsStore.update { s -> s.copy(syncClipboard = it) }; plan = null }
                 ScopeOption("Images / screenshots", settings.syncImages) { SettingsStore.update { s -> s.copy(syncImages = it) }; plan = null }
                 ScopeOption("Portable settings", settings.syncSettings) { SettingsStore.update { s -> s.copy(syncSettings = it) }; plan = null }
+                Text(if (settings.syncPropagatePruning) "Automatic age/capacity cleanup is shared with other devices." else "Automatic age/capacity cleanup stays local. Manual deletions synchronize even after Trash expires.", style = MaterialTheme.typography.bodySmall)
                 Text("Vault entries, API keys, accounts, private commands and paths stay on this phone. Newly selected history: up to ${settings.syncMaxItems} recent entries; images up to ${settings.syncMaxImageMb} MiB each, within the 12 MiB snapshot limit. Previously shared entries and deletion markers remain in sync history.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(enabled = !busy, onClick = {
                     startActivity(Intent(this@DeviceSyncActivity, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, "all")
@@ -94,7 +95,7 @@ class DeviceSyncActivity : ComponentActivity() {
                     (destination == Destination.DRIVE || fileUri != null), onClick = ::preview) { Text("Preview changes") }
                 plan?.let { review ->
                     Card { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Shared snapshot: ${review.sharedClips} clipboard entries, ${review.sharedSettings} settings.")
+                        Text("Shared snapshot: ${review.sharedClips} clipboard entries, ${review.sharedSettings} settings, ${review.sharedDeletions} retained deletion markers.")
                         Text("Incoming: ${review.changedClips} clipboard changes, ${review.deletions} deletions, ${review.changedSettings.size} setting changes.")
                         if (review.changedSettings.isNotEmpty()) Text(review.changedSettings.take(25).joinToString(", ") + if (review.changedSettings.size > 25) "…" else "")
                         Text("Deleted local entries go to Trash. Concurrent edits use version order; device ID breaks ties. Repeating a transfer merges by identity.", style = MaterialTheme.typography.bodySmall)

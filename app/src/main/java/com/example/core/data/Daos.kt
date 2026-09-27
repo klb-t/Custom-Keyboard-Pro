@@ -8,20 +8,38 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ClipboardDao {
-    @Query("SELECT * FROM clipboard_items ORDER BY timestamp DESC LIMIT 10001")
+    @Query("SELECT * FROM clipboard_deletions LIMIT 10001")
+    suspend fun syncDeletions(): List<ClipboardDeletionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun recordDeletion(deletion: ClipboardDeletionEntity)
+
+    @Query("DELETE FROM clipboard_deletions WHERE syncId = :syncId")
+    suspend fun clearDeletion(syncId: String)
+
+    @Query("INSERT OR REPLACE INTO clipboard_deletions SELECT syncId, deletedAt, 'MANUAL' FROM clipboard_items WHERE deleteBatch = :batch AND deletedAt > 0")
+    suspend fun recordDeletedBatch(batch: String)
+
+    @Query("INSERT OR REPLACE INTO clipboard_deletions SELECT syncId, deletedAt, 'MANUAL' FROM clipboard_items WHERE deletedAt > 0 AND deletedAt < :before")
+    suspend fun recordExpiredTrash(before: Long)
+
+    @Query("INSERT OR REPLACE INTO clipboard_deletions SELECT syncId, :now, 'REPLACED' FROM clipboard_items WHERE deletedAt = 0 AND pinned = 0 AND type = 'TEXT' AND content = :content")
+    suspend fun recordReplacedContent(content: String, now: Long)
+
+    @Query("SELECT * FROM clipboard_items ORDER BY timestamp DESC, id DESC LIMIT 10001")
     suspend fun syncEntries(): List<ClipboardEntity>
 
     @Query("SELECT * FROM clipboard_items WHERE syncId = :syncId LIMIT 1")
     suspend fun bySyncId(syncId: String): ClipboardEntity?
 
 
-    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC")
+    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC, id DESC")
     fun observeAll(): Flow<List<ClipboardEntity>>
 
-    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 AND content LIKE '%' || :query || '%' ORDER BY pinned DESC, timestamp DESC")
+    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 AND content LIKE '%' || :query || '%' ORDER BY pinned DESC, timestamp DESC, id DESC")
     fun search(query: String): Flow<List<ClipboardEntity>>
 
-    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 ORDER BY timestamp DESC, id DESC LIMIT 1")
     suspend fun newest(): ClipboardEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -47,7 +65,7 @@ interface ClipboardDao {
      */
     @Query(
         "SELECT * FROM clipboard_items WHERE deletedAt = 0 AND pinned = 0 AND id NOT IN (" +
-            "SELECT id FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC LIMIT :keep)"
+            "SELECT id FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC, id DESC LIMIT :keep)"
     )
     suspend fun overflowing(keep: Int): List<ClipboardEntity>
 
@@ -87,11 +105,11 @@ interface ClipboardDao {
     /** Drops the oldest unpinned entries beyond [keep]. */
     @Query(
         "DELETE FROM clipboard_items WHERE deletedAt = 0 AND pinned = 0 AND id NOT IN " +
-            "(SELECT id FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC LIMIT :keep)"
+            "(SELECT id FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC, id DESC LIMIT :keep)"
     )
     suspend fun trimTo(keep: Int)
 
-    @Query("DELETE FROM clipboard_items WHERE deletedAt = 0 AND content = :content AND pinned = 0")
+    @Query("DELETE FROM clipboard_items WHERE deletedAt = 0 AND type = 'TEXT' AND content = :content AND pinned = 0")
     suspend fun deleteByContent(content: String)
 }
 
