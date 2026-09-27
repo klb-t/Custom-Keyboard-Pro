@@ -69,4 +69,14 @@ class SyncRepositoryTest {
         assertTrue(runCatching { repo.prepare(listOf(remote(6, "replacement")), "the wrong passphrase".toCharArray()) }.isFailure)
         assertEquals(before, db.clipboardDao().newest())
     }
+    @Test fun `a pin made after preview is preserved and requires a fresh review`() = runBlocking {
+        repo.apply(repo.prepare(listOf(remote(5, "original")), password), password)
+        val plan = repo.prepare(listOf(remote(6, "remote edit")), password)
+        val clip = db.clipboardDao().newest()!!
+        KeyboardRepository(context, db).setClipPinned(clip.id, true)
+        assertTrue(runCatching { repo.apply(plan, password) }.isFailure)
+        assertEquals("original", db.clipboardDao().newest()!!.content)
+        assertTrue(db.clipboardDao().newest()!!.pinned)
+    }
+
 }

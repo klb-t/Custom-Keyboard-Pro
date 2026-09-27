@@ -65,8 +65,11 @@ PBKDF2-HMAC-SHA512 iterations. Unsupported algorithms/compression/headers, hosti
 work factors and oversized input are rejected before mutation. Local sync state is
 also JWE-encrypted in noBackup storage. Passphrase loss is not recoverable by Google.
 
-Preview reads/merges only. Apply re-captures current data and rejects stale settings
-or changed scope. Image bytes and both encrypted snapshots are prepared before DB
+Preview reads/merges only. Apply re-captures current data and rejects stale settings,
+clipboard edits made after review, or changed scope. Affected rows are compared
+again under the database transaction after image/crypto staging, so intervening
+pins/edits/deletes cannot be overwritten. Previously shared entries are still
+tracked when they fall outside the recent-new-entry selection limit. Image bytes and both encrypted snapshots are prepared before DB
 writes; Room clipboard writes are transactional. Settings and the sync state are
 separate durable stores, so an interrupted apply may need an idempotent retry. An
 upload failure can occur after local merge has succeeded: the UI says that local

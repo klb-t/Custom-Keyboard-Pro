@@ -16,8 +16,8 @@ import java.util.UUID
 /** Manual, reviewed sync. Caller runs disk/crypto on IO; no background upload. */
 class SyncRepository(private val context: Context, private val db: KeyboardDatabase = KeyboardDatabase.get(context)) {
     data class Plan(val remote: Map<String, SyncRecord>, val settings: Settings,
-        val changedSettings: List<String>, val changedClips: Int, val deletions: Int, val sharedClips: Int, val sharedSettings: Int)
-    private data class Local(val values: Map<String, JSONObject?>, val ids: Set<String>)
+        val changedSettings: List<String>, val changedClips: Int, val deletions: Int, val sharedClips: Int, val sharedSettings: Int, val reviewedLocal: Map<String, String>)
+    private data class Local(val values: Map<String, JSONObject?>, val ids: Set<String>, val rows: Map<String, ClipboardEntity>)
     private val stateFile get() = AtomicFile(File(context.noBackupFilesDir, "sync-state-v1.jwe"))
     private fun deviceId(): String {
         val file = AtomicFile(File(context.noBackupFilesDir, "sync-device-id"))
@@ -40,7 +40,7 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
     private fun allowed(record: SyncRecord, settings: Settings): Boolean = permitted(record.key, settings) &&
         (record.deleted || !record.key.startsWith("clip:") || record.value!!.getString("type") != ClipboardEntity.TYPE_FILE || settings.syncImages)
 
-    private suspend fun local(settings: Settings): Local {
+    private suspend fun local(settings: Settings, tracked: Set<String>): Local {
         val values = linkedMapOf<String, JSONObject?>()
         if (settings.syncSettings) SettingsProfiles.portableValues(SettingsStore.current).let { json ->
             json.keys().forEach { key -> values["setting:$key"] = JSONObject().put("v", json.get(key)) }
@@ -53,15 +53,20 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             val key = "clip:${clip.syncId}"
             if (clip.deletedAt > 0) { values[key] = null; return@forEach }
             if (clip.type !in listOf(ClipboardEntity.TYPE_TEXT, ClipboardEntity.TYPE_FILE)) return@forEach
-            if (count >= settings.syncMaxItems) return@forEach
+            if (count >= settings.syncMaxItems && key !in tracked) return@forEach
             if (clip.content.length > 200_000) return@forEach
             val value = JSONObject().put("type", clip.type).put("content", clip.content)
                 .put("label", clip.label.orEmpty().take(1000)).put("pinned", clip.pinned).put("timestamp", clip.timestamp)
             if (!clip.isText) {
                 if (!settings.syncImages || !clip.mime.startsWith("image/")) return@forEach
-                val file = ClipStore.fileFor(clip) ?: return@forEach
+                val file = ClipStore.fileFor(clip)
+                if (file == null) { check(key !in tracked) { "A previously shared image is missing locally; sync stopped without replacing it." }; return@forEach }
                 val limit = settings.syncMaxImageMb.coerceIn(1, 8) * 1024 * 1024
-                if (file.length() !in 1..limit.toLong() || imageBytes + file.length() > 7 * 1024 * 1024) return@forEach
+                if (file.length() !in 1..limit.toLong()) {
+                    check(key !in tracked) { "A previously shared image exceeds the current file limit; adjust the limit before syncing." }
+                    return@forEach
+                }
+                if (key !in tracked && imageBytes + file.length() > 7 * 1024 * 1024) return@forEach
                 val bytes = file.inputStream().use { readBounded(it, limit) }
                 value.put("mime", clip.mime).put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))
                 imageBytes += bytes.size
@@ -69,22 +74,23 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             SyncClip.validate(value)
             values[key] = value; count++
         }
-        return Local(values, all.map { "clip:${it.syncId}" }.toSet())
+        return Local(values, all.map { "clip:${it.syncId}" }.toSet(), all.associateBy { it.syncId })
     }
 
     suspend fun prepare(remote: List<SyncState>, passphrase: CharArray): Plan = mutex.withLock {
         val settings = SettingsStore.current
         require(settings.syncClipboard || settings.syncSettings) { "Select clipboard or settings in expert sync options." }
         val current = load(passphrase)
-        val local = local(settings)
+        val local = local(settings, current.records.keys)
         val captured = SyncMerge.capture(current, local.values, local.ids, settings.syncClipboard, remote.any { r -> r.records.keys.any { it.startsWith("setting:") } })
-        val incoming = SyncMerge.merge(*remote.map { it.records.filterValues { record -> allowed(record, settings) } }.toTypedArray())
+        val incoming = SyncMerge.merge(*remote.map { it.records.filterValues { record -> allowed(record, settings) && (record.key !in local.ids || record.key in local.values) } }.toTypedArray())
         val merged = SyncMerge.merge(captured.records, incoming)
         val changed = merged.values.filter { permitted(it.key, settings) && it.fingerprint() != captured.records[it.key]?.fingerprint() }
         Plan(incoming, settings, changed.filter { it.key.startsWith("setting:") }.map { it.key.removePrefix("setting:") },
             changed.count { it.key.startsWith("clip:") && !it.deleted }, changed.count { it.key.startsWith("clip:") && it.deleted },
             merged.values.count { allowed(it, settings) && it.key.startsWith("clip:") && !it.deleted },
-            merged.values.count { allowed(it, settings) && it.key.startsWith("setting:") })
+            merged.values.count { allowed(it, settings) && it.key.startsWith("setting:") },
+            local.values.mapValues { (_, value) -> SyncJson.hash(value?.let(SyncJson::canonical) ?: "deleted") })
     }
 
     /** Re-capture immediately before applying, preserving edits made while reviewing/downloading. */
@@ -92,7 +98,11 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
         val settings = SettingsStore.current
         require(sameScope(settings, plan.settings)) { "Sync options changed; preview again." }
         val before = load(passphrase)
-        val nowLocal = local(settings)
+        val nowLocal = local(settings, before.records.keys)
+        plan.remote.keys.filter { it.startsWith("clip:") }.forEach { key ->
+            val current = if (key in nowLocal.values) SyncJson.hash(nowLocal.values[key]?.let(SyncJson::canonical) ?: "deleted") else null
+            check(current == plan.reviewedLocal[key]) { "Clipboard changed after preview; preview again to protect your edit." }
+        }
         val captured = SyncMerge.capture(before, nowLocal.values, nowLocal.ids, settings.syncClipboard, plan.remote.keys.any { it.startsWith("setting:") })
         val merged = SyncMerge.merge(captured.records, plan.remote)
         val changed = merged.values.filter { permitted(it.key, settings) && it.fingerprint() != captured.records[it.key]?.fingerprint() }
@@ -129,6 +139,12 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             val sharedArchive = SyncJson.seal(saved.copy(records = saved.records.filterValues { allowed(it, settings) }, observed = emptyMap()), passphrase)
             db.withTransaction {
                 val dao = db.clipboardDao()
+                // Crypto/file staging may take time. Verify affected rows again under
+                // the write transaction so a concurrent pin/edit/delete cannot be lost.
+                changed.filter { it.key.startsWith("clip:") }.forEach { r ->
+                    val id = r.key.removePrefix("clip:")
+                    check(dao.bySyncId(id) == nowLocal.rows[id]) { "Clipboard changed while preparing sync; preview again." }
+                }
                 changed.filter { it.key.startsWith("clip:") }.forEach { r ->
                     val previous = dao.bySyncId(r.key.removePrefix("clip:"))
                     if (r.deleted) previous?.let { dao.trash(listOf(it.id), System.currentTimeMillis(), "sync", true) }
@@ -137,7 +153,14 @@ class SyncRepository(private val context: Context, private val db: KeyboardDatab
             }
             staged.clear() // These files are now owned by database entries.
             if (patch.length() > 0) {
-                SettingsStore.update { base -> SettingsProfiles.apply(base, SettingsProfile("sync", "Device sync", "Reviewed sync", patch)).getOrThrow() }.getOrThrow()
+                SettingsStore.update { base ->
+                    patch.keys().forEach { key ->
+                        check(SyncJson.canonical(SettingsStore.getByKey(key, base)) == SyncJson.canonical(SettingsStore.getByKey(key, settings))) {
+                            "Settings changed while preparing sync; preview again."
+                        }
+                    }
+                    SettingsProfiles.apply(base, SettingsProfile("sync", "Device sync", "Reviewed sync", patch)).getOrThrow()
+                }.getOrThrow()
                 SettingsStore.awaitPersistence().getOrThrow()
             }
             write(stateFile, localArchive)
