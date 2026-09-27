@@ -24,6 +24,7 @@ class KeyboardState(
         com.example.core.config.Settings()
     }
 ) {
+    var clipboardClearRequested by mutableStateOf(false)
 
     // -----------------------------------------------------------------------
     // Modifiers

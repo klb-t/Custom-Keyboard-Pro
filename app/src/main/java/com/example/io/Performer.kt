@@ -111,7 +111,12 @@ class Performer(private val host: PerformerHost) {
             "split_screen" -> global(service!!, AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN, spec)
             "lock" -> requireApi(28, spec) { global(service!!, AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN, spec) }
             "screenshot" -> requireApi(28, spec) {
-                global(service!!, AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT, spec)
+                if (Build.VERSION.SDK_INT >= 30 && com.example.core.config.SettingsStore.current.screenshotToClipboard) {
+                    com.example.clipboard.ScreenshotClipboard.capture(service!!) { host.notice(it) }
+                } else {
+                    global(service!!, AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT, spec)
+                    host.notice("Use the screenshot's Share action → IO Matrix to add its image to clipboard history.")
+                }
             }
             "app_drawer" -> requireApi(31, spec) {
                 global(service!!, AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS, spec)

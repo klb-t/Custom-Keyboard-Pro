@@ -73,6 +73,15 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.MyApplication" />
+        <activity android:name=".clipboard.ClipboardImportActivity" android:exported="true"
+            android:label="Add to IO Matrix clipboard" android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
         <!-- Autofill is disabled by resource below API 26; the API-specific service is never bound there. -->
         <service
             android:name=".vault.MatrixAutofillService"

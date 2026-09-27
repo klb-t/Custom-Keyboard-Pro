@@ -3,12 +3,13 @@ package com.example.core.data
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 /**
  * One remembered clipboard entry.
  *
- * `type` distinguishes text from a content URI; a URI is stored by reference because
- * copying the bytes of every screenshot the user takes is not a trade anyone asked for.
+ * Text and copied file bytes share one history. Manual deletion moves entries to
+ * a recoverable trash; captured images retain their bytes until final expiry.
  */
 @Entity(tableName = "clipboard_items")
 data class ClipboardEntity(
@@ -43,7 +44,11 @@ data class ClipboardEntity(
      * its HTML — and splitting them into rows keeps each one usable on its own while
      * this records that they came as one thing.
      */
-    val groupId: String? = null
+    val groupId: String? = null,
+    @ColumnInfo(defaultValue = "0") val deletedAt: Long = 0,
+    val deleteBatch: String? = null,
+    @ColumnInfo(defaultValue = "''") val syncId: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(defaultValue = "0") val modifiedAt: Long = timestamp
 ) {
     val isText: Boolean get() = type == TYPE_TEXT
 

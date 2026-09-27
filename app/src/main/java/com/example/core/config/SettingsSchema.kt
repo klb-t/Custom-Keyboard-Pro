@@ -828,6 +828,8 @@ object SettingsSchema {
 
         "clipboardEnabled" to Meta(group = GROUP_CLIPBOARD, label = "Keep clipboard history"),
         "clipboardRetentionDays" to Meta(group = GROUP_CLIPBOARD, label = "Keep for (days, 0 = forever)", min = 0f, max = 365f),
+        "clipboardTrashHours" to Meta(group = GROUP_CLIPBOARD, label = "Keep deleted clips in Trash (hours)", min = 1f, max = 168f, help = "Manual deletion is recoverable until this interval expires. Bulk clearing always needs confirmation and preserves pinned entries."),
+        "screenshotToClipboard" to Meta(group = GROUP_CLIPBOARD, label = "Screenshots to clipboard history", help = "The Screenshot action captures image bytes through Accessibility on Android 11+. Otherwise use the system screenshot Share action or Add image in the clipboard panel."),
         "clipboardMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Maximum entries", min = 10f, max = 2000f),
         "clipboardIgnorePasswordFields" to Meta(group = GROUP_CLIPBOARD, label = "Never record from password fields"),
         "clipboardKeepFiles" to Meta(

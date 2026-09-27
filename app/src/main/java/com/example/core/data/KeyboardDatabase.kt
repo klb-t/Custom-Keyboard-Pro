@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ClipboardEntity::class, WordEntity::class, BigramEntity::class, ShortcutEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class KeyboardDatabase : RoomDatabase() {
@@ -31,10 +31,20 @@ abstract class KeyboardDatabase : RoomDatabase() {
                     KeyboardDatabase::class.java,
                     NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
+
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN deletedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN deleteBatch TEXT")
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN syncId TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE clipboard_items ADD COLUMN modifiedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE clipboard_items SET syncId = lower(hex(randomblob(16))), modifiedAt = timestamp")
+            }
+        }
 
         /**
          * Version 3 lets a clipboard entry be something other than text.

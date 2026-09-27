@@ -5,6 +5,7 @@ import com.example.core.clipboard.ClipStore
 import android.content.Context
 import com.example.core.text.TextOps
 import kotlinx.coroutines.flow.Flow
+import androidx.room.withTransaction
 
 /**
  * Everything persisted about the user's typing, behind one object.
@@ -13,9 +14,7 @@ import kotlinx.coroutines.flow.Flow
  * can block the input thread — a keyboard that stutters while it writes to SQLite is
  * worse than a keyboard with no history at all.
  */
-class KeyboardRepository(context: Context) {
-
-    private val db = KeyboardDatabase.get(context)
+class KeyboardRepository(context: Context, private val db: KeyboardDatabase = KeyboardDatabase.get(context)) {
     private val clipboard = db.clipboardDao()
     private val dictionary = db.dictionaryDao()
     private val shortcuts = db.shortcutDao()
@@ -25,6 +24,22 @@ class KeyboardRepository(context: Context) {
     fun observeClipboard(): Flow<List<ClipboardEntity>> = clipboard.observeAll()
 
     fun searchClipboard(query: String): Flow<List<ClipboardEntity>> = clipboard.search(query)
+    fun observeClipboardTrash(): Flow<List<ClipboardEntity>> = clipboard.observeTrash()
+
+    data class ClipboardClearPlan(val ids: List<Long>, val pinnedCount: Int)
+
+    suspend fun prepareClipboardClear(): ClipboardClearPlan = db.withTransaction {
+        ClipboardClearPlan(clipboard.allUnpinned().map { it.id }, clipboard.pinnedCount())
+    }
+
+    /** Only the reviewed snapshot is affected; newly copied/pinned entries survive. */
+    suspend fun trashClipboard(plan: ClipboardClearPlan): Int = db.withTransaction {
+        val batch = java.util.UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        plan.ids.distinct().chunked(400).sumOf { clipboard.trash(it, now, batch, false) }
+    }
+
+    suspend fun restoreClip(id: Long): Boolean = clipboard.restore(id, System.currentTimeMillis()) > 0
 
     suspend fun rememberClip(type: String, content: String, maxItems: Int) {
         if (content.isBlank()) return
@@ -59,16 +74,16 @@ class KeyboardRepository(context: Context) {
     suspend fun newestClip(): ClipboardEntity? = clipboard.newest()
 
     suspend fun deleteClip(id: Long) {
-        clipboard.byId(id)?.let { ClipStore.delete(it) }
-        clipboard.deleteById(id)
+        clipboard.trash(listOf(id), System.currentTimeMillis(), java.util.UUID.randomUUID().toString(), true)
     }
-    suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned)
-    suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content)
-    suspend fun clearClipboard() {
-        clipboard.allUnpinned().forEach { ClipStore.delete(it) }
-        clipboard.deleteAllUnpinned()
-    }
+    suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned, System.currentTimeMillis())
+    suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content, System.currentTimeMillis())
     suspend fun sweepClipboard(retentionDays: Int) {
+        val trashBefore = System.currentTimeMillis() - com.example.core.config.SettingsStore.current.clipboardTrashHours.coerceIn(1, 168) * 3_600_000L
+        db.withTransaction {
+            clipboard.expiredTrash(trashBefore).forEach { ClipStore.delete(it) }
+            clipboard.purgeTrash(trashBefore)
+        }
         if (retentionDays <= 0) return
         val before = System.currentTimeMillis() - retentionDays * 24L * 3600L * 1000L
         clipboard.olderThan(before).forEach { ClipStore.delete(it) }

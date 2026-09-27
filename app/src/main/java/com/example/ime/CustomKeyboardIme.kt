@@ -216,7 +216,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 SettingsStore.state
                     .map { listOf(it.presentation, it.floatingX, it.floatingY, it.floatingWidthDp, it.floatingHeightDp) }
                     .distinctUntilChanged()
-                    .collect { composeView?.requestLayout() }
+                    .collect { composeView?.requestLayout(); scheduleWorkspaceCheck() }
             }
             serviceScope.launch {
                 SettingsStore.state.map { it.keyboardKeepVisible }.distinctUntilChanged().collect {
@@ -224,6 +224,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                     else shortcutSession.updatePreference(it)
                     if (!it) shortcutRestoreJob?.cancel()
                 }
+            }
+            serviceScope.launch {
+                SettingsStore.state.map { listOf(it.avoidCoveringCursor, it.cursorAvoidStrategy, it.cursorAvoidMarginDp, it.insetsMode) }
+                    .distinctUntilChanged().collect { requestCursorMonitoring(); scheduleWorkspaceCheck(); composeView?.requestLayout() }
             }
             AppLogger.d(tag, "done")
         } catch (crash: Throwable) {
@@ -315,7 +319,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             insets
         }
 
+        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> scheduleWorkspaceCheck() }
         composeView = view
+        ViewCompat.requestApplyInsets(view)
         AppLogger.d(tag, "done, view returned")
         return view
     }
@@ -336,7 +342,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private fun takeSystemInsets(view: View, insets: WindowInsetsCompat) {
         val bars = insets.getInsets(
-            WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout()
+            WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout() or
+                WindowInsetsCompat.Type.mandatorySystemGestures()
         )
         val status = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
         if (bars == systemInsets && status == statusTopPx) return
@@ -344,6 +351,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         statusTopPx = status
         AppLogger.d("IME.insets", "bars=$bars status=$status wholeScreen=$wholeScreen")
         applyInputViewSize(view, requestedHeightPx.value, wholeScreen, force = true)
+        scheduleWorkspaceCheck()
     }
 
     /**
@@ -376,7 +384,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         )
         view.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            if (whole) ViewGroup.LayoutParams.MATCH_PARENT else heightPx + bars.bottom
+            if (whole) ViewGroup.LayoutParams.MATCH_PARENT else (heightPx + bars.bottom).coerceAtMost(
+                (view.rootView.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels) - statusTopPx
+            ).coerceAtLeast(bars.bottom + 1)
         )
         view.requestLayout()
     }
@@ -392,6 +402,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         shortcutShowCheckJob?.cancel()
         val view = composeView ?: return
         ViewCompat.getRootWindowInsets(view)?.let { takeSystemInsets(view, it) }
+        requestCursorMonitoring()
+        scheduleWorkspaceCheck()
     }
 
     override fun onWindowHidden() {
@@ -431,15 +443,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             completions.clear()
             previousWord = ""
 
-            // Only ask for cursor reports when something will act on them: monitoring
-            // costs the app a callback per scrolled frame.
-            if (SettingsStore.current.avoidCoveringCursor) {
-                currentInputConnection?.requestCursorUpdates(
-                    android.view.inputmethod.InputConnection.CURSOR_UPDATE_MONITOR
-                )
-            } else {
-                avoidance.clear()
-            }
+            cursorAnchor = null
+            avoidance.clear()
+            requestCursorMonitoring()
 
             val sensitive = editor.isSensitive
             if (sensitive) cancelSensitiveRecording()
@@ -475,6 +481,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         suggestions.clear()
         completions.clear()
         panelState.value = null
+        cursorAnchor = null
+        avoidance.clear()
     }
 
     override fun onUpdateSelection(
@@ -530,11 +538,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         // Cursor avoidance can override the policy for as long as it applies: the
         // point of RESERVE_SPACE is precisely to claim space the policy would not.
         val reserving = settings.avoidCoveringCursor &&
-            settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE &&
-            avoidance.shiftPx > 0f
+            settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE
 
+        val viewTop = IntArray(2).also { view.getLocationInWindow(it) }[1]
         when {
             reserving -> {
+                insets.contentTopInsets = viewTop
+                insets.visibleTopInsets = viewTop
                 insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
             }
 
@@ -542,14 +552,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 // Nothing is reserved and only the keys take touches: the app keeps
                 // its full height and may well be covered, which is what was asked for.
                 applyKeyRegion(insets, view, fallbackToVisible = false)
-                insets.contentTopInsets = view.height
-                insets.visibleTopInsets = view.height
+                insets.contentTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
+                insets.visibleTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
             }
 
             settings.insetsMode == InsetsMode.KEYS_ONLY -> {
                 applyKeyRegion(insets, view, fallbackToVisible = true)
-                insets.contentTopInsets = view.height
-                insets.visibleTopInsets = view.height
+                insets.contentTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
+                insets.visibleTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
             }
 
             settings.insetsMode == InsetsMode.PANEL_ONLY ||
@@ -557,7 +567,11 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                 applyPanelRegion(insets, view, settings)
             }
 
-            else -> insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            else -> {
+                insets.contentTopInsets = viewTop
+                insets.visibleTopInsets = viewTop
+                insets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            }
         }
     }
 
@@ -615,9 +629,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         }
 
         insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
-        val keepClear = if (restricted) null
-        else panels.filter { it.reservesContent }.minOfOrNull { it.rect.top }
-        val top = keepClear ?: view.height
+        val reserveAll = settings.avoidCoveringCursor && settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE
+        val keepClear = if (restricted && !reserveAll) null
+        else panels.filter { it.reservesContent || reserveAll }.minOfOrNull { it.rect.top }
+        val top = keepClear ?: (IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height)
         insets.contentTopInsets = top
         insets.visibleTopInsets = top
     }
@@ -653,67 +668,69 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
         insets.touchableRegion.set(Rect(left, top, left + width, top + height))
         // The app keeps its full height: a floating keyboard does not push it up.
-        insets.contentTopInsets = view.height
-        insets.visibleTopInsets = view.height
+        insets.contentTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
+        insets.visibleTopInsets = IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height
     }
 
-    /**
-     * Where the text cursor is, when the app is willing to say.
-     *
-     * Only requested when the user asked for cursor avoidance, because monitoring
-     * costs the app a callback per frame of scrolling and buys nothing unless
-     * something acts on it.
-     */
+    private var cursorAnchor: android.view.inputmethod.CursorAnchorInfo? = null
+    private var workspaceCheckPosted = false
+
+    private fun requestCursorMonitoring() {
+        if (!isInputViewShown) return
+        val flags = if (SettingsStore.current.avoidCoveringCursor)
+            android.view.inputmethod.InputConnection.CURSOR_UPDATE_MONITOR or
+                android.view.inputmethod.InputConnection.CURSOR_UPDATE_IMMEDIATE else 0
+        runCatching { currentInputConnection?.requestCursorUpdates(flags) }
+    }
+
+    private fun scheduleWorkspaceCheck() {
+        val view = composeView ?: return
+        if (workspaceCheckPosted) return
+        workspaceCheckPosted = true
+        view.postOnAnimation { workspaceCheckPosted = false; updateWorkspaceAvoidance() }
+    }
+
     override fun onUpdateCursorAnchorInfo(info: android.view.inputmethod.CursorAnchorInfo?) {
         super.onUpdateCursorAnchorInfo(info)
+        cursorAnchor = info
+        scheduleWorkspaceCheck()
+    }
+
+    /** Event-driven: cursor, layout, panel geometry, settings and system-bar changes. */
+    private fun updateWorkspaceAvoidance() {
         val settings = SettingsStore.current
-        if (!settings.avoidCoveringCursor || info == null) {
-            avoidance.clear()
-            return
-        }
-
         val view = composeView ?: return
-        val bottom = info.getInsertionMarkerBottom()
-        if (bottom.isNaN() || bottom <= 0f) {
-            avoidance.clear()
-            return
-        }
-
-        // The insertion marker is in screen coordinates; the keyboard's top edge is
-        // the screen height minus however much of it the keyboard occupies — unless
-        // the view covers the screen, when it is wherever the docked piece begins.
-        val screenHeight = resources.displayMetrics.heightPixels
-        val keyboardTop = if (wholeScreen) {
-            val onScreen = IntArray(2).also { view.getLocationOnScreen(it) }
-            val inWindow = IntArray(2).also { view.getLocationInWindow(it) }
-            val dockTop = panelRectsBySource.values.filter { it.reservesContent }
-                .minOfOrNull { it.rect.top } ?: (inWindow[1] + view.height)
-            (onScreen[1] - inWindow[1] + dockTop).toFloat()
-        } else (screenHeight - view.height).toFloat()
-        val margin = settings.cursorAvoidMarginDp * resources.displayMetrics.density
-        val overlap = bottom + margin - keyboardTop
-
-        if (overlap <= 0f) {
-            avoidance.clear()
-            return
-        }
-
+        val info = cursorAnchor
+        if (!settings.avoidCoveringCursor || info == null || !isInputViewShown) { avoidance.clear(); return }
+        val onScreen = IntArray(2).also { view.getLocationOnScreen(it) }
+        val inWindow = IntArray(2).also { view.getLocationInWindow(it) }
+        val dx = (onScreen[0] - inWindow[0]).toFloat()
+        val dy = (onScreen[1] - inWindow[1]).toFloat()
+        val workspace = android.graphics.RectF(
+            (onScreen[0] + view.paddingLeft).toFloat(), (onScreen[1] + view.paddingTop).toFloat(),
+            (onScreen[0] + view.width - view.paddingRight).toFloat(),
+            (onScreen[1] + view.height - view.paddingBottom).toFloat())
+        val focus = CursorWorkspace.focus(info, view.rootView.height * 0.3f) ?: run { avoidance.clear(); return }
+        val rectangles = if (wholeScreen) panelRectsBySource.values.map { android.graphics.RectF(it.rect).apply { offset(dx, dy) } }
+            .ifEmpty { keyRects.map { android.graphics.RectF(it).apply { offset(dx, dy) } } }
+        else listOf(android.graphics.RectF(workspace))
+        if (rectangles.isEmpty()) return
+        // Use the authored position, undoing the previous transient shift. Otherwise
+        // each redraw would alternate between moved and unmoved (feedback jitter).
+        val movable = wholeScreen && layout.elements.isEmpty() && (settings.presentation == PresentationMode.FLOATING || settings.presentation == PresentationMode.FREE)
+        val base = android.graphics.RectF(rectangles.first())
+        rectangles.drop(1).forEach { base.union(it) }
+        if (movable) base.offset(0f, avoidance.shiftPx)
+        val margin = settings.cursorAvoidMarginDp.coerceIn(0f, 96f) * resources.displayMetrics.density
+        val guarded = android.graphics.RectF(focus).apply { inset(-margin, -margin) }
+        val overlaps = android.graphics.RectF.intersects(base, guarded)
         when (settings.cursorAvoidStrategy) {
-            CursorAvoidStrategy.FADE -> {
-                avoidance.fade = settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f)
-                avoidance.shiftPx = 0f
-            }
+            CursorAvoidStrategy.RESERVE_SPACE -> { avoidance.clear() } // Insets remain stable until policy/editor changes.
+            CursorAvoidStrategy.FADE -> { avoidance.shiftPx = 0f; avoidance.fade = if (overlaps) settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f) else 1f }
             CursorAvoidStrategy.MOVE_PANEL -> {
-                // Only a keyboard that can be somewhere else can move out of the way.
-                val movable = settings.presentation == PresentationMode.FLOATING ||
-                    settings.presentation == PresentationMode.FREE
-                avoidance.shiftPx = if (movable) overlap else 0f
-                avoidance.fade = if (movable) 1f else settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f)
-            }
-            CursorAvoidStrategy.RESERVE_SPACE -> {
-                avoidance.shiftPx = overlap
-                avoidance.fade = 1f
-                composeView?.requestLayout()
+                val shift = if (movable) CursorWorkspace.shift(base, focus, workspace, margin) else if (overlaps) null else 0f
+                avoidance.shiftPx = shift ?: 0f
+                avoidance.fade = if (shift == null) settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f) else 1f
             }
         }
     }
@@ -1352,6 +1369,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * is keys that do not answer, or an app that does not get its touches back.
      */
     private fun regionChanged() {
+        scheduleWorkspaceCheck()
         val settings = SettingsStore.current
         if (wholeScreen || settings.insetsMode == InsetsMode.KEYS_ONLY || settings.insetsMode == InsetsMode.NONE) {
             composeView?.post { composeView?.requestLayout() }
@@ -2078,7 +2096,10 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             ClipboardOp.PIN_CURRENT -> serviceScope.launch {
                 repository.newestClip()?.let { repository.setClipPinned(it.id, true) }
             }
-            ClipboardOp.CLEAR -> serviceScope.launch { repository.clearClipboard() }
+            ClipboardOp.CLEAR -> {
+                state.clipboardClearRequested = true
+                openPanel(PanelId.CLIPBOARD)
+            }
         }
     }
 

@@ -6,10 +6,10 @@ Branch: `claude/keyboard-app-all-features-78fkrd`.
 
 ## Last verified release
 
-4.1 / version code 5, commit `5204084393cb05262af0f26a59e5c051d3a32972`.
-GitHub Actions run `36347371623` passed compile, tests, build and publication.
-Local validation: 658 tests, 657 passed, one existing ClipStore skip; lint zero
-errors, 67 reviewed warnings. See `HANDOFF_2026-09-27.md` for implemented scope.
+4.2 / version code 6, commit `badb73f3e9cdde5cd873a5301c4ceed583ba9d44`.
+GitHub Actions run `36355797115` passed compile, tests, lint, build and publication.
+The rolling release preserves previous assets; commit-specific releases are immutable checkpoints.
+See `HANDOFF_2026-09-27.md` and `VAULT_BACKUP.md` for scope.
 
 ## Current user instruction
 
@@ -35,9 +35,9 @@ of the client freeze is unknown; do not claim that changing this repository fixe
 5. Run the full existing suite, new focused regressions and Android lint, publish
    the next APK, and record exact results here. Keep the signing identity unchanged.
 
-Vault backup/restore and safer release publication are being implemented for 4.2;
-their source must pass compilation, focused tests and the full gate before being
-called verified. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
+Vault backup/restore and safer release publication passed the 4.2 gate.
+Clipboard recovery, image ingress and workspace geometry are implemented for 4.3,
+pending CI and device checks; see `CLIPBOARD_WORKSPACE.md`. Google sync is next. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
 strict input/work-factor bounds and explicit merge choices. UI locks on leaving.
 
 ## Recovery procedure

@@ -373,20 +373,32 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
     val host = LocalKeyboardHost.current
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
-    val clipFlow = remember(query) {
-        if (query.isBlank()) host.repository.observeClipboard()
+    var showTrash by remember { mutableStateOf(false) }
+    var clearPlan by remember { mutableStateOf<com.example.core.data.KeyboardRepository.ClipboardClearPlan?>(null) }
+    var undoIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    val clipFlow = remember(query, showTrash) {
+        if (showTrash) host.repository.observeClipboardTrash()
+        else if (query.isBlank()) host.repository.observeClipboard()
         else host.repository.searchClipboard(query)
     }
-    val clips by clipFlow.collectAsState(initial = emptyList())
+    val storedClips by clipFlow.collectAsState(initial = emptyList())
+    val clips = if (showTrash && query.isNotBlank()) storedClips.filter { it.content.contains(query, true) || it.label.orEmpty().contains(query, true) } else storedClips
     var editing by remember { mutableStateOf<ClipboardEntity?>(null) }
     // Selecting turns the list into a way of building one clip out of several
     // entries. Android's clipboard has one slot and no "add to", so two things copied
     // in two apps can only ever meet here.
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val context = LocalContext.current
+    LaunchedEffect(host.state.clipboardClearRequested) {
+        if (host.state.clipboardClearRequested) {
+            showTrash = false
+            clearPlan = host.repository.prepareClipboardClear()
+            host.state.clipboardClearRequested = false
+        }
+    }
 
     PanelFrame(
-        title = if (selected.isEmpty()) "Clipboard" else "${selected.size} selected",
+        title = if (showTrash) "Clipboard Trash" else if (selected.isEmpty()) "Clipboard" else "${selected.size} selected",
         theme = theme,
         onClose = onClose,
         actions = {
@@ -415,10 +427,10 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                 ) {
                     PanelText("Cancel", theme.stripText, 13.sp)
                 }
-            } else {
+            } else if (!showTrash) {
                 Box(
                     Modifier.fillMaxHeight()
-                        .clickable { scope.launch { host.repository.clearClipboard() } }
+                        .clickable { host.state.clipboardClearRequested = true }
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -428,6 +440,33 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
         }
     ) {
         Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PanelText(if (showTrash) "Back to history" else "Trash", theme.stripText, 12.sp,
+                    modifier = Modifier.clickable { showTrash = !showTrash; selected = emptySet(); clearPlan = null }.padding(8.dp))
+                if (!showTrash) PanelText("Add image / screenshot", theme.stripText, 12.sp,
+                    modifier = Modifier.clickable {
+                        context.startActivity(android.content.Intent(context, com.example.clipboard.ClipboardImportActivity::class.java)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.padding(8.dp))
+            }
+            clearPlan?.let { plan ->
+                Column(Modifier.fillMaxWidth().background(theme.keyActiveBackground).padding(10.dp)) {
+                    PanelText("Move ${plan.ids.size} entries from the entire history to Trash? ${plan.pinnedCount} pinned entries stay. This includes entries hidden by search.", theme.keyText, 13.sp)
+                    Row {
+                        PanelText("Cancel", theme.stripText, 13.sp, modifier = Modifier.clickable { clearPlan = null }.padding(10.dp))
+                        if (plan.ids.isNotEmpty()) PanelText("Move to Trash", theme.stripText, 13.sp, modifier = Modifier.clickable {
+                            clearPlan = null
+                            scope.launch { host.repository.trashClipboard(plan); undoIds = plan.ids }
+                        }.padding(10.dp))
+                    }
+                }
+            }
+            if (undoIds.isNotEmpty()) PanelText("Moved to Trash · Undo", theme.stripText, 13.sp,
+                modifier = Modifier.clickable {
+                    val ids = undoIds; undoIds = emptyList()
+                    scope.launch { ids.forEach { host.repository.restoreClip(it) } }
+                }.padding(8.dp))
+            if (showTrash) PanelText("Deleted items can be restored for ${com.example.core.config.SettingsStore.current.clipboardTrashHours} hours. Tap Restore to return one to history.", theme.keyHintText, 11.sp, modifier = Modifier.padding(8.dp))
             SearchField(query, theme) { query = it }
 
             val editingItem = editing
@@ -442,12 +481,12 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
             if (clips.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     PanelText(
-                        if (query.isBlank()) "Nothing copied yet." else "No match.",
+                        if (showTrash) "No deleted entries." else if (query.isBlank()) "Nothing copied yet." else "No match.",
                         theme.keyHintText, 14.sp
                     )
                 }
             } else {
-                if (selected.isEmpty()) {
+                if (selected.isEmpty() && !showTrash) {
                     PanelText(
                         "Hold an entry to start picking several.",
                         theme.keyHintText, 11.sp,
@@ -468,6 +507,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                 .combinedClickable(
                                     onClick = {
                                         when {
+                                            showTrash -> Unit
                                             // Once picking has started, a tap adds to
                                             // the pick rather than pasting: changing
                                             // what a tap means mid-gesture is how
@@ -486,8 +526,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                         }
                                     },
                                     onLongClick = {
-                                        selected = if (isSelected) selected - item.id
-                                        else selected + item.id
+                                        if (!showTrash) selected = if (isSelected) selected - item.id else selected + item.id
                                     }
                                 )
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -500,6 +539,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                     modifier = Modifier.padding(end = 8.dp)
                                 )
                             }
+                            ClipboardImagePreview(item)
                             Column(Modifier.weight(1f)) {
                                 PanelText(
                                     text = if (item.isText) item.content.replace('\n', ' ')
@@ -513,13 +553,17 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                     PanelText(ClipStore.describe(item), theme.keyHintText, 11.sp)
                                 }
                             }
-                            IconAction(if (item.pinned) "★" else "☆", theme) {
-                                scope.launch { host.repository.setClipPinned(item.id, !item.pinned) }
-                            }
-                            if (item.isText) IconAction("✎", theme) { editing = item }
-                            IconAction("🗑", theme) {
-                                selected = selected - item.id
-                                scope.launch { host.repository.deleteClip(item.id) }
+                            if (showTrash) {
+                                IconAction("Restore", theme) { scope.launch { host.repository.restoreClip(item.id) } }
+                            } else {
+                                IconAction(if (item.pinned) "★" else "☆", theme) {
+                                    scope.launch { host.repository.setClipPinned(item.id, !item.pinned) }
+                                }
+                                if (item.isText) IconAction("✎", theme) { editing = item }
+                                IconAction("🗑", theme) {
+                                    selected = selected - item.id
+                                    scope.launch { host.repository.deleteClip(item.id); undoIds = listOf(item.id) }
+                                }
                             }
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(theme.keyBorder))

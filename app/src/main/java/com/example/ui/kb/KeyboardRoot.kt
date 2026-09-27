@@ -189,7 +189,7 @@ fun KeyboardRoot(
                         alpha = theme.background.alpha * settings.panelOpacity.coerceIn(0f, 1f)
                     )
                 )
-                .alpha(settings.keyboardOpacity.coerceIn(0.05f, 1f)),
+                .alpha((settings.keyboardOpacity * host.avoidance.fade).coerceIn(0.05f, 1f)),
             contentAlignment = alignment
         ) {
             Box(Modifier.fillMaxHeight().width((screenWidthDp * widthFraction).dp)) {
@@ -579,20 +579,22 @@ private fun FloatingShell(
         val maxW = maxWidth.value
         // The system bars are already outside this box — the view is padded by them.
         // What is subtracted here is only the extra the user asked to keep clear.
-        val maxH = (maxHeight.value - settings.floatingSafeBottomDp).coerceAtLeast(120f)
+        val maxH = (maxHeight.value - settings.floatingSafeBottomDp).coerceAtLeast(1f)
+        val visibleWidth = width.coerceIn(1f, maxW.coerceAtLeast(1f))
+        val visibleHeight = height.coerceIn(1f, maxH)
 
         // The panel is nudged up out of the cursor's way without its stored position
         // changing: where the user put it is a decision, and getting out of the way
         // for a moment is not a reason to overwrite it.
         val avoidShiftDp = with(density) { avoidShiftPx.toDp().value }
-        val placedY = (offsetY.coerceIn(0f, (maxH - height).coerceAtLeast(0f)) - avoidShiftDp)
-            .coerceAtLeast(0f)
+        val placedY = (offsetY.coerceIn(0f, (maxH - visibleHeight).coerceAtLeast(0f)) - avoidShiftDp)
+            .coerceIn(0f, (maxH - visibleHeight).coerceAtLeast(0f))
 
         Box(
             modifier = Modifier
-                .offset(offsetX.coerceIn(0f, (maxW - width).coerceAtLeast(0f)).dp, placedY.dp)
-                .width(width.dp)
-                .height(height.dp)
+                .offset(offsetX.coerceIn(0f, (maxW - visibleWidth).coerceAtLeast(0f)).dp, placedY.dp)
+                .width(visibleWidth.dp)
+                .height(visibleHeight.dp)
                 .alpha((settings.keyboardOpacity * avoidFade).coerceIn(0.05f, 1f))
                 .background(
                     theme.background.copy(
@@ -957,7 +959,7 @@ private fun LooseElement(
     Box(
         Modifier
             .offset {
-                IntOffset(box.left.roundToInt(), (box.top - shift).coerceAtLeast(0f).roundToInt())
+                IntOffset(box.left.roundToInt(), (box.top - shift).coerceIn(0f, (areaH - box.height).coerceAtLeast(0f)).roundToInt())
             }
             .size(
                 width = with(density) { box.width.toDp() },

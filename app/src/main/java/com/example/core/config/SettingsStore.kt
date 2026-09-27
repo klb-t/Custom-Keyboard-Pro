@@ -343,6 +343,8 @@ object SettingsStore {
 
         put("clipboardEnabled", s.clipboardEnabled)
         put("clipboardRetentionDays", s.clipboardRetentionDays)
+        put("clipboardTrashHours", s.clipboardTrashHours)
+        put("screenshotToClipboard", s.screenshotToClipboard)
         put("clipboardMaxItems", s.clipboardMaxItems)
         put("clipboardIgnorePasswordFields", s.clipboardIgnorePasswordFields)
         put("clipboardKeepFiles", s.clipboardKeepFiles)
@@ -573,6 +575,8 @@ object SettingsStore {
 
             clipboardEnabled = o.optBoolean("clipboardEnabled", d.clipboardEnabled),
             clipboardRetentionDays = o.optInt("clipboardRetentionDays", d.clipboardRetentionDays),
+            clipboardTrashHours = o.optInt("clipboardTrashHours", d.clipboardTrashHours).coerceIn(1, 168),
+            screenshotToClipboard = o.optBoolean("screenshotToClipboard", d.screenshotToClipboard),
             clipboardMaxItems = o.optInt("clipboardMaxItems", d.clipboardMaxItems),
             clipboardIgnorePasswordFields = o.optBoolean("clipboardIgnorePasswordFields", d.clipboardIgnorePasswordFields),
             clipboardKeepFiles = o.optBoolean("clipboardKeepFiles", d.clipboardKeepFiles),

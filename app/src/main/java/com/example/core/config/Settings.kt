@@ -247,11 +247,10 @@ data class Settings(
     /**
      * Watch where the text cursor actually is and get out of its way.
      *
-     * Off by default: it needs the app to report the cursor position
-     * (`requestCursorUpdates`), most do, some do not, and a keyboard that
-     * occasionally jumps for no visible reason is worse than one that never jumps.
+     * Editors may decline reports. Docked insets still reserve the actual view area;
+     * continuous monitoring uses geometry only, never editor text.
      */
-    val avoidCoveringCursor: Boolean = false,
+    val avoidCoveringCursor: Boolean = true,
     val cursorAvoidMarginDp: Float = 12f,
     val cursorAvoidStrategy: CursorAvoidStrategy = CursorAvoidStrategy.MOVE_PANEL,
     /** How far the keyboard fades when [cursorAvoidStrategy] is FADE. */
@@ -537,6 +536,8 @@ data class Settings(
     // --- clipboard --------------------------------------------------------
     val clipboardEnabled: Boolean = true,
     val clipboardRetentionDays: Int = 0,
+    val clipboardTrashHours: Int = 24,
+    val screenshotToClipboard: Boolean = true,
     val clipboardMaxItems: Int = 200,
     val clipboardIgnorePasswordFields: Boolean = true,
     /**
