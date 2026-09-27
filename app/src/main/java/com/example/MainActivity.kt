@@ -5,17 +5,23 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.Icons
@@ -27,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.example.core.config.SettingsStore
 import com.example.core.layout.LayoutRepository
 import com.example.core.config.SettingsSchema
@@ -35,6 +42,10 @@ import com.example.core.discovery.AiCapability
 import com.example.core.data.WordLists
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.panels.PanelGenerator
+import com.example.ui.settings.CapabilitiesScreen
+import com.example.ui.settings.MediaHubScreen
+import com.example.ui.settings.VaultScreen
+import com.example.ui.settings.SettingsNavigation
 import com.example.ui.settings.AboutScreen
 import com.example.ui.settings.AiSettingsScreen
 import com.example.ui.settings.AllSettingsScreen
@@ -64,6 +75,11 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_ROUTE = "route"
+        const val EXTRA_SETTINGS_QUERY = SettingsNavigation.QUERY
+        const val EXTRA_SETTINGS_REQUEST = SettingsNavigation.REQUEST
+        const val ROUTE_MEDIA = "media"
+        const val ROUTE_VAULT = "vault"
+        const val ROUTE_CAPABILITIES = "capabilities"
         const val ROUTE_HOME = "home"
         const val ROUTE_APPEARANCE = "appearance"
         const val ROUTE_TYPING = "typing"
@@ -83,6 +99,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private var micPermissionGranted by mutableStateOf(false)
+    private var route by mutableStateOf(ROUTE_HOME)
+    private var settingsQuery by mutableStateOf("")
+    private var settingsRequest by mutableStateOf("")
+
+    private fun navigate(next: String) {
+        settingsQuery = ""
+        settingsRequest = ""
+        route = next
+    }
+
+    private fun receiveDestination(incoming: Intent?) {
+        if (incoming?.action == "android.service.quicksettings.action.QS_TILE_PREFERENCES") {
+            @Suppress("DEPRECATION")
+            val component = incoming.getParcelableExtra<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME)
+            settingsQuery = if (component?.className == "com.example.io.PocketLockTile") "pocket" else "keyboard"
+            settingsRequest = ""
+            route = ROUTE_ALL_SETTINGS
+        } else {
+            route = incoming?.getStringExtra(EXTRA_ROUTE)
+                ?: if (SettingsStore.current.setupDone) ROUTE_HOME else ROUTE_SETUP
+            settingsQuery = incoming?.getStringExtra(EXTRA_SETTINGS_QUERY).orEmpty()
+            settingsRequest = incoming?.getStringExtra(EXTRA_SETTINGS_REQUEST).orEmpty()
+        }
+    }
 
     /**
      * Registered as a field, which is what makes it work at all: the result APIs
@@ -106,30 +146,30 @@ class MainActivity : ComponentActivity() {
         ProviderCatalog.init(this)
         WordLists.init(this)
         registerDynamicOptions()
+        receiveDestination(intent)
         enableEdgeToEdge()
         AppLogger.d("Settings", "onCreate stores ready")
 
         setContent {
             val settings by SettingsStore.state.collectAsState()
-            // A first launch opens the wizard; every later one opens the home
-            // screen. The wizard marks itself done even when skipped, so it never
-            // greets the same person twice.
-            var route by remember {
-                mutableStateOf(
-                    intent?.getStringExtra(EXTRA_ROUTE)
-                        ?: if (SettingsStore.current.setupDone) ROUTE_HOME else ROUTE_SETUP
-                )
-            }
+            val storageError by SettingsStore.persistenceError.collectAsState()
+            val persistencePending by SettingsStore.persistencePending.collectAsState()
+            BackHandler(enabled = route != ROUTE_HOME) { navigate(ROUTE_HOME) }
 
             MyApplicationTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     topBar = {
                         TopAppBar(
-                            title = { Text(titleFor(route)) },
+                            title = {
+                                Column {
+                                    Text(titleFor(route))
+                                    Text(if (persistencePending) "Saving settings…" else "", style = MaterialTheme.typography.labelSmall)
+                                }
+                            },
                             navigationIcon = {
                                 if (route != ROUTE_HOME) {
-                                    IconButton(onClick = { route = ROUTE_HOME }) {
+                                    IconButton(onClick = { navigate(ROUTE_HOME) }) {
                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                     }
                                 }
@@ -137,7 +177,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 ) { inner ->
-                    Box(Modifier.fillMaxSize().padding(inner)) {
+                    Column(Modifier.fillMaxSize().padding(inner)) {
+                        storageError?.let { error ->
+                            Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("Settings storage: $error", color = MaterialTheme.colorScheme.onErrorContainer)
+                                    TextButton(onClick = { SettingsStore.retryPersistence() }) { Text("Retry saving") }
+                                }
+                            }
+                        }
+                        Box(Modifier.weight(1f)) {
                         when (route) {
                             ROUTE_APPEARANCE -> AppearanceScreen(settings)
                             ROUTE_TYPING -> TypingSettingsScreen(settings)
@@ -160,13 +209,16 @@ class MainActivity : ComponentActivity() {
                             ROUTE_DICTIONARY -> DictionaryScreen()
                             ROUTE_ABOUT -> AboutScreen()
                             ROUTE_DIAGNOSTICS -> DiagnosticsScreen()
-                            ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings)
-                            ROUTE_REQUEST_PANEL -> RequestPanelScreen(settings)
+                            ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings, initialQuery = settingsQuery)
+                            ROUTE_REQUEST_PANEL -> RequestPanelScreen(settings, initialRequest = settingsRequest)
+                            ROUTE_MEDIA -> MediaHubScreen()
+                            ROUTE_VAULT -> VaultScreen()
+                            ROUTE_CAPABILITIES -> CapabilitiesScreen(onNavigate = ::navigate)
                             ROUTE_THEME_EDITOR -> ThemeEditorScreen(settings)
                             ROUTE_SETUP -> SetupWizardScreen(
                                 settings = settings,
-                                onDone = { route = ROUTE_HOME },
-                                onNavigate = { route = it }
+                                onDone = { navigate(ROUTE_HOME) },
+                                onNavigate = ::navigate
                             )
                             else -> {
                                 // A generated panel's route carries its id, so routes do
@@ -183,18 +235,19 @@ class MainActivity : ComponentActivity() {
                                         settings = settings,
                                         onDelete = {
                                             PanelGenerator.delete(panel.id)
-                                            route = ROUTE_HOME
+                                            navigate(ROUTE_HOME)
                                         }
                                     )
                                 } else {
                                     HomeScreen(
                                         settings = settings,
-                                        onNavigate = { route = it },
+                                        onNavigate = ::navigate,
                                         onEnableKeyboard = { openImeSettings() },
                                         onChooseKeyboard = { showImePicker() }
                                     )
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -206,6 +259,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         AppLogger.d("Settings", "onNewIntent (route=${intent.getStringExtra(EXTRA_ROUTE)})")
         setIntent(intent)
+        receiveDestination(intent)
     }
 
     override fun onResume() {
@@ -280,19 +334,4 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-private fun titleFor(route: String): String = when (route) {
-    MainActivity.ROUTE_APPEARANCE -> "Size, shape & theme"
-    MainActivity.ROUTE_TYPING -> "Typing"
-    MainActivity.ROUTE_LAYOUTS -> "Layouts"
-    MainActivity.ROUTE_AI -> "AI"
-    MainActivity.ROUTE_VOICE, MainActivity.ROUTE_PERMISSIONS -> "Dictation"
-    MainActivity.ROUTE_DICTIONARY -> "Dictionary & shortcuts"
-    MainActivity.ROUTE_ABOUT -> "About & help"
-    MainActivity.ROUTE_DIAGNOSTICS -> "Diagnostics"
-    MainActivity.ROUTE_ALL_SETTINGS -> "Every setting"
-    MainActivity.ROUTE_REQUEST_PANEL -> "Ask for a panel"
-    MainActivity.ROUTE_THEME_EDITOR -> "Theme editor"
-    MainActivity.ROUTE_SETUP -> "Setting up"
-    else -> if (route.startsWith(MainActivity.ROUTE_PANEL_PREFIX)) "Your panel" else "IO Matrix"
-}
+private fun titleFor(route: String): String = com.example.core.config.SettingsDestinations.title(route)

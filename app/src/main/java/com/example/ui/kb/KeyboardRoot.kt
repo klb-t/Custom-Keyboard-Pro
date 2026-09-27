@@ -81,6 +81,10 @@ fun KeyboardRoot(
     onSizeChanged: (heightPx: Int, wholeScreen: Boolean) -> Unit
 ) {
     val host = LocalKeyboardHost.current
+    val storageError by SettingsStore.persistenceError.collectAsState()
+    LaunchedEffect(storageError) {
+        storageError?.let { host.notices.post("Settings storage: $it", "Settings") { host.openApp("all") } }
+    }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val theme = remember(settings.themeId, settings.customThemesJson) { ThemeStore.resolve(settings) }
@@ -111,7 +115,7 @@ fun KeyboardRoot(
         (settings.completionReserveRow || !completion.isEmpty || completion.running)
 
     val totalHeightDp = keyboardHeightDp +
-        (if (settings.suggestionsEnabled || panel != null) stripHeight.value else 0f) +
+        (if (settings.keyboardToolbarVisible || settings.suggestionsEnabled || panel != null) stripHeight.value else 0f) +
         (if (completionShowing) stripHeight.value else 0f) +
         (if (settings.indicatorStripVisible) indicatorHeight.value else 0f) +
         settings.bottomPaddingDp
@@ -288,7 +292,7 @@ private fun KeyboardRows(
 
     val notice by host.notices.current.collectAsState()
     val chips by host.actionChips.collectAsState()
-    if (settings.suggestionsEnabled || panel != null) {
+    if (settings.keyboardToolbarVisible || settings.suggestionsEnabled || panel != null) {
         Box(Modifier.touchTarget("row:toolbar")) {
             val shown = notice
             // News takes the strip for a few seconds rather than adding a row: the

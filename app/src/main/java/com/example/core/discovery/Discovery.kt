@@ -53,12 +53,14 @@ object Discovery {
      * explains itself in [DiscoveryOutcome.failures]. A partial list beats an error
      * screen when the partial list is the one the user already had.
      */
-    suspend fun <T : Discoverable> merge(sources: List<DiscoverySource<T>>): DiscoveryOutcome<T> {
+    suspend fun <T : Discoverable> merge(
+        sources: List<DiscoverySource<T>>, identity: (T) -> String = { it.id }
+    ): DiscoveryOutcome<T> {
         val byId = LinkedHashMap<String, T>()
         val failures = mutableMapOf<String, String>()
         sources.forEach { source ->
             source.discover().fold(
-                onSuccess = { items -> items.forEach { byId.putIfAbsent(it.id, it) } },
+                onSuccess = { items -> items.forEach { byId.putIfAbsent(identity(it), it) } },
                 onFailure = { failures[source.label] = it.message ?: it::class.java.simpleName }
             )
         }

@@ -88,7 +88,8 @@ class CloudVoice(
                 model = settings.ttsModel,
                 prompt = text,
                 language = settings.ttsLanguage,
-                params = mapOf("voice" to settings.ttsCloudVoice)
+                params = ProviderProfiles.paramsFor(provider.id, AiCapability.SPEECH, settings) +
+                    if (settings.ttsCloudVoice.isNotBlank()) mapOf("voice" to settings.ttsCloudVoice) else emptyMap()
             ),
             apiKey = key
         ).getOrThrow()
@@ -162,7 +163,7 @@ class CloudVoice(
                 ?: return null
             val key = ProviderProfiles.keyFor(spec.id, settings)
             if (spec.needsKey && key.isBlank()) return null
-            return spec to key
+            return ProviderProfiles.resolved(spec, settings) to key
         }
     }
 }

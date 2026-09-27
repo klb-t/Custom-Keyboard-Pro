@@ -21,6 +21,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import com.example.core.config.Knobs
 import com.example.core.config.SettingsStore
 import com.example.core.config.knobFloat
@@ -28,6 +29,9 @@ import com.example.core.config.knobLong
 import com.example.core.io.HoldGesture
 import com.example.core.io.KeySequence
 import com.example.core.io.PocketMode
+import com.example.core.io.PocketLockPolicy
+import com.example.core.io.LockKeyDomain
+import com.example.core.io.ConsumedKeyPresses
 import com.example.util.AppLogger
 
 /**
@@ -72,6 +76,10 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
     private var keys = KeySequence(emptyList())
     private var lockedPackage: String? = null
     private var restoring = 0L
+    private val consumed = ConsumedKeyPresses()
+    private var policy = PocketLockPolicy(true, true, false, true, true)
+    private var unlockFingers = 2
+    private var unlockPattern = emptyList<String>()
 
     /** The proximity sensor says something is right over the screen: a pocket. */
     @Volatile
@@ -81,13 +89,36 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
 
     fun toggle(mode: PocketMode) = if (locked) unlock("toggled off") else lock(mode)
 
-    fun lock(requested: PocketMode) {
-        if (locked) return
+    fun lock(requested: PocketMode): Boolean {
+        if (locked) return true
         val s = SettingsStore.current
-        keys = KeySequence(KeySequence.parse(s.pocketUnlockKeys), s.knobLong(Knobs.POCKET_SEQUENCE_MS))
+        policy = PocketLockPolicy(s.pocketBlockTouch, s.pocketBlockKeys, s.pocketBlockMediaKeys,
+            s.pocketBlockNavigation, s.pocketBlockOtherKeys)
+        unlockPattern = KeySequence.parse(s.pocketUnlockKeys).takeIf { pattern ->
+            pattern.all { name ->
+                val code = when (name) {
+                    "up" -> KeyEvent.KEYCODE_VOLUME_UP
+                    "down" -> KeyEvent.KEYCODE_VOLUME_DOWN
+                    else -> KeyEvent.keyCodeFromString("KEYCODE_${name.uppercase()}")
+                }
+                code != KeyEvent.KEYCODE_UNKNOWN && keyDomain(code) != LockKeyDomain.SYSTEM
+            }
+        } ?: emptyList()
+        // Full-opacity app overlays cannot pass touches through on Android 12+.
+        // Do not silently block touches when the profile explicitly leaves them on.
+        if (!policy.blockTouch && requested == PocketMode.SCREEN && !host.filtersKeys && Build.VERSION.SDK_INT >= 31) {
+            Toast.makeText(ctx, "Black screen with touch enabled requires accessibility. Use TOUCH mode or enable accessibility.", Toast.LENGTH_LONG).show()
+            return false
+        }
+        if (!policy.blockTouch && unlockPattern.isEmpty()) {
+            Toast.makeText(ctx, "Set an unlock key sequence before allowing touches through the lock.", Toast.LENGTH_LONG).show()
+            return false
+        }
+        unlockFingers = policy.effectiveUnlockFingers(s.pocketUnlockFingers, unlockPattern.isNotEmpty())
+        keys = KeySequence(unlockPattern, s.knobLong(Knobs.POCKET_SEQUENCE_MS))
         lockedPackage = host.foregroundPackage
         val (w, h) = host.screenSize()
-        val keysWanted = s.pocketBlockKeys || s.pocketUnlockKeys.isNotBlank()
+        val keysWanted = policy.needsKeys || unlockPattern.isNotEmpty()
 
         val v = LockView(ctx, requested == PocketMode.SCREEN)
         // Without key filtering, the window has to take focus to hear the volume keys
@@ -96,6 +127,7 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
         val flags = (if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            (if (!policy.blockTouch) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0) or
             (if (requested == PocketMode.SCREEN && s.pocketKeepAwake) WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON else 0)
         val lp = WindowManager.LayoutParams(w, h, host.windowType, flags, PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -104,6 +136,9 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
             if (Build.VERSION.SDK_INT >= 28) {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
+            // A fully transparent non-touchable app overlay is explicitly allowed
+            // to pass input through; an invisible View alone is not sufficient.
+            if (!policy.blockTouch && requested == PocketMode.TOUCH) alpha = 0f
             if (requested == PocketMode.SCREEN) {
                 // Released with the window.
                 screenBrightness = s.knobFloat(Knobs.POCKET_BRIGHTNESS)
@@ -113,7 +148,8 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
             wm.addView(v, lp)
         } catch (e: Exception) {
             AppLogger.e(TAG, "could not put the lock up", e)
-            return
+            Toast.makeText(ctx, "Could not open the lock overlay. Check its display-over-apps or accessibility permission.", Toast.LENGTH_LONG).show()
+            return false
         }
         view = v
         if (focusable) v.requestFocus()
@@ -121,47 +157,71 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
         watchProximity(true)
         AppLogger.d(TAG, "locked ($requested) over $lockedPackage")
         com.example.engine.EngineRuntime.lockChanged(true)
+        return true
     }
 
     fun unlock(reason: String) {
         val v = view ?: return
         view = null
         runCatching { wm.removeView(v) }
-        if (host.filtersKeys) host.wantKeys(false)
+        if (host.filtersKeys) host.wantKeys(consumed.pending)
         watchProximity(false)
         lockedPackage = null
         AppLogger.d(TAG, "unlocked: $reason")
         com.example.engine.EngineRuntime.lockChanged(false)
     }
 
-    /** Hardware keys while locked. True means taken. */
+    /** Hardware key routing preserves down/up pairs across unlock and settings changes. */
     fun onKey(event: KeyEvent): Boolean {
-        if (!locked) return false
+        if (event.action == KeyEvent.ACTION_UP && consumed.up(event.keyCode)) {
+            if (!locked && host.filtersKeys && !consumed.pending) host.wantKeys(false)
+            return true
+        }
+        if (consumed.contains(event.keyCode)) return true
+        if (!locked || event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return false
         val s = SettingsStore.current
+        val domain = keyDomain(event.keyCode)
+        if (domain == LockKeyDomain.SYSTEM) return false
         val name = when (event.keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP -> "up"
             KeyEvent.KEYCODE_VOLUME_DOWN -> "down"
             else -> KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_").lowercase()
         }
+        var consume = policy.blocks(domain)
+        var doUnlock = false
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             if (keys.press(name, SystemClock.uptimeMillis())) {
+                // Consume the completing press and its release together, even when
+                // this domain otherwise passes through to the foreground app.
+                consume = true
                 if (covered && s.pocketIgnoreWhenCovered) {
                     view?.hint("Covered — take it out of the pocket to unlock")
                 } else {
-                    unlock("key sequence")
+                    doUnlock = true
                 }
-                return true
             }
-            if (!covered) view?.hint(hintText())
+            if (!covered && !doUnlock) view?.hint(hintText())
         }
-        // Media keys from a headset stay working: they are how you pause a talking
-        // app without taking the phone out, which is the point of pocketing it.
-        return when (event.keyCode) {
-            KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-            KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
-            KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> false
-            else -> s.pocketBlockKeys
-        }
+        if (consume && event.action == KeyEvent.ACTION_DOWN) consumed.down(event.keyCode)
+        if (doUnlock) unlock("key sequence")
+        return consume
+    }
+
+    private fun keyDomain(code: Int): LockKeyDomain = when (code) {
+        KeyEvent.KEYCODE_POWER, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_APP_SWITCH,
+        KeyEvent.KEYCODE_SLEEP, KeyEvent.KEYCODE_WAKEUP -> LockKeyDomain.SYSTEM
+        KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> LockKeyDomain.VOLUME
+        KeyEvent.KEYCODE_BACK -> LockKeyDomain.NAVIGATION
+        KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+        KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+        KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_RECORD,
+        KeyEvent.KEYCODE_MEDIA_CLOSE, KeyEvent.KEYCODE_MEDIA_EJECT,
+        KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+        KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD, KeyEvent.KEYCODE_MEDIA_STEP_FORWARD,
+        KeyEvent.KEYCODE_MEDIA_STEP_BACKWARD -> LockKeyDomain.MEDIA
+        else -> LockKeyDomain.OTHER
     }
 
     /**
@@ -186,11 +246,11 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
     private fun hintText(): String {
         val s = SettingsStore.current
         val ways = mutableListOf<String>()
-        if (s.pocketUnlockKeys.isNotBlank()) {
-            ways += "volume " + KeySequence.parse(s.pocketUnlockKeys)
+        if (unlockPattern.isNotEmpty()) {
+            ways += "keys " + unlockPattern
                 .joinToString(" ") { if (it == "up") "+" else if (it == "down") "−" else it }
         }
-        if (s.pocketUnlockFingers > 0) ways += "hold ${s.pocketUnlockFingers} fingers ${s.pocketUnlockHoldMs / 1000.0}s"
+        if (unlockFingers > 0) ways += "hold $unlockFingers fingers ${s.pocketUnlockHoldMs / 1000.0}s"
         if (ways.isEmpty()) ways += "a wire you set up (a phrase, a key)"
         return "Locked — to unlock: " + ways.joinToString(", or ")
     }
@@ -219,7 +279,7 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
     private inner class LockView(context: Context, private val black: Boolean) : View(context) {
         private val s = SettingsStore.current
         private val hold = HoldGesture(
-            fingers = s.pocketUnlockFingers.coerceAtLeast(1),
+            fingers = unlockFingers.coerceAtLeast(1),
             holdMs = s.pocketUnlockHoldMs,
             slopPx = s.knobFloat(Knobs.POCKET_HOLD_SLOP_DP) * context.resources.displayMetrics.density
         )
@@ -259,7 +319,7 @@ class PocketLockOverlay(private val host: LockHost) : SensorEventListener {
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(event: MotionEvent): Boolean {
-            val fingers = s.pocketUnlockFingers
+            val fingers = unlockFingers
             if (fingers > 0) {
                 val up = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
                 lastCount = if (up) 0 else event.pointerCount -
@@ -341,13 +401,11 @@ object PocketLocks {
     /** Locks, or returns false when neither way is granted. */
     fun lock(context: Context, mode: PocketMode): Boolean {
         IoAccessibilityService.instance?.let {
-            it.pocket.lock(mode)
-            return true
+            return it.pocket.lock(mode)
         }
         if (canOverlay(context)) {
             val o = overlay ?: PocketLockOverlay(overlayHost(context.applicationContext)).also { overlay = it }
-            o.lock(mode)
-            return true
+            return o.lock(mode)
         }
         return false
     }

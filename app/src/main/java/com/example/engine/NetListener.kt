@@ -28,44 +28,55 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
     private val main = Handler(Looper.getMainLooper())
     private var udp: DatagramSocket? = null
     private var tcp: ServerSocket? = null
-    private var running: Triple<Int, String, Boolean>? = null
+    private class Session(val port: Int, val token: String, val allowCommands: Boolean)
+    @Volatile private var running: Session? = null
+    private val clients = mutableSetOf<Socket>()
     private val connections = AtomicInteger(0)
 
-    val port: Int? get() = running?.first
+    val port: Int? get() = running?.port
 
     @Synchronized
     fun start(port: Int, token: String, allowCommands: Boolean) {
-        val wanted = Triple(port, token, allowCommands)
-        if (running == wanted) return
+        val previous = running
+        if (previous?.port == port && previous.token == token && previous.allowCommands == allowCommands) return
         stop()
         if (port !in 1..65535 || !NetLines.tokenUsable(token)) return
+        // Identity, rather than configuration equality, prevents queued work surviving
+        // stop→restart even when the user restores the exact same settings.
+        val wanted = Session(port, token, allowCommands)
         running = wanted
         // Opening sockets is kept off the main thread along with everything else.
         Thread({
+            var openingUdp: DatagramSocket? = null
+            var openingTcp: ServerSocket? = null
             try {
-                val u = DatagramSocket(null).apply {
+                val u = DatagramSocket(null).also { openingUdp = it }.apply {
                     reuseAddress = true
                     bind(InetSocketAddress(port))
                 }
-                val t = ServerSocket().apply {
+                val t = ServerSocket().also { openingTcp = it }.apply {
                     reuseAddress = true
                     bind(InetSocketAddress(port))
                 }
                 synchronized(this) {
-                    if (running != wanted) {
-                        runCatching { u.close() }
-                        runCatching { t.close() }
-                        return@Thread
-                    }
+                    if (running !== wanted) return@Thread
                     udp = u
                     tcp = t
+                    openingUdp = null
+                    openingTcp = null
                 }
-                Thread({ receiveUdp(u, token, allowCommands) }, "io-net-udp").apply { isDaemon = true }.start()
-                acceptTcp(t, token, allowCommands)
+                Thread({ receiveUdp(u, wanted) }, "io-net-udp").apply { isDaemon = true }.start()
+                acceptTcp(t, wanted)
             } catch (e: Exception) {
-                AppLogger.e("NetListener", "cannot listen on $port", e)
-                main.post { report("Can't listen on port $port — ${e.message ?: e.javaClass.simpleName}") }
-                synchronized(this) { if (running == wanted) stop() }
+                if (running === wanted) {
+                    AppLogger.e("NetListener", "cannot listen on $port", e)
+                    synchronized(this) { if (running === wanted) stop() }
+                    main.post { if (running == null) report("Can't listen on port $port") }
+                }
+            } finally {
+                // Also close partially opened sockets when TCP bind fails after UDP bind.
+                runCatching { openingUdp?.close() }
+                runCatching { openingTcp?.close() }
             }
         }, "io-net").apply { isDaemon = true }.start()
     }
@@ -75,16 +86,22 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
         running = null
         runCatching { udp?.close() }
         runCatching { tcp?.close() }
+        clients.forEach { runCatching { it.close() } }
+        clients.clear()
         udp = null
         tcp = null
     }
 
-    private fun deliver(line: String, token: String, allowCommands: Boolean) {
-        val message = NetLines.parse(line, token, allowCommands) ?: return
-        main.post { onMessage(message) }
+    private fun deliver(line: String, session: Session) {
+        if (running !== session) return
+        val message = NetLines.parse(line, session.token, session.allowCommands) ?: return
+        main.post {
+            // Revocation must also discard commands parsed before a settings change.
+            if (running === session) onMessage(message)
+        }
     }
 
-    private fun receiveUdp(socket: DatagramSocket, token: String, allowCommands: Boolean) {
+    private fun receiveUdp(socket: DatagramSocket, session: Session) {
         val buffer = ByteArray(NetLines.MAX_LINE * 4)
         while (!socket.isClosed) {
             try {
@@ -92,14 +109,14 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
                 socket.receive(packet)
                 String(packet.data, 0, packet.length, Charsets.UTF_8).lineSequence()
                     .filter { it.isNotBlank() }
-                    .forEach { deliver(it, token, allowCommands) }
+                    .forEach { deliver(it, session) }
             } catch (e: Exception) {
                 if (!socket.isClosed) AppLogger.e("NetListener", "udp receive failed", e)
             }
         }
     }
 
-    private fun acceptTcp(server: ServerSocket, token: String, allowCommands: Boolean) {
+    private fun acceptTcp(server: ServerSocket, session: Session) {
         while (!server.isClosed) {
             val client: Socket = try {
                 server.accept()
@@ -113,11 +130,19 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
                 runCatching { client.close() }
                 continue
             }
-            Thread({ serve(client, token, allowCommands) }, "io-net-client").apply { isDaemon = true }.start()
+            val accepted = synchronized(this) {
+                if (running !== session) false else { clients += client; true }
+            }
+            if (!accepted) {
+                connections.decrementAndGet()
+                runCatching { client.close() }
+                continue
+            }
+            Thread({ serve(client, session) }, "io-net-client").apply { isDaemon = true }.start()
         }
     }
 
-    private fun serve(client: Socket, token: String, allowCommands: Boolean) {
+    private fun serve(client: Socket, session: Session) {
         try {
             client.soTimeout = 5 * 60_000
             BufferedReader(InputStreamReader(client.getInputStream(), Charsets.UTF_8)).use { reader ->
@@ -128,7 +153,7 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
                     val c = reader.read()
                     if (c < 0) break
                     if (c == '\n'.code) {
-                        if (line.isNotBlank()) deliver(line.toString().trimEnd('\r'), token, allowCommands)
+                        if (line.isNotBlank()) deliver(line.toString().trimEnd('\r'), session)
                         line.setLength(0)
                     } else {
                         line.append(c.toChar())
@@ -140,6 +165,7 @@ class NetListener(private val onMessage: (NetMessage) -> Unit, private val repor
             // A client going away mid-line is how most connections end.
         } finally {
             runCatching { client.close() }
+            synchronized(this) { clients.remove(client) }
             connections.decrementAndGet()
         }
     }

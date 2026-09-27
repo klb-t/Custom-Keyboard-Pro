@@ -1,0 +1,154 @@
+[
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "pocket-touch",
+    "name": "Touch guard",
+    "description": "Keep the display visible and block touches and volume keys.",
+    "values": {
+      "pocketMode": "TOUCH",
+      "pocketBlockTouch": true,
+      "pocketBlockKeys": true,
+      "pocketBlockNavigation": true,
+      "pocketBlockMediaKeys": false,
+      "pocketBlockOtherKeys": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "pocket-screen",
+    "name": "Pocket listening",
+    "description": "Blank the display while playback keeps running; headset controls remain available.",
+    "values": {
+      "pocketMode": "SCREEN",
+      "pocketBlockTouch": true,
+      "pocketBlockKeys": true,
+      "pocketBlockNavigation": true,
+      "pocketBlockMediaKeys": false,
+      "pocketBlockOtherKeys": true,
+      "pocketKeepAwake": true,
+      "pocketIgnoreWhenCovered": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "pocket-controls",
+    "name": "Touch guard with volume controls",
+    "description": "Prevent accidental touches while leaving physical media and volume controls usable.",
+    "values": {
+      "pocketMode": "TOUCH",
+      "pocketBlockTouch": true,
+      "pocketBlockKeys": false,
+      "pocketBlockNavigation": true,
+      "pocketBlockMediaKeys": false,
+      "pocketBlockOtherKeys": false
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "shortcuts",
+    "name": "Persistent shortcuts",
+    "description": "Use the shortcut board without a text field and request persistence across app changes.",
+    "values": {
+      "fieldlessLayoutId": "hacker",
+      "keyboardKeepVisible": true,
+      "showOnHardwareKeyboard": true,
+      "actionSuggestions": true,
+      "keyboardToolbarVisible": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "literal-typing",
+    "name": "Literal typing",
+    "description": "Keep user text unchanged and disable automatic corrections and capitalisation.",
+    "values": {
+      "autoCapitalize": false,
+      "doubleSpacePeriod": false,
+      "autoSpaceAfterPunctuation": false,
+      "smartQuotes": false,
+      "cursorMagnet": "OFF",
+      "autoCorrect": false
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "transparent",
+    "name": "Transparent floating keys",
+    "description": "Keep solid key labels over a transparent panel.",
+    "values": {
+      "presentation": "FLOATING",
+      "panelOpacity": 0.0,
+      "keyOpacity": 0.15,
+      "keyBorderWidthDp": 1.0,
+      "keyBorderOpacity": 0.8,
+      "keyLabelOpacity": 1.0
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "free-arrange",
+    "name": "Arrange individual keys",
+    "description": "Free keys with guides and explicit arrangement mode.",
+    "values": {
+      "presentation": "FREE",
+      "freeKeysDraggable": true,
+      "freeArrangeMode": true,
+      "freeShowGuides": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "large-targets",
+    "name": "Large touch targets",
+    "description": "Increase keyboard size, labels and press duration for deliberate input.",
+    "values": {
+      "heightPortrait": 0.45,
+      "keyTextScale": 1.3,
+      "longPressMs": 350,
+      "longPressBoardMs": 500,
+      "keyGapDp": 5.0,
+      "keyPreviewPopup": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "quiet",
+    "name": "Quiet feedback",
+    "description": "Disable keyboard sound and vibration without changing typing behaviour.",
+    "values": {
+      "soundEnabled": false,
+      "hapticEnabled": false
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "local-only",
+    "name": "Local conversions & no prediction",
+    "description": "Disable AI, prediction, remote conversion and learning. System dictation follows Android speech settings.",
+    "values": {
+      "aiEnabled": false,
+      "completionEnabled": false,
+      "convertLocalOnly": true,
+      "netListenPort": 0,
+      "netAllowCommands": false,
+      "learnActions": false,
+      "learnProperNouns": false,
+      "touchModelLearning": false,
+      "aiCompletionEnabled": false,
+      "pasteConvert": false,
+      "learnFromTyping": false,
+      "ttsProvider": "",
+      "asrEngine": "android"
+    }
+  }
+]

@@ -45,7 +45,11 @@ password field are stated once.
 
 **One settings snapshot.** The settings app and the IME read the same `StateFlow`.
 They previously read two different `SharedPreferences` files, so nothing in settings
-had any effect; that class of bug is now structurally impossible.
+had any effect. They now share the same runtime snapshot. One IO writer coalesces
+updates and persists an encrypted AtomicFile; pending/error state distinguishes
+visible changes from durable storage. The device-bound key is held by Android
+Keystore, with hardware backing where the device supports it. Settings and
+credentials are excluded from backup, and portable profiles omit credentials.
 
 **Geometry is computed, not measured.** `KeyPlacement` produces the rectangles, and
 the renderer, the hit test and the popups all read them. The old code let Compose
@@ -64,8 +68,11 @@ Two rules, enforced in the layers that could break them rather than at call site
    nothing is suggested, learned, recorded to the clipboard, or sent to a model.
    `EditorController.isSensitive` is the single check; `SuggestionEngine.update`,
    the clipboard listener and `runAiTask` all consult it.
-2. Anything that leaves the device is off by default and needs the user to supply
-   their own provider.
+2. User content leaves through configured features or an explicit request. Public
+   catalogue refreshes need no account and send neither typed content nor API keys.
+   Generic system dictation has unknown processing locality; the distinct
+   on-device-only route is offered when Android reports it available and uses the
+   on-device recogniser for both initial requests and retries.
 
 ## Building
 

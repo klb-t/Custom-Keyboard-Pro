@@ -56,8 +56,15 @@ data class Record(
     val confidence: Double? = null,
     val note: String? = null
 ) {
-    val origin: Origin
-        get() = if (changes.any { it.kind == ChangeKind.EXTERNALLY_ADDED }) Origin.EXTERNAL else Origin.of(mapping)
+    /** Source and epistemic status are independent: external information can be inferred or generated. */
+    val origins: Set<Origin>
+        get() = buildSet {
+            add(Origin.of(mapping))
+            if (changes.any { it.kind == ChangeKind.EXTERNALLY_ADDED }) add(Origin.EXTERNAL)
+        }
+
+    /** The mapping's origin; use [origins] when describing the complete record. */
+    val origin: Origin get() = Origin.of(mapping)
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("transform", transform)
@@ -123,7 +130,7 @@ data class Provenance(
         get() = buildSet {
             add(Origin.OBSERVED)
             if (source.inferred) add(Origin.INFERRED)
-            records.forEach { add(it.origin) }
+            records.forEach { addAll(it.origins) }
             earlier?.let { addAll(it.origins) }
         }
 
@@ -145,7 +152,7 @@ data class Provenance(
         records.forEach { r ->
             append(" → ").append(r.transform)
             val marks = buildList {
-                if (r.origin != Origin.DERIVED) add(r.origin.name.lowercase())
+                addAll(r.origins.filter { it != Origin.DERIVED }.map { it.name.lowercase() })
                 if (r.site == Site.PROVIDER) add("sent away")
                 if (r.assumed.isNotEmpty()) add("assumed " + r.assumed.joinToString("/"))
             }
@@ -162,7 +169,7 @@ data class Provenance(
         records.forEachIndexed { i, r ->
             append(i + 1).append(". ").append(r.transform)
             r.implementation?.let { append(" by ").append(it) }
-            append(" — ").append(r.origin.name.lowercase())
+            append(" — ").append(r.origins.joinToString { it.name.lowercase() })
             r.confidence?.let { append(", confidence ").append("%.2f".format(java.util.Locale.ROOT, it)) }
             append('\n')
             if (r.parameters.isNotEmpty()) append("   with ").append(r.parameters.entries.joinToString { "${it.key}=${it.value}" }).append('\n')

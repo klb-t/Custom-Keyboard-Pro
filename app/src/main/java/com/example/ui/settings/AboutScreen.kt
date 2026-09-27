@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,6 +29,7 @@ import com.example.core.text.TextOps
  */
 @Composable
 fun AboutScreen() {
+    val scope = rememberCoroutineScope()
     var exported by remember { mutableStateOf<String?>(null) }
     var importText by remember { mutableStateOf("") }
     var importResult by remember { mutableStateOf<String?>(null) }
@@ -90,8 +93,11 @@ fun AboutScreen() {
         ) {
             ActionRow(
                 "Export settings",
-                "Shows the JSON so you can copy it",
-                onClick = { exported = SettingsStore.exportJson() }
+                "Portable settings only; credentials and private payloads are omitted",
+                onClick = {
+                    runCatching { SettingsStore.exportJson() }.onSuccess { exported = it }
+                        .onFailure { importResult = "Export failed: ${it.message}" }
+                }
             )
             exported?.let {
                 TextRow(
@@ -115,12 +121,19 @@ fun AboutScreen() {
             )
             ActionRow(
                 "Import",
-                "Replaces every setting",
+                "Merges the listed options after validation; preserves unrelated settings and credentials",
                 onClick = {
-                    importResult = SettingsStore.importJson(importText).fold(
-                        onSuccess = { "Imported." },
-                        onFailure = { "Could not read that: ${it.message}" }
-                    )
+                    scope.launch {
+                        importResult = SettingsStore.importJson(importText).fold(
+                            onSuccess = {
+                                SettingsStore.awaitPersistence().fold(
+                                    onSuccess = { "Imported and saved. Unrelated settings were kept." },
+                                    onFailure = { "Applied in memory; not saved: ${it.message}" }
+                                )
+                            },
+                            onFailure = { "Could not read that: ${it.message}" }
+                        )
+                    }
                 }
             )
             importResult?.let { InfoRow(it) }

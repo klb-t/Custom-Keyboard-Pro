@@ -128,6 +128,12 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private var composeView: ComposeView? = null
     private var clipboardManager: ClipboardManager? = null
+    private val shortcutSession = com.example.core.io.ShortcutSession()
+    private var shortcutRestoreJob: kotlinx.coroutines.Job? = null
+    private var shortcutShowCheckJob: kotlinx.coroutines.Job? = null
+
+    /** The tile is also an always-available escape from a pinned shortcut session. */
+    val shortcutSessionActive: Boolean get() = shortcutSession.active
 
     private val panelState = mutableStateOf<PanelId?>(null)
     private val layoutIdState = mutableStateOf<String?>(null)
@@ -212,6 +218,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
                     .distinctUntilChanged()
                     .collect { composeView?.requestLayout() }
             }
+            serviceScope.launch {
+                SettingsStore.state.map { it.keyboardKeepVisible }.distinctUntilChanged().collect {
+                    if (it && isInputViewShown) shortcutSession.start(true)
+                    else shortcutSession.updatePreference(it)
+                    if (!it) shortcutRestoreJob?.cancel()
+                }
+            }
             AppLogger.d(tag, "done")
         } catch (crash: Throwable) {
             AppLogger.e(tag, "failed — the service will not come up", crash)
@@ -220,6 +233,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onDestroy() {
+        shortcutSession.stop()
+        shortcutRestoreJob?.cancel()
         if (liveKeyboard === this) liveKeyboard = null
         com.example.engine.EngineRuntime.keyboardDestroyed()
         com.example.engine.EngineRuntime.noticeSink = null
@@ -374,8 +389,20 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      */
     override fun onWindowShown() {
         super.onWindowShown()
+        shortcutShowCheckJob?.cancel()
         val view = composeView ?: return
         ViewCompat.getRootWindowInsets(view)?.let { takeSystemInsets(view, it) }
+    }
+
+    override fun onWindowHidden() {
+        shortcutSession.hidden()
+        super.onWindowHidden()
+        // No retry here: Android may intentionally refuse or hide this window.
+    }
+
+    override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(info, restarting)
+        restoreShortcutSession(info?.packageName)
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -394,7 +421,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             // makes an empty field indistinguishable from one whose text has simply
             // not been read yet, and sends every cursor movement down the blind path.
             editor.seedSelection(info)
-            restoreLayoutForApp()
+            if (shortcutSession.active) applyShortcutLayout() else restoreLayoutForApp()
             AppLogger.d(tag, "> layout for app resolved: ${layout.id}")
             panelState.value = null
             state.clearAllModifiers()
@@ -415,6 +442,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             }
 
             val sensitive = editor.isSensitive
+            if (sensitive) cancelSensitiveRecording()
             state.setFlag(IndicatorKeys.PASSWORD_FIELD, editor.isPasswordField)
             state.setFlag(IndicatorKeys.INCOGNITO, sensitive && SettingsStore.current.incognitoInPasswordFields)
             AppLogger.d(tag, "> editor state read: sensitive=$sensitive")
@@ -466,7 +494,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * which covered a third of the screen for anyone using a physical keyboard.
      */
     override fun onEvaluateInputViewShown(): Boolean =
-        SettingsStore.current.showOnHardwareKeyboard || super.onEvaluateInputViewShown()
+        shortcutSession.active || SettingsStore.current.showOnHardwareKeyboard || super.onEvaluateInputViewShown()
 
     /**
      * Landscape full-screen extract mode replaces the app's own field with one drawn by
@@ -691,6 +719,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) stopShortcutSession()
         // Wired volume keys first: a wire is a more specific wish than the general
         // "volume keys resize" setting, and nobody wants both from one press.
         if (isInputViewShown && com.example.engine.EngineRuntime.onVolumeKey(event)) return true
@@ -840,6 +869,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     private fun appLayoutPrefs() = getSharedPreferences("app_layouts", Context.MODE_PRIVATE)
 
     override fun openApp(route: String?) {
+        stopShortcutSession()
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             if (route != null) putExtra(MainActivity.EXTRA_ROUTE, route)
@@ -867,11 +897,23 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         openApp(MainActivity.ROUTE_PERMISSIONS)
     }
 
+    override fun requestHideSelf(flags: Int) {
+        stopShortcutSession()
+        super.requestHideSelf(flags)
+    }
+
     override fun hideKeyboard() {
         requestHideSelf(0)
     }
 
+    private fun stopShortcutSession() {
+        shortcutSession.stop()
+        shortcutRestoreJob?.cancel()
+        shortcutShowCheckJob?.cancel()
+    }
+
     override fun switchIme() {
+        stopShortcutSession()
         try {
             (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.showInputMethodPicker()
         } catch (e: Exception) {
@@ -884,23 +926,65 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val notices = com.example.ui.kb.NoticeBoard()
 
     /**
-     * Shows the keyboard with no text field — for shortcuts, keys and actions sent to
-     * whatever app is in front.
-     *
-     * Android shows a keyboard for a field; asked to show itself with none, what the
-     * system does is up to the version and the app. Where it works, keys go to the app
-     * as ordinary key presses (Ctrl+C, arrows, Escape, space for play), which is what a
-     * keyboard without a field is for. Where it does not, nothing breaks: it just does
-     * not appear. Honest name for that: experimental.
+     * A user-started shortcut session. A pin survives focus changes, but Android
+     * still owns the IME window and may refuse it without a served input target.
+     * Hide, Back and a second tile tap end the session; SHOW_FORCED is never used.
      */
     fun showWithoutField() {
         val s = SettingsStore.current
-        s.fieldlessLayoutId.takeIf { it.isNotBlank() && LayoutRepository.byId(it) != null }?.let { selectLayout(it) }
+        shortcutSession.start(s.keyboardKeepVisible)
+        applyShortcutLayout()
+        requestShortcutWindow(userInitiated = true)
+    }
+
+    private fun applyShortcutLayout() {
+        SettingsStore.current.fieldlessLayoutId
+            .takeIf { it.isNotBlank() && LayoutRepository.byId(it) != null }
+            ?.let { id ->
+                // A temporary tile layout must not overwrite the user's default
+                // or the per-app typing layout remembered for the foreground app.
+                layoutIdState.value = id
+                state.resetLayer(LayoutDef.BASE_LAYER)
+                touchLearner.load(id)
+            }
+    }
+
+    /** One request per new target, not a polling loop that fights the OS or Back. */
+    fun restoreShortcutSession(targetPackage: String?) {
+        if (targetPackage == null || targetPackage == "com.android.systemui") return
+        shortcutRestoreJob?.cancel()
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val power = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        fun allowed(): Boolean = shortcutSession.shouldRestore(
+            ownTarget = targetPackage == packageName,
+            deviceUnlocked = keyguard?.isKeyguardLocked != true && power?.isInteractive != false,
+            pocketLocked = com.example.io.PocketLocks.locked
+        )
+        if (!allowed()) return
+        shortcutRestoreJob = serviceScope.launch {
+            delay(SettingsStore.current.knobLong(com.example.core.config.Knobs.KEYBOARD_RESTORE_DELAY_MS))
+            if (allowed() && !isInputViewShown) requestShortcutWindow()
+        }
+    }
+
+    private fun requestShortcutWindow(userInitiated: Boolean = false) {
         if (Build.VERSION.SDK_INT >= 28) {
             requestShowSelf(0)
         } else {
             @Suppress("DEPRECATION")
             showWindow(true)
+        }
+        if (userInitiated && !isInputViewShown) {
+            shortcutShowCheckJob?.cancel()
+            shortcutShowCheckJob = serviceScope.launch {
+                delay(SettingsStore.current.knobLong(com.example.core.config.Knobs.KEYBOARD_SHOW_TIMEOUT_MS))
+                if (shortcutSession.active && !isInputViewShown) {
+                    stopShortcutSession()
+                    android.widget.Toast.makeText(this@CustomKeyboardIme,
+                        "Android did not open the keyboard here. Focus an editable field, then use the tile again.",
+                        android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -1179,7 +1263,18 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private var recorder: com.example.core.io.MacroRecorder? = null
 
+    private fun cancelSensitiveRecording() {
+        if (recorder == null) return
+        recorder = null
+        notices.post("Macro recording discarded: a private field is active")
+    }
+
     private fun recordMacro(state: String, name: String) {
+        if (editor.isSensitive) {
+            cancelSensitiveRecording()
+            notices.post("Macro recording is unavailable in private fields")
+            return
+        }
         val active = recorder
         val stop = state == "stop" || (state != "start" && active != null)
         if (stop) {
@@ -1264,9 +1359,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun textForAi(): String {
-        val selected = editor.selectedText()?.toString()
-        if (!selected.isNullOrBlank()) return selected
-        return editor.allText(4000).toString().takeLast(SettingsStore.current.aiContextChars)
+        return editor.textForExternalUse(SettingsStore.current.aiContextChars)
     }
 
     // -----------------------------------------------------------------------
@@ -1295,7 +1388,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         recordShortcut(action)
         // Recorded as performed, not as pressed: what a key *did* is what a replay
         // has to do, whichever key or wire it came from. Not while a macro plays.
-        if (!com.example.engine.EngineRuntime.isPlaying) recorder?.record(action, android.os.SystemClock.uptimeMillis())
+        if (editor.isSensitive) cancelSensitiveRecording()
+        else if (!com.example.engine.EngineRuntime.isPlaying) recorder?.record(action, android.os.SystemClock.uptimeMillis())
         val serial = ++actionSerial
         if (action is KeyAction.Backspace && settings.longPressAdaptive) backspaceAfterRelease(serial)
         when (action) {
@@ -1703,8 +1797,9 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     private fun refreshSuggestions() {
-        val before = editor.textBefore(SettingsStore.current.aiContextChars.coerceAtLeast(64))
         val sensitive = editor.isSensitive
+        // Do not even fetch surrounding private text for a pipeline that will reject it.
+        val before = if (sensitive) "" else editor.textBefore(SettingsStore.current.aiContextChars.coerceAtLeast(64))
         suggestions.update(
             textBeforeCursor = before,
             sensitive = sensitive,

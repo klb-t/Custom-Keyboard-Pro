@@ -148,8 +148,10 @@ class IoAccessibilityService : AccessibilityService() {
         // The shade is not "the app in front": locking from a quick settings tile
         // must lock over the app underneath it.
         if (pkg != packageName && pkg != "com.android.systemui") {
+            val changed = foregroundPackage != pkg
             foregroundPackage = pkg
             pocket.onForeground(pkg)
+            if (changed) com.example.ime.liveKeyboard?.restoreShortcutSession(pkg)
             com.example.engine.EngineRuntime.appInFront(pkg)
         }
     }
@@ -157,7 +159,9 @@ class IoAccessibilityService : AccessibilityService() {
     /** Only asked for while someone wants keys; see [wantKeys]. The lock comes first. */
     override fun onKeyEvent(event: android.view.KeyEvent?): Boolean {
         val e = event ?: return false
-        if (pocket.locked) return runCatching { pocket.onKey(e) }.getOrDefault(false)
+        // A consumed down must keep its up, including the key that unlocked.
+        if (runCatching { pocket.onKey(e) }.getOrDefault(false)) return true
+        if (pocket.locked) return false
         return runCatching { com.example.engine.EngineRuntime.onVolumeKey(e) }.getOrDefault(false)
     }
 
@@ -204,22 +208,7 @@ class IoAccessibilityService : AccessibilityService() {
         for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1, visit)
     }
 
-    private fun facts(n: AccessibilityNodeInfo): NodeFacts {
-        val r = Rect().also { n.getBoundsInScreen(it) }
-        return NodeFacts(
-            text = n.text?.toString(),
-            desc = n.contentDescription?.toString(),
-            viewId = n.viewIdResourceName,
-            className = n.className?.toString(),
-            clickable = n.isClickable,
-            longClickable = n.isLongClickable,
-            checkable = n.isCheckable,
-            checked = n.isChecked,
-            row = n.collectionItemInfo?.rowIndex,
-            top = r.top,
-            left = r.left
-        )
-    }
+    private fun facts(n: AccessibilityNodeInfo): NodeFacts = AccessibilityNodeData.facts(n)
 
     /** Every piece of text on screen, top to bottom, without repeating itself. */
     fun screenText(maxChars: Int = 20_000): String {
@@ -227,8 +216,7 @@ class IoAccessibilityService : AccessibilityService() {
         roots().forEach { root ->
             walk(root) { n ->
                 if (!n.isVisibleToUser) return@walk
-                n.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { lines += it }
-                    ?: n.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { lines += it }
+                AccessibilityNodeData.screenText(n)?.let { lines += it }
             }
         }
         val out = StringBuilder()

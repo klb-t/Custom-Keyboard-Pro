@@ -32,6 +32,9 @@ import com.example.core.discovery.ProviderCatalog
 import com.example.core.discovery.ProviderProfile
 import com.example.core.discovery.ProviderProfiles
 import com.example.core.setup.ProviderProbe
+import com.example.core.setup.CapabilitySetup
+import com.example.core.setup.SetupRoute
+import com.example.core.discovery.AiCapability
 import kotlinx.coroutines.launch
 
 /**
@@ -64,6 +67,7 @@ fun AiSettingsScreen(settings: Settings) {
     val profile = profiles[settings.aiProvider] ?: ProviderProfile(settings.aiProvider)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+        CapabilitySetupSection(settings)
 
         SettingsSection(
             title = "AI features",
@@ -92,11 +96,13 @@ fun AiSettingsScreen(settings: Settings) {
         }
 
         SettingsSection(
-            title = "Provider",
+            title = "Writing provider",
             subtitle = "The catalogue is a bundled data file, not a list in the code — " +
                 "so a provider that appears next year is an entry, not a release."
         ) {
-            val providers = remember(settings.customProvidersJson) { ProviderCatalog.all(settings) }
+            val providers = remember(settings.customProvidersJson, settings.fetchedProvidersJson) {
+                ProviderCatalog.all(settings).filter { it.can(AiCapability.CHAT) }
+            }
             ChoiceRow(
                 label = "Provider",
                 description = "Anything speaking the OpenAI chat API works, including a " +
@@ -106,17 +112,8 @@ fun AiSettingsScreen(settings: Settings) {
                 optionLabel = { it.label },
                 onSelect = { spec ->
                     SettingsStore.update { current ->
-                        val previous = ProviderCatalog.byId(current.aiProvider, current)
-                        // Only replace a URL or model the user did not choose themselves.
-                        current.copy(
-                            aiProvider = spec.id,
-                            aiBaseUrl = if (current.aiBaseUrl.isBlank() ||
-                                current.aiBaseUrl == previous?.baseUrl
-                            ) spec.baseUrl else current.aiBaseUrl,
-                            aiModel = if (current.aiModel.isBlank() ||
-                                current.aiModel == previous?.defaultModel
-                            ) spec.defaultModel else current.aiModel
-                        )
+                        CapabilitySetup.select(current, SetupRoute(spec, AiCapability.CHAT,
+                            ProviderProfiles.of(spec.id, current).model.ifBlank { spec.defaultModel }, "User selected"))
                     }
                 }
             )
@@ -143,9 +140,7 @@ fun AiSettingsScreen(settings: Settings) {
                 description = "Kept against this provider, so switching provider switches " +
                     "key with it and nothing has to be retyped. On this device only; an " +
                     "exported settings file carries it.",
-                value = profile.apiKey.ifBlank {
-                    if (settings.aiApiKey.isNotBlank()) settings.aiApiKey else ""
-                },
+                value = ProviderProfiles.keyFor(settings.aiProvider, settings),
                 secret = true,
                 onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(apiKey = v) } }
             )
@@ -205,7 +200,8 @@ fun AiSettingsScreen(settings: Settings) {
                         checking = true
                         checkResult = null
                         scope.launch {
-                            val probe = ProviderProbe.probe(spec, ProviderProfiles.keyFor(spec.id, settings))
+                            val probe = ProviderProbe.probe(spec.copy(baseUrl = ProviderProfiles.baseUrlFor(spec.id, settings)),
+                                ProviderProfiles.keyFor(spec.id, settings))
                             checkResult = when {
                                 probe.usable ->
                                     "Works. ${spec.label} answered" +
@@ -281,9 +277,10 @@ fun AiSettingsScreen(settings: Settings) {
                         discovering = true
                         discoveryResult = null
                         scope.launch {
-                            ModelDiscovery.fetch(spec, ProviderProfiles.keyFor(spec.id, settings)).fold(
+                            ModelDiscovery.fetch(spec.copy(baseUrl = ProviderProfiles.baseUrlFor(spec.id, settings)),
+                                ProviderProfiles.keyFor(spec.id, settings)).fold(
                                 onSuccess = { models ->
-                                    ModelDiscovery.cache(spec.id, models)
+                                    ModelDiscovery.cache(spec.id, ModelDiscovery.selectForCapability(models, emptyList(), AiCapability.CHAT, false))
                                     discoveryResult = if (models.isEmpty()) {
                                         "The provider answered, but listed no models."
                                     } else {
@@ -358,17 +355,29 @@ fun AiSettingsScreen(settings: Settings) {
                 )
                 SliderRow(
                     label = "Temperature",
-                    value = settings.aiTemperature,
+                    value = AiConfig.from(settings).temperature,
                     range = 0f..1.5f,
                     format = { "%.2f".format(it) },
-                    onChange = { v -> SettingsStore.update { it.copy(aiTemperature = v) } }
+                    onChange = { v ->
+                        SettingsStore.update { it.copy(aiTemperature = v) }
+                        ProviderProfiles.update(settings.aiProvider) { profile ->
+                            val cap = profile.capabilities[AiCapability.CHAT] ?: com.example.core.discovery.CapabilityProfile()
+                            profile.copy(capabilities = profile.capabilities + (AiCapability.CHAT to cap.copy(params = cap.params + ("temperature" to v.toString()))))
+                        }
+                    }
                 )
                 SliderRow(
                     label = "Maximum reply length",
-                    value = settings.aiMaxTokens.toFloat(),
+                    value = AiConfig.from(settings).maxTokens.toFloat(),
                     range = 16f..1024f,
                     format = { "${it.toInt()} tokens" },
-                    onChange = { v -> SettingsStore.update { it.copy(aiMaxTokens = v.toInt()) } }
+                    onChange = { v ->
+                        SettingsStore.update { it.copy(aiMaxTokens = v.toInt()) }
+                        ProviderProfiles.update(settings.aiProvider) { profile ->
+                            val cap = profile.capabilities[AiCapability.CHAT] ?: com.example.core.discovery.CapabilityProfile()
+                            profile.copy(capabilities = profile.capabilities + (AiCapability.CHAT to cap.copy(params = cap.params + ("maxTokens" to v.toInt().toString()))))
+                        }
+                    }
                 )
             }
 

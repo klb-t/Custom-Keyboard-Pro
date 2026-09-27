@@ -46,6 +46,21 @@ class ProvenanceTest {
     }
 
     @Test
+    fun `external knowledge cannot hide that a result was generated or inferred`() {
+        for ((mapping, origin) in listOf(Mapping.GENERATIVE to Origin.GENERATED, Mapping.INFERENTIAL to Origin.INFERRED)) {
+            val record = Record("enrich", "enrich.provider", Site.PROVIDER, mapping,
+                listOf(Change(ChangeKind.EXTERNALLY_ADDED, "provider knowledge")))
+            val source = Provenance(Source("field", "text", "utf8")).then(record)
+            val carried = Provenance(Source("file", "text", "utf8"), earlier = source)
+            val roundTrip = Provenance.fromJson(carried.toJson().toString())!!
+            assertTrue(roundTrip.origins.containsAll(setOf(Origin.OBSERVED, Origin.EXTERNAL, origin)))
+            assertTrue(source.summary().contains(origin.name.lowercase()))
+            assertTrue(source.summary().contains("external"))
+            assertTrue(source.details().contains(origin.name.lowercase()))
+        }
+    }
+
+    @Test
     fun `a step at a provider is remembered as having left the phone`() {
         val sent = history.then(Record("transcribe", "transcribe.provider", Site.PROVIDER, Mapping.INFERENTIAL, emptyList()))
         assertTrue(sent.leftDevice)
@@ -88,6 +103,9 @@ class ProvenanceTest {
             .then(Record("stft", "stft.app", Site.APP, Mapping.DETERMINISTIC, emptyList()))
             .then(Record("render_field", "render_field.app", Site.APP, Mapping.DETERMINISTIC, emptyList(), mapOf("time" to "up")))
         assertEquals(setOf("spectrogram"), Interpret.factsFrom(drawn))
+        val encoded = drawn.then(Record("encode", "encode.app", Site.APP, Mapping.DETERMINISTIC, emptyList(), mapOf("as" to "png")))
+        assertEquals(setOf("spectrogram"), Interpret.factsFrom(encoded))
+        assertEquals(setOf("spectrogram"), Interpret.factsFrom(Provenance(Source("file", "picture", "png"), earlier = encoded)))
         assertEquals(mapOf("time" to "up"), Interpret.carried(drawn, "render_field"))
         assertEquals(mapOf("time" to "up"), Interpret.carried(Provenance(Source("file", "picture", "png"), earlier = drawn), "render_field"))
     }

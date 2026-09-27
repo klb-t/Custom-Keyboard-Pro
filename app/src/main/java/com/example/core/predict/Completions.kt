@@ -135,7 +135,7 @@ class CompletionEngine(
         // every lookup, and this runs on every keystroke. In a password field the
         // decision is made on the first line and the parse never happens at all.
         val resolved by lazy(LazyThreadSafetyMode.NONE) {
-            ProviderCatalog.byId(s.completionProvider.ifBlank { s.aiProvider }, s)
+            ProviderCatalog.byId(s.completionProvider.ifBlank { s.aiProvider }, s)?.let { ProviderProfiles.resolved(it, s) }
         }
         if (Refusal.of(before, sensitive, s) { resolved } != null) {
             clear()
@@ -183,7 +183,7 @@ class CompletionEngine(
                             .ifBlank { provider.defaultModel }
                     },
                     prompt = before.takeLast(s.aiContextChars).toString(),
-                    params = mapOf(
+                    params = ProviderProfiles.paramsFor(provider.id, AiCapability.COMPLETE, s) + mapOf(
                         "maxTokens" to s.completionMaxTokens.toString(),
                         "temperature" to s.completionTemperature.toString()
                     )

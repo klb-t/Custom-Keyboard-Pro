@@ -2,7 +2,7 @@
   {
     "id": "openrouter_models",
     "label": "OpenRouter's public model list",
-    "note": "Prices, context lengths and modalities for several hundred models across most providers, readable without an account. The single most useful thing available to somebody who has no keys yet.",
+    "note": "Public catalogue of models listed by OpenRouter. This is one gateway, not an exhaustive inventory of all providers. Prices and availability can change.",
     "needsKey": false,
     "enabled": true,
     "call": {
@@ -19,12 +19,14 @@
       "promptPrice": "pricing.prompt",
       "completionPrice": "pricing.completion",
       "modalities": "architecture.input_modalities"
-    }
+    },
+    "routeProvider": "openrouter",
+    "capability": "chat"
   },
   {
     "id": "openrouter_models_alt",
     "label": "OpenRouter, older field names",
-    "note": "The same list read the way it was shaped before input_modalities existed. Kept as a second entry rather than as a fallback inside the first, so that whichever one still works can simply be the one left enabled.",
+    "note": "Public catalogue of models listed by OpenRouter. This is one gateway, not an exhaustive inventory of all providers. Prices and availability can change.",
     "needsKey": false,
     "enabled": false,
     "call": {
@@ -41,6 +43,32 @@
       "promptPrice": "pricing.prompt",
       "completionPrice": "pricing.completion",
       "modalities": "architecture.modality"
+    },
+    "routeProvider": "openrouter",
+    "capability": "chat"
+  },
+  {
+    "id": "openrouter_embeddings",
+    "label": "OpenRouter embedding model list",
+    "note": "The official API documents authentication for this endpoint. The account-free wizard uses the bundled verified routes; refresh this list after adding a key.",
+    "needsKey": true,
+    "enabled": true,
+    "routeProvider": "openrouter",
+    "capability": "embed",
+    "call": {
+      "method": "GET",
+      "path": "https://openrouter.ai/api/v1/embeddings/models",
+      "auth": "bearer",
+      "bodyKind": "none"
+    },
+    "itemPath": "data",
+    "fields": {
+      "id": "id",
+      "label": "name",
+      "contextTokens": "context_length",
+      "promptPrice": "pricing.prompt",
+      "completionPrice": "pricing.completion",
+      "modalities": "architecture.input_modalities"
     }
   }
 ]

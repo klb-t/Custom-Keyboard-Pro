@@ -133,7 +133,6 @@ fun SuggestionStrip(
             if (aiBusy) {
                 PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
             }
-            ToolbarButton("⚙", "Settings", theme) { host.openApp() }
         } else {
             LazyRow(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -187,6 +186,7 @@ fun SuggestionStrip(
             if (aiBusy) PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 8.dp))
             ToolbarButton("▾", "More", theme) { onToolbar(PanelId.CLIPBOARD) }
         }
+        KeyboardConfigurationButton(settings, theme)
     }
 }
 

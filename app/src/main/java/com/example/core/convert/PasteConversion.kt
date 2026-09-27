@@ -98,10 +98,10 @@ object PasteConversion {
         }
         ProviderCatalog.byId(chosen, settings)
             ?.takeIf { it.can(capability) }
-            ?.let { return it }
+            ?.let { return ProviderProfiles.resolved(it, settings) }
         return ProviderCatalog.serving(capability, settings).firstOrNull { spec ->
             !spec.needsKey || ProviderProfiles.keyFor(spec.id, settings).isNotBlank()
-        }
+        }?.let { ProviderProfiles.resolved(it, settings) }
     }
 
     /** True when pasting this would produce text, with everything set up to do it. */
@@ -203,13 +203,16 @@ object PasteConversion {
         val capability = provider.capability(AiCapability.OCR)
             ?: error("${provider.label} does not read pictures.")
         val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-        val model = settings.ocrModel.ifBlank { capability.defaultModel }
+        val model = (if (settings.ocrProvider == provider.id) settings.ocrModel else
+            ProviderProfiles.of(provider.id, settings).capabilities[AiCapability.OCR]?.model.orEmpty())
+            .ifBlank { capability.defaultModel }
 
         if (capability.call != null) {
             return CallEngine.run(
                 provider = provider,
                 capability = AiCapability.OCR,
-                input = CallInput(model = model, imageBase64 = base64, imageMime = mime),
+                input = CallInput(model = model, imageBase64 = base64, imageMime = mime,
+                    params = ProviderProfiles.paramsFor(provider.id, AiCapability.OCR, settings)),
                 apiKey = key
             ).getOrThrow().text
                 // Null is "the endpoint answered with no text at that path", which for
@@ -246,10 +249,13 @@ object PasteConversion {
             temporary.writeBytes(bytes)
             Transcription.via(
                 provider = provider,
-                model = settings.asrModel,
+                model = (if (settings.asrProvider == provider.id) settings.asrModel else
+                    ProviderProfiles.of(provider.id, settings).capabilities[AiCapability.TRANSCRIBE]?.model.orEmpty())
+                    .ifBlank { provider.capability(AiCapability.TRANSCRIBE)?.defaultModel.orEmpty() },
                 apiKey = key,
                 file = temporary,
-                language = language.ifBlank { settings.asrLanguage }
+                language = language.ifBlank { settings.asrLanguage },
+                params = ProviderProfiles.paramsFor(provider.id, AiCapability.TRANSCRIBE, settings)
             ).getOrThrow()
         } finally {
             // The recording was somebody's conversation. It does not stay behind in a

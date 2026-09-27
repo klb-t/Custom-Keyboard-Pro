@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -16,12 +17,11 @@ import androidx.core.content.ContextCompat
 /**
  * The system recogniser.
  *
- * Chosen as the default because it costs nothing, needs no account, and on most
- * devices runs on-device — so dictation works in aeroplane mode and the audio does not
- * leave the phone. It is also the only engine here that returns a real N-best list,
+ * The generic system service may process audio remotely. The separate onDeviceOnly
+ * route uses Android's guaranteed on-device recognizer and never falls back to it. It is also the only engine here that returns a real N-best list,
  * which is what makes "pick a different reading" possible rather than decorative.
  */
-class AndroidAsr(private val context: Context) : AsrEngine {
+class AndroidAsr(private val context: Context, private val onDeviceOnly: Boolean = false) : AsrEngine {
 
     private var recognizer: SpeechRecognizer? = null
     private val main = Handler(Looper.getMainLooper())
@@ -51,7 +51,16 @@ class AndroidAsr(private val context: Context) : AsrEngine {
             PackageManager.PERMISSION_GRANTED
 
     override fun isAvailable(): Boolean =
-        hasPermission() && SpeechRecognizer.isRecognitionAvailable(context)
+        hasPermission() && recognitionAvailable()
+
+    private fun recognitionAvailable(): Boolean = if (onDeviceOnly) supportsOnDevice(context)
+        else SpeechRecognizer.isRecognitionAvailable(context)
+
+    private fun createRecognizer(): SpeechRecognizer = if (onDeviceOnly) {
+        check(supportsOnDevice(context)) { "On-device recognition is unavailable; no cloud fallback is allowed." }
+        if (Build.VERSION.SDK_INT >= 31) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        else error("On-device recognition requires Android 12 or newer.")
+    } else SpeechRecognizer.createSpeechRecognizer(context)
 
     override fun start(language: String, maxAlternatives: Int, onState: (AsrState) -> Unit) {
         listener = onState
@@ -63,8 +72,9 @@ class AndroidAsr(private val context: Context) : AsrEngine {
             onState(AsrState.Error("Microphone permission has not been granted.", needsPermission = true))
             return
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            onState(AsrState.Error("No speech recogniser is installed on this device."))
+        if (!recognitionAvailable()) {
+            onState(AsrState.Error(if (onDeviceOnly) "On-device speech recognition is unavailable. No audio was sent to a system/cloud fallback."
+                else "No speech recogniser is installed on this device."))
             return
         }
 
@@ -91,7 +101,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
                 // recognition service asynchronously; building a new one and starting
                 // it in the same breath races that unbind, and the new instance is the
                 // one that gets told the server disconnected.
-                val active = recognizer ?: SpeechRecognizer.createSpeechRecognizer(context)
+                val active = recognizer ?: createRecognizer()
                     .also {
                         it.setRecognitionListener(recognitionListener)
                         recognizer = it
@@ -160,7 +170,7 @@ class AndroidAsr(private val context: Context) : AsrEngine {
             main.postDelayed({
                 if (mine != generation) return@postDelayed
                 try {
-                    val fresh = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    val fresh = createRecognizer().apply {
                         setRecognitionListener(recognitionListener)
                     }
                     recognizer = fresh
@@ -302,7 +312,10 @@ class AndroidAsr(private val context: Context) : AsrEngine {
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
     }
 
-    private companion object {
+    companion object {
+        fun supportsOnDevice(context: Context): Boolean = Build.VERSION.SDK_INT >= 31 &&
+            runCatching { SpeechRecognizer.isOnDeviceRecognitionAvailable(context) }.getOrDefault(false)
+
         /**
          * Named here rather than referenced from [SpeechRecognizer].
          *

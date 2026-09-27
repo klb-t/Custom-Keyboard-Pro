@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "action-1",
+      "label": "Pocket lock",
+      "command": "pocket_lock on",
+      "settingsQuery": "pocket"
+    },
+    {
+      "id": "action-2",
+      "label": "Read aloud",
+      "command": "read_aloud",
+      "settingsQuery": "tts"
+    },
+    {
+      "id": "action-3",
+      "label": "Pause / resume reading",
+      "command": "read_control toggle",
+      "settingsQuery": "tts"
+    },
+    {
+      "id": "action-4",
+      "label": "Stop reading",
+      "command": "read_control stop",
+      "settingsQuery": "tts"
+    },
+    {
+      "id": "action-5",
+      "label": "Read the page",
+      "command": "read_aloud source=page",
+      "settingsQuery": "tts"
+    },
+    {
+      "id": "action-6",
+      "label": "Read clipboard",
+      "command": "read_aloud source=clipboard",
+      "settingsQuery": "tts"
+    },
+    {
+      "id": "action-7",
+      "label": "Convert → text",
+      "command": "convert to=text",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-8",
+      "label": "Convert → sound",
+      "command": "convert to=audio",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-9",
+      "label": "Convert → MIDI",
+      "command": "convert to=midi",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-10",
+      "label": "Song → melody + words",
+      "command": "convert to=midi lyrics=on",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-11",
+      "label": "Convert → picture",
+      "command": "convert to=image",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-12",
+      "label": "Text → AI picture",
+      "command": "convert to=image use=draw",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-13",
+      "label": "Convert → note names",
+      "command": "convert to=notes",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-14",
+      "label": "Hide text in sound",
+      "command": "convert to=audio use=typeset",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-15",
+      "label": "Sound → spectrogram",
+      "command": "convert to=spectrogram",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-16",
+      "label": "Sound → scalogram",
+      "command": "convert to=scalogram",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-17",
+      "label": "Where it came from",
+      "command": "provenance",
+      "settingsQuery": "convert"
+    },
+    {
+      "id": "action-18",
+      "label": "Recenter streams",
+      "command": "recenter",
+      "settingsQuery": "streams"
+    },
+    {
+      "id": "action-19",
+      "label": "What the streams do",
+      "command": "streams",
+      "settingsQuery": "streams"
+    },
+    {
+      "id": "action-20",
+      "label": "Record / stop",
+      "command": "record toggle",
+      "settingsQuery": "macros"
+    },
+    {
+      "id": "action-21",
+      "label": "Play recording",
+      "command": "play",
+      "settingsQuery": "macros"
+    },
+    {
+      "id": "action-22",
+      "label": "Back",
+      "command": "back",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-23",
+      "label": "Home",
+      "command": "home",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-24",
+      "label": "Recent apps",
+      "command": "recents",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-25",
+      "label": "Notifications",
+      "command": "notifications",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-26",
+      "label": "Quick settings",
+      "command": "quick_settings",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-27",
+      "label": "Screenshot",
+      "command": "screenshot",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-28",
+      "label": "Scroll down",
+      "command": "scroll down",
+      "settingsQuery": "scroll"
+    },
+    {
+      "id": "action-29",
+      "label": "Scroll up",
+      "command": "scroll up",
+      "settingsQuery": "scroll"
+    },
+    {
+      "id": "action-30",
+      "label": "Copy the screen",
+      "command": "read_screen to=clipboard",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-31",
+      "label": "Screen → AI",
+      "command": "read_screen to=ai",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-32",
+      "label": "Tick all",
+      "command": "sweep mode=checkboxes pages=1",
+      "settingsQuery": "sweep"
+    },
+    {
+      "id": "action-33",
+      "label": "Select 3 pages",
+      "command": "sweep mode=longpress pages=3",
+      "settingsQuery": "sweep"
+    },
+    {
+      "id": "action-34",
+      "label": "Pointer",
+      "command": "pointer toggle",
+      "settingsQuery": "pointer"
+    },
+    {
+      "id": "action-35",
+      "label": "Play / pause",
+      "command": "media play_pause",
+      "settingsQuery": "pocketBlockMediaKeys"
+    },
+    {
+      "id": "action-36",
+      "label": "Previous",
+      "command": "media previous",
+      "settingsQuery": "pocketBlockMediaKeys"
+    },
+    {
+      "id": "action-37",
+      "label": "Next",
+      "command": "media next",
+      "settingsQuery": "pocketBlockMediaKeys"
+    },
+    {
+      "id": "action-38",
+      "label": "Volume −",
+      "command": "volume down",
+      "settingsQuery": "volume"
+    },
+    {
+      "id": "action-39",
+      "label": "Volume +",
+      "command": "volume up",
+      "settingsQuery": "volume"
+    },
+    {
+      "id": "action-40",
+      "label": "Torch",
+      "command": "torch toggle",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-41",
+      "label": "Search selection",
+      "command": "search",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-42",
+      "label": "Share selection",
+      "command": "share",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-43",
+      "label": "Split screen",
+      "command": "split_screen",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-44",
+      "label": "Lock",
+      "command": "lock",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "action-45",
+      "label": "Wi-Fi settings",
+      "command": "system_settings wifi",
+      "settingsQuery": "ioActionProfilesJson"
+    },
+    {
+      "id": "lock-details",
+      "label": "Lock options",
+      "route": "all",
+      "settingsQuery": "pocket"
+    },
+    {
+      "id": "keyboard-pin",
+      "label": "Keep keyboard visible",
+      "route": "all",
+      "settingsQuery": "keyboardKeepVisible"
+    },
+    {
+      "id": "media-hub",
+      "label": "Files & cloud media",
+      "route": "media",
+      "glyph": "▧"
+    },
+    {
+      "id": "vault",
+      "label": "Passwords & cards",
+      "route": "vault",
+      "glyph": "⚿"
+    },
+    {
+      "id": "device-capabilities",
+      "label": "Phone capabilities",
+      "route": "capabilities",
+      "glyph": "◈"
+    },
+    {
+      "id": "customize",
+      "label": "Change this keyboard",
+      "route": "request",
+      "glyph": "⚙"
+    },
+    {
+      "id": "expert",
+      "label": "Expert settings",
+      "route": "all",
+      "glyph": "⚙"
+    }
+  ]
+}

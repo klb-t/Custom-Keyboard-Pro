@@ -183,7 +183,8 @@ class RemoteAsr(
             scope: CoroutineScope,
             provider: () -> ProviderSpec?,
             apiKey: () -> String,
-            model: () -> String
+            model: () -> String,
+            params: () -> Map<String, String> = { emptyMap() }
         ): RemoteAsr = RemoteAsr(
             context = context,
             scope = scope,
@@ -199,7 +200,7 @@ class RemoteAsr(
             transcribe = { file, language ->
                 val p = provider()
                 if (p == null) Result.failure(IllegalStateException("No dictation provider."))
-                else Transcription.via(p, model(), apiKey(), file, language)
+                else Transcription.via(p, model(), apiKey(), file, language, params())
             }
         )
     }

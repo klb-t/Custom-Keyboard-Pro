@@ -131,9 +131,10 @@ jobs:
           $subject
 
           Install: tap the .apk below. Android will ask you to allow installing from
-          this browser the first time. Debug builds are signed with a throwaway key, so
-          this will not upgrade a copy installed from anywhere else — uninstall first if
-          one is already there."
+          this browser the first time. This branch preserves its package and signing key
+          so compatible earlier builds can be updated in place. If Android reports a
+          signature mismatch, preserve your data before replacing the installed app;
+          uninstalling deletes local settings and the device-bound vault."
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4

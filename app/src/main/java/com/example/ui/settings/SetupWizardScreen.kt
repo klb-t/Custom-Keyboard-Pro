@@ -32,6 +32,8 @@ import com.example.core.setup.ProviderProbe
 import com.example.core.setup.Recommendation
 import com.example.core.setup.SetupAdvisor
 import com.example.core.setup.SetupWants
+import com.example.core.setup.CapabilitySetup
+import com.example.core.setup.SetupRoute
 import kotlinx.coroutines.launch
 
 /**
@@ -62,8 +64,9 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
         probing = false
     }
 
-    val providers = remember(settings.customProvidersJson, settings.fetchedProvidersJson) {
-        ProviderCatalog.all(settings)
+    val providers = remember(settings.customProvidersJson, settings.fetchedProvidersJson,
+        settings.providerProfilesJson, settings.aiBaseUrl, settings.aiProvider) {
+        ProviderCatalog.all(settings).filter(ProviderCatalog::runtimeSupported).map { com.example.core.discovery.ProviderProfiles.resolved(it, settings) }
     }
     val effectiveWants = remember(wants, notes) { wants.copy(notes = notes) }
     val advice = remember(providers, effectiveWants) {
@@ -91,12 +94,14 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
             )
         }
 
+        CapabilitySetupSection(settings)
+
         if (probing) {
             SettingsSection("Looking around") { InfoRow("Checking whether anything is running here…") }
         } else if (found.isNotEmpty()) {
             SettingsSection(
                 title = "Already running on this device or network",
-                subtitle = "Found without being asked. Nothing sent anywhere, no account, no key."
+                subtitle = "Local endpoints that answered. Availability of a particular model still needs a test."
             ) {
                 found.forEach { result ->
                     val spec = providers.firstOrNull { it.id == result.provider }
@@ -108,13 +113,13 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
                             " · ${result.models.take(3).joinToString(", ")}",
                         trailing = "Use",
                         onClick = {
-                            SettingsStore.update {
-                                it.copy(
-                                    aiEnabled = true,
-                                    aiProvider = result.provider,
-                                    aiModel = result.models.firstOrNull() ?: spec?.defaultModel.orEmpty(),
-                                    setupDone = true
-                                )
+                            SettingsStore.update { current ->
+                                var updated = current
+                                wants.capabilities.filter { spec?.can(it) == true }.forEach { cap ->
+                                    updated = CapabilitySetup.select(updated, SetupRoute(spec!!, cap,
+                                        spec.capability(cap)?.defaultModel.orEmpty(), "Local catalogue"))
+                                }
+                                updated.copy(setupDone = true)
                             }
                             onDone()
                         }
@@ -126,8 +131,7 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
 
         SettingsSection(
             title = "What matters to you",
-            subtitle = "These are rules, not preferences — anything you switch on here " +
-                "removes providers from the list rather than moving them down it."
+            subtitle = "Privacy and payment controls filter the recommendations. One-account preference affects ranking."
         ) {
             SwitchRow(
                 label = "Nothing may leave this device",
@@ -172,13 +176,8 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
             subtitle = "Only providers that do all of these are offered — two accounts " +
                 "covering half each is where people give up."
         ) {
-            listOf(
-                AiCapability.CHAT to "Writing and rewriting",
-                AiCapability.COMPLETE to "Finishing sentences as you type",
-                AiCapability.TRANSCRIBE to "Dictation",
-                AiCapability.OCR to "Text out of a picture",
-                AiCapability.IMAGE to "Making pictures"
-            ).forEach { (capability, label) ->
+            AiCapability.ALL.forEach { capability ->
+                val label = AiCapability.label(capability)
                 SwitchRow(
                     label = label,
                     checked = capability in wants.capabilities,
@@ -208,14 +207,14 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
                         "disagree with one rather than having to trust a number."
                 compromise != null ->
                     "Nothing matches all of that. Here is what you get ${compromise.second}."
-                else -> "Nothing in the catalogue matches, even with your preferences dropped."
+                else -> "Nothing in the catalogue matches within your device boundary. Change a constraint explicitly to see other options."
             }
         ) {
             if (shown.isEmpty()) {
                 InfoRow("Try switching something off above.")
             } else {
                 shown.forEach { recommendation ->
-                    RecommendationRow(recommendation, onNavigate)
+                    RecommendationRow(recommendation, effectiveWants.capabilities, onNavigate)
                     Divider()
                 }
             }
@@ -267,7 +266,7 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
 }
 
 @Composable
-private fun RecommendationRow(recommendation: Recommendation, onNavigate: (String) -> Unit) {
+private fun RecommendationRow(recommendation: Recommendation, capabilities: Set<String>, onNavigate: (String) -> Unit) {
     val provider = recommendation.provider
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(provider.label, style = MaterialTheme.typography.titleSmall)
@@ -298,14 +297,10 @@ private fun RecommendationRow(recommendation: Recommendation, onNavigate: (Strin
         OutlinedButton(
             onClick = {
                 SettingsStore.update { current ->
-                    current.copy(
-                        aiProvider = provider.id,
-                        aiModel = provider.defaultModel,
-                        asrProvider = if (provider.can(AiCapability.TRANSCRIBE)) provider.id
-                        else current.asrProvider,
-                        asrEngine = if (provider.can(AiCapability.TRANSCRIBE)) AsrEngines.PROVIDER
-                        else current.asrEngine
-                    )
+                    capabilities.fold(current) { updated, capability ->
+                        CapabilitySetup.select(updated, SetupRoute(provider, capability,
+                            provider.capability(capability)?.defaultModel.orEmpty(), "Catalogue recommendation"))
+                    }
                 }
                 // Not marked done: a key still has to be pasted, and pretending
                 // otherwise leaves the user on a home screen that quietly does nothing.

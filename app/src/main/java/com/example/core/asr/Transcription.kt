@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 object Transcription {
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)
@@ -43,7 +43,8 @@ object Transcription {
         model: String,
         apiKey: String,
         file: File,
-        language: String
+        language: String,
+        params: Map<String, String> = emptyMap()
     ): Result<String> {
         val spec = provider.capability(AiCapability.TRANSCRIBE)
             ?: return Result.failure(IllegalStateException("${provider.label} does not take dictation."))
@@ -51,7 +52,7 @@ object Transcription {
 
         return when {
             spec.wire == AiWire.OPENAI_AUDIO ->
-                openAiAudio(provider.baseUrl, apiKey, chosen, file, language)
+                openAiAudio(provider.baseUrl, apiKey, chosen, file, language, params)
 
             spec.call != null -> CallEngine.run(
                 provider = provider,
@@ -62,7 +63,7 @@ object Transcription {
                     file = file,
                     // The recorder writes an MPEG-4 container; providers that read the
                     // body rather than the filename need to be told so.
-                    fileMime = "audio/mp4"
+                    fileMime = "audio/mp4", params = params
                 ),
                 apiKey = apiKey
             ).mapCatching { result ->
@@ -86,7 +87,8 @@ object Transcription {
         apiKey: String,
         model: String,
         file: File,
-        language: String
+        language: String,
+        params: Map<String, String> = emptyMap()
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val url = baseUrl.trimEnd('/').let {
@@ -101,6 +103,8 @@ object Transcription {
                     // A two-letter hint helps; an empty one is read as a language by
                     // more providers than not.
                     if (language.isNotBlank()) addFormDataPart("language", language.take(2))
+                    params.filterKeys { it !in setOf("file", "model", "language", "response_format") }
+                        .forEach { (key, value) -> addFormDataPart(key, value) }
                 }
                 .build()
 

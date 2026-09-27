@@ -57,8 +57,14 @@ object Interpret {
      * drawing a field is a spectrogram, one whose last step was setting text is a
      * picture of text.
      */
-    fun factsFrom(history: Provenance?): Set<String> =
-        history?.records?.lastOrNull()?.let { Transforms.byId(it.transform)?.produces }.orEmpty()
+    fun factsFrom(history: Provenance?): Set<String> {
+        history ?: return emptySet()
+        // Container encoding does not turn a rendered field back into an unknown
+        // picture. Keep the last content transform, including across carried history.
+        val content = history.records.lastOrNull { it.transform != "encode" }
+            ?: return factsFrom(history.earlier)
+        return Transforms.byId(content.transform)?.produces.orEmpty()
+    }
 
     /** The parameters of the last step in [history] that was [transform] — how a picture was drawn, say. */
     fun carried(history: Provenance?, transform: String): Map<String, String> =

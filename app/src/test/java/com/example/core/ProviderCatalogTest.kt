@@ -75,7 +75,7 @@ class ProviderCatalogTest {
             .forEach { provider ->
                 val spec = provider.capability(AiCapability.TRANSCRIBE)!!
                 val reachable = spec.wire == AiWire.OPENAI_AUDIO ||
-                    spec.wire == AiWire.ON_DEVICE ||
+                    spec.wire == AiWire.ON_DEVICE || spec.wire == AiWire.ANDROID_SYSTEM ||
                     spec.call != null
                 assertTrue(
                     "'${provider.id}' offers dictation in a way nothing can carry out " +
@@ -98,12 +98,14 @@ class ProviderCatalogTest {
         // "which cloud".
         val phone = bundled.firstOrNull { it.can(AiCapability.TRANSCRIBE) && it.local }
         assertNotNull("nothing on-device takes dictation", phone)
-        assertEquals(
-            AiWire.ON_DEVICE,
-            bundled.first { it.id == "android_speech" }
-                .capability(AiCapability.TRANSCRIBE)?.wire
-        )
-        assertFalse(bundled.first { it.id == "android_speech" }.needsKey)
+        val system = bundled.first { it.id == "android_speech" }
+        val offline = bundled.first { it.id == "android_speech_offline" }
+        assertEquals(AiWire.ANDROID_SYSTEM, system.capability(AiCapability.TRANSCRIBE)?.wire)
+        assertEquals(Privacy.UNKNOWN, system.privacy)
+        assertEquals(AiWire.ON_DEVICE, offline.capability(AiCapability.TRANSCRIBE)?.wire)
+        assertEquals(Privacy.ON_DEVICE, offline.privacy)
+        assertFalse(system.needsKey)
+        assertFalse(offline.needsKey)
     }
 
     @Test
@@ -267,12 +269,12 @@ class ProviderCatalogTest {
             provider.capabilities.forEach { (id, spec) ->
                 val call = spec.call ?: return@forEach
                 val text = call.path + call.bodyTemplate +
-                    call.fields.values.joinToString() + call.headers.values.joinToString()
+                    call.fields.values.joinToString() + call.headers.values.joinToString() + spec.inputTemplate
                 placeholder.findAll(text).map { it.groupValues[1] }.forEach { name ->
                     assertTrue(
                         "provider '${provider.id}', capability '$id': template asks for " +
                             "{{$name}}, which nothing supplies",
-                        name in known
+                        name in known || name in spec.defaults
                     )
                 }
             }

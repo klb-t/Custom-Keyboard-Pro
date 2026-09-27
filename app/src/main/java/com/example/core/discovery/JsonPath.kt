@@ -114,13 +114,13 @@ object Templates {
      * "0.7" — which several providers reject. A placeholder with text around it stays
      * a string, because that is the only thing it can be.
      */
-    fun fillJson(template: String, values: Map<String, String>): JSONObject =
-        substitute(JSONObject(template), values) as JSONObject
+    fun fillJson(template: String, values: Map<String, String>, stringInputs: Set<String> = emptySet()): JSONObject =
+        substitute(JSONObject(template), values, stringInputs) as JSONObject
 
-    private fun substitute(node: Any?, values: Map<String, String>): Any? = when (node) {
+    private fun substitute(node: Any?, values: Map<String, String>, stringInputs: Set<String>): Any? = when (node) {
         is JSONObject -> JSONObject().also { out ->
             node.keys().forEach { key ->
-                val filled = substitute(node.opt(key), values)
+                val filled = substitute(node.opt(key), values, stringInputs)
                 // A placeholder nothing supplies drops the field rather than sending
                 // an empty one: providers reject `"language": ""` more often than
                 // they reject its absence.
@@ -129,18 +129,18 @@ object Templates {
         }
         is JSONArray -> JSONArray().also { out ->
             (0 until node.length()).forEach { i ->
-                substitute(node.opt(i), values)?.let { out.put(it) }
+                substitute(node.opt(i), values, stringInputs)?.let { out.put(it) }
             }
         }
-        is String -> substituteString(node, values)
+        is String -> substituteString(node, values, stringInputs)
         else -> node
     }
 
-    private fun substituteString(raw: String, values: Map<String, String>): Any? {
+    private fun substituteString(raw: String, values: Map<String, String>, stringInputs: Set<String>): Any? {
         val whole = PLACEHOLDER.matchEntire(raw)
         if (whole != null) {
             val value = values[whole.groupValues[1]] ?: return null
-            return typed(value)
+            return if (whole.groupValues[1] in stringInputs) value else typed(value)
         }
         return fill(raw, values)
     }

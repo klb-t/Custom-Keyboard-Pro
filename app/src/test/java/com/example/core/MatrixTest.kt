@@ -171,6 +171,20 @@ class MatrixTest {
         assertTrue(plan.blocked.toString(), plan.blocked.any { "off the phone" in it })
     }
 
+    @Test
+    fun `choosing a provider route never overrides local only privacy`() {
+        for (requested in listOf("ocr", "ocr.provider")) {
+            val plan = Planner.plan(from("picture"), Types.TEXT, providers("ocr"),
+                Policy(allowLeavingDevice = false, through = listOf(requested)))
+            assertNull(requested, plan.best)
+            assertTrue(plan.blocked.toString(), plan.blocked.any { "off the phone" in it })
+        }
+        val local = Planner.plan(Interpret.text("hello"), Types.AUDIO, providers("speak"),
+            Policy(allowLeavingDevice = false, through = listOf("speak")))
+        assertEquals(listOf("speak.phone"), impls(local))
+        assertTrue(local.routes.none { it.leavesDevice })
+    }
+
     // ------------------------------------------------------------------
     // The model itself
     // ------------------------------------------------------------------

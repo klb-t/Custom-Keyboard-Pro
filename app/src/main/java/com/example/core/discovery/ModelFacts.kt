@@ -26,12 +26,15 @@ data class ModelFact(
     val completionPrice: Double? = null,
     /** "text", "image", "audio" — what it will accept. */
     val modalities: List<String> = emptyList(),
-    val source: String = ""
+    val source: String = "",
+    val routeProvider: String = "",
+    val capability: String = "",
+    val fetchedAt: Long = 0L
 ) : Discoverable {
 
     /** Free to call, as distinct from unknown. */
     val isFree: Boolean? get() = when {
-        promptPrice == null && completionPrice == null -> null
+        promptPrice == null || completionPrice == null -> null
         else -> (promptPrice ?: 0.0) == 0.0 && (completionPrice ?: 0.0) == 0.0
     }
 
@@ -72,7 +75,9 @@ data class FactSource(
     val needsKey: Boolean = false,
     val note: String = "",
     /** Turned off without being deleted, so a source that breaks can be parked. */
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val routeProvider: String = "",
+    val capability: String = ""
 ) : Discoverable {
 
     companion object {
@@ -87,7 +92,9 @@ data class FactSource(
                 fields = o.optJSONObject("fields").toStringMap(),
                 needsKey = o.optBoolean("needsKey", false),
                 note = o.optString("note"),
-                enabled = o.optBoolean("enabled", true)
+                enabled = o.optBoolean("enabled", true),
+                routeProvider = o.optString("routeProvider"),
+                capability = o.optString("capability")
             )
         }
 
@@ -110,7 +117,7 @@ data class FactSource(
 object FactsFetcher {
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -168,7 +175,11 @@ object FactsFetcher {
                 promptPrice = perMillion(number(item, map["promptPrice"])),
                 completionPrice = perMillion(number(item, map["completionPrice"])),
                 modalities = strings(item, map["modalities"]),
-                source = source.id
+                source = source.id,
+                routeProvider = source.routeProvider,
+                capability = if ("embeddings" in item.optJSONObject("architecture")?.optJSONArray("output_modalities").toStringList())
+                    AiCapability.EMBED else source.capability,
+                fetchedAt = System.currentTimeMillis()
             )
         }
     }
@@ -219,6 +230,8 @@ object FactsFetcher {
                     override val label = source.label
                     override suspend fun discover(): Result<List<ModelFact>> = fetch(source)
                 }
-            }
+            },
+            // Two routing providers serving the same model remain two user choices.
+            identity = { "${it.routeProvider}:${it.capability}:${it.id}" }
         )
 }

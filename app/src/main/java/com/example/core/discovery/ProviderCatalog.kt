@@ -29,13 +29,15 @@ object AiWire {
 
     /** Android's own recogniser. No network, no key, no provider. */
     const val ON_DEVICE = "on_device"
+    /** System-selected recognizer; processing locality depends on its implementation. */
+    const val ANDROID_SYSTEM = "android_system"
 
     /** Described by a [CallSpec] rather than by code. */
     const val DESCRIBED = "described"
 
     val CHAT = listOf(OPENAI, ANTHROPIC, GEMINI)
 
-    val ALL = listOf(OPENAI, ANTHROPIC, GEMINI, OPENAI_AUDIO, ON_DEVICE, DESCRIBED)
+    val ALL = listOf(OPENAI, ANTHROPIC, GEMINI, OPENAI_AUDIO, ON_DEVICE, ANDROID_SYSTEM, DESCRIBED)
 }
 
 /**
@@ -135,7 +137,9 @@ data class ProviderSpec(
      * earns its place where it disambiguates — telling an OpenRouter key from an
      * Anthropic one when both have been on the clipboard.
      */
-    val keyPattern: String = ""
+    val keyPattern: String = "",
+    /** Account prerequisites and links are provider data, rendered by the same wizard. */
+    val setupSteps: List<ProviderSetupStep> = emptyList()
 ) : Discoverable {
 
     /**
@@ -175,6 +179,9 @@ data class ProviderSpec(
         if (privacy != Privacy.UNKNOWN) put("privacy", privacy)
         if (strengths.isNotEmpty()) put("strengths", JSONArray(strengths))
         if (keyPattern.isNotBlank()) put("keyPattern", keyPattern)
+        if (setupSteps.isNotEmpty()) put("setupSteps", JSONArray().apply {
+            setupSteps.forEach { put(it.toJson()) }
+        })
         if (capabilities.isNotEmpty()) {
             put("capabilities", JSONObject().apply {
                 capabilities.forEach { (id, spec) -> put(id, spec.toJson()) }
@@ -209,7 +216,12 @@ data class ProviderSpec(
                 signupUrl = o.optString("signupUrl"),
                 privacy = o.optString("privacy").ifBlank { Privacy.UNKNOWN }.lowercase(),
                 keyPattern = o.optString("keyPattern"),
-                strengths = o.optJSONArray("strengths").toStringList()
+                strengths = o.optJSONArray("strengths").toStringList(),
+                setupSteps = o.optJSONArray("setupSteps")?.let { steps ->
+                    (0 until steps.length()).mapNotNull { i -> steps.optJSONObject(i)?.let {
+                        ProviderSetupStep(it.optString("title"), it.optString("detail"), it.optString("url"))
+                    } }
+                } ?: emptyList()
             )
         }
     }
@@ -229,8 +241,10 @@ object ProviderCatalog {
 
     private var bundled: List<ProviderSpec> = emptyList()
     private var loaded = false
+    private var appContext: Context? = null
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (loaded) return
         loaded = true
         bundled = try {
@@ -270,6 +284,11 @@ object ProviderCatalog {
             .forEach { merged.putIfAbsent(it.id, it) }
         return merged.values.toList()
     }
+
+    /** Setup only offers the guaranteed offline recognizer when Android actually supplies it. */
+    fun runtimeSupported(provider: ProviderSpec): Boolean =
+        provider.capability(AiCapability.TRANSCRIBE)?.wire != AiWire.ON_DEVICE ||
+            appContext?.let { com.example.core.asr.AndroidAsr.supportsOnDevice(it) } == true
 
     fun allIds(settings: Settings = SettingsStore.current): List<String> = all(settings).map { it.id }
 
@@ -344,4 +363,9 @@ object ProviderCatalog {
             defaultModel = "gemini-2.5-flash"
         )
     )
+}
+
+/** No credentials are collected by a signup step: the provider's own page handles its account. */
+data class ProviderSetupStep(val title: String, val detail: String = "", val url: String = "") {
+    fun toJson(): JSONObject = JSONObject().put("title", title).put("detail", detail).put("url", url)
 }

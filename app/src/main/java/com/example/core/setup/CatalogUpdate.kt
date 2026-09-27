@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 object CatalogUpdate {
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -84,11 +84,11 @@ object CatalogUpdate {
             }
             AppLogger.d(
                 "Catalog",
-                "fetched ${fetched.size} providers from ${settings.catalogUrl}" +
+                "fetched ${fetched.size} providers from configured catalogue" +
                     if (own.isNotEmpty()) "; kept ${own.size} of your own" else ""
             )
         }.onFailure {
-            AppLogger.e("Catalog", "could not refresh from ${settings.catalogUrl}: ${it.message}")
+            AppLogger.e("Catalog", "could not refresh configured catalogue (${it::class.java.simpleName})")
         }
         return result.map { it.size }
     }
@@ -118,7 +118,7 @@ data class ProbeResult(
 object ProviderProbe {
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             // Short, because this runs against a list and a dead port must not hold
             // up the ones behind it.
             .connectTimeout(4, TimeUnit.SECONDS)
@@ -128,8 +128,10 @@ object ProviderProbe {
 
     suspend fun probe(provider: ProviderSpec, apiKey: String = ""): ProbeResult =
         withContext(Dispatchers.IO) {
-            if (provider.wire == AiWire.ON_DEVICE) {
-                return@withContext ProbeResult(provider.id, reachable = true)
+            if (provider.wire == AiWire.ON_DEVICE || provider.wire == AiWire.ANDROID_SYSTEM) {
+                val available = ProviderCatalog.runtimeSupported(provider)
+                return@withContext ProbeResult(provider.id, reachable = available,
+                    problem = if (available) null else "On-device recognition is unavailable on this device.")
             }
             val base = provider.baseUrl.trimEnd('/')
             val path = provider.capability(AiCapability.CHAT)?.modelsPath.orEmpty()
@@ -147,14 +149,14 @@ object ProviderProbe {
             }
 
             runCatching {
-                val url = if (provider.wire == AiWire.GEMINI) "$base$path?key=$apiKey" else "$base$path"
+                val url = "$base$path"
                 val builder = Request.Builder().url(url).get()
                 when (provider.wire) {
                     AiWire.ANTHROPIC -> {
                         builder.addHeader("x-api-key", apiKey)
                         builder.addHeader("anthropic-version", "2023-06-01")
                     }
-                    AiWire.GEMINI -> Unit
+                    AiWire.GEMINI -> builder.addHeader("x-goog-api-key", apiKey)
                     else -> if (apiKey.isNotBlank()) builder.addHeader("Authorization", "Bearer $apiKey")
                 }
                 client.newCall(builder.build()).execute().use { response ->
@@ -190,7 +192,8 @@ object ProviderProbe {
      */
     suspend fun findLocal(settings: Settings = SettingsStore.current): List<ProbeResult> =
         ProviderCatalog.all(settings)
-            .filter { it.local && !it.needsKey }
+            .map { com.example.core.discovery.ProviderProfiles.resolved(it, settings) }
+            .filter { it.local && !it.needsKey && SetupAdvisor.staysOnDevice(it) }
             .map { probe(it) }
             .filter { it.usable }
 

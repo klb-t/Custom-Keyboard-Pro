@@ -57,6 +57,18 @@ object Knobs {
     val POCKET_DETECT_MS = k("pocketDetectMs", 1500.0, 200.0, 10000.0, ENGINE, "In pocket after (ms)",
         "Covered this long, and the phone counts as in a pocket (the in_pocket input).")
 
+    val KEYBOARD_RESTORE_DELAY_MS = k("keyboardRestoreDelayMs", 300.0, 0.0, 3000.0, TIMING, "Shortcut keyboard: restore delay (ms)",
+        "Wait after a focus change before requesting the persistent shortcut keyboard again.")
+    val KEYBOARD_SHOW_TIMEOUT_MS = k("keyboardShowTimeoutMs", 1500.0, 300.0, 10000.0, TIMING, "Shortcut keyboard: show timeout (ms)",
+        "After an explicit show request, report if Android did not display the keyboard.")
+
+    val IMAGE_REENCODE_MAX_PIXELS = k("imageReencodeMaxPixels", 16000000.0, 1000000.0, 64000000.0,
+        SettingsSchema.GROUP_MATRIX, "Image re-encode: maximum pixels",
+        "Refuse larger images before decoding; never silently reduce their resolution.")
+    val IMAGE_REENCODE_QUALITY = k("imageReencodeQuality", 92.0, 0.0, 100.0,
+        SettingsSchema.GROUP_MATRIX, "Image re-encode: JPEG/WebP quality",
+        "Quality for lossy encoding. PNG preserves its available colour and alpha information.")
+
     // --- side keys ----------------------------------------------------------
     val VOLUME_DOUBLE_MS = k("volumeDoubleMs", 350.0, 150.0, 1000.0, ENGINE, "Volume key: double press within (ms)",
         "Only used when a double press is wired; a single press is then delayed by this much.")
@@ -77,7 +89,7 @@ object Knobs {
     val POCKET_RESTORE_GAP_MS = k("pocketRestoreGapMs", 2000.0, 300.0, 30000.0, POCKET, "Reopen the app at most every (ms)",
         "So two apps can never fight over the screen.")
     val POCKET_SHADE_DELAY_MS = k("pocketShadeDelayMs", 450.0, 0.0, 3000.0, POCKET, "Wait for the shade to close (ms)",
-        "From the quick settings tile: how long before the lock goes up.")
+        "After either quick-settings tile closes the shade, wait this long before showing the lock or keyboard.")
     val POCKET_HINT_MS = k("pocketHintMs", 2500.0, 0.0, 10000.0, POCKET, "Show the unlock hint for (ms)",
         "0 never shows it.")
     val POCKET_HOLD_SLOP_DP = k("pocketHoldSlopDp", 40.0, 5.0, 300.0, POCKET, "Held fingers may drift (dp)",

@@ -189,20 +189,52 @@
       "embed": {
         "call": {
           "path": "/models/{{model}}:embedContent",
-          "auth": "query",
-          "authName": "key",
+          "auth": "header",
+          "authName": "x-goog-api-key",
           "body": {
+            "model": "models/{{model}}",
             "content": {
               "parts": [
                 {
                   "text": "{{prompt}}"
                 }
               ]
-            }
+            },
+            "outputDimensionality": "{{dimensions}}"
           },
           "resultPath": "embedding.values"
         },
-        "defaultModel": "text-embedding-004"
+        "defaultModel": "gemini-embedding-2",
+        "models": [
+          "gemini-embedding-2",
+          "gemini-embedding-001"
+        ],
+        "defaults": {
+          "dimensions": "3072",
+          "taskPrefix": ""
+        },
+        "choices": {
+          "dimensions": [
+            "768",
+            "1536",
+            "3072"
+          ],
+          "taskPrefix": [
+            "",
+            "task: search result | query: ",
+            "title: none | text: ",
+            "task: question answering | query: ",
+            "task: fact checking | query: ",
+            "task: code retrieval | query: ",
+            "task: classification | query: ",
+            "task: clustering | query: ",
+            "task: sentence similarity | query: "
+          ]
+        },
+        "inputTemplate": "{{taskPrefix}}{{prompt}}",
+        "notes": "Text embedding route. Gemini Embedding 2 supports more input modalities, which this route does not yet send. Dimensions 128–3072; 768, 1536 and 3072 recommended. For Embedding 2 use a task prefix, not taskType. Clear prefix for Embedding 001. Different models produce incompatible vector spaces; reindex when changing models.",
+        "docsUrl": "https://ai.google.dev/gemini-api/docs/embeddings",
+        "verifiedOn": "2026-09-27"
       }
     },
     "freeTier": true,
@@ -213,8 +245,29 @@
       "long-context",
       "video"
     ],
-    "signupUrl": "https://aistudio.google.com/app/apikey",
-    "keyPattern": "^AIza[A-Za-z0-9_\\-]{30,}$"
+    "signupUrl": "https://aistudio.google.com/api-keys",
+    "keyPattern": "^AIza[A-Za-z0-9_\\-]{30,}$",
+    "setupSteps": [
+      {
+        "title": "Create or sign in to a Google account",
+        "detail": "Open Google AI Studio, check availability in your country, and accept the applicable API terms.",
+        "url": "https://aistudio.google.com/"
+      },
+      {
+        "title": "Create an API key in a project",
+        "detail": "Use a dedicated project/key for IO Matrix. Availability, billing and quotas belong to that project.",
+        "url": "https://aistudio.google.com/api-keys"
+      },
+      {
+        "title": "Check this model’s price and data terms",
+        "detail": "Free and paid tiers can have different data policies. A provider free tier does not mean every model is free.",
+        "url": "https://ai.google.dev/gemini-api/docs/pricing"
+      },
+      {
+        "title": "Return here and paste the API key",
+        "detail": "Return to IO Matrix, paste the dedicated API key, and save the route for your chosen operation."
+      }
+    ]
   },
   {
     "id": "mistral",
@@ -726,9 +779,72 @@
         },
         "defaultModel": "openai/gpt-4o-mini",
         "notes": "Streams, so a continuation can be cut where it stops being sure."
+      },
+      "embed": {
+        "call": {
+          "path": "/embeddings",
+          "auth": "bearer",
+          "body": {
+            "model": "{{model}}",
+            "input": "{{prompt}}",
+            "encoding_format": "float",
+            "dimensions": "{{dimensions}}"
+          },
+          "resultPath": "data[0].embedding"
+        },
+        "defaultModel": "google/gemini-embedding-2",
+        "models": [
+          "google/gemini-embedding-2"
+        ],
+        "modelsPath": "/embeddings/models",
+        "modelListIsScoped": true,
+        "defaults": {
+          "dimensions": "3072",
+          "taskPrefix": ""
+        },
+        "choices": {
+          "dimensions": [
+            "768",
+            "1536",
+            "3072"
+          ],
+          "taskPrefix": [
+            "",
+            "task: search result | query: ",
+            "title: none | text: ",
+            "task: question answering | query: ",
+            "task: fact checking | query: ",
+            "task: code retrieval | query: ",
+            "task: classification | query: ",
+            "task: clustering | query: ",
+            "task: sentence similarity | query: "
+          ]
+        },
+        "inputTemplate": "{{taskPrefix}}{{prompt}}",
+        "docsUrl": "https://openrouter.ai/google/gemini-embedding-2",
+        "verifiedOn": "2026-09-27",
+        "notes": "Gateway route. Check current price and downstream provider policy. Dimensions and task instructions depend on the selected model; the defaults describe Gemini Embedding 2. Only a successful embedding test verifies this route."
       }
     },
-    "keyPattern": "^sk-or-v1-[A-Za-z0-9]{32,}$"
+    "keyPattern": "^sk-or-v1-[A-Za-z0-9]{32,}$",
+    "signupUrl": "https://openrouter.ai/settings/keys",
+    "setupSteps": [
+      {
+        "title": "Create or sign in to an OpenRouter account",
+        "detail": "One gateway account can reach the models currently offered through its routes.",
+        "url": "https://openrouter.ai/"
+      },
+      {
+        "title": "Create a dedicated API key",
+        "detail": "Set a spending limit. Some routes require credits; inspect model pricing before paying.",
+        "url": "https://openrouter.ai/settings/keys"
+      },
+      {
+        "title": "Check model availability and provider routing",
+        "detail": "Model listings and downstream providers may change. Refresh the capability list after adding your key.",
+        "url": "https://openrouter.ai/google/gemini-embedding-2"
+      }
+    ]
   },
   {
     "id": "requesty",
@@ -789,9 +905,9 @@
     "local": true,
     "router": true,
     "docsUrl": "https://docs.litellm.ai/docs/simple_proxy",
-    "note": "A router you run yourself, so keys never leave your machine. Point the base URL at wherever it runs.",
+    "note": "A local endpoint alone does not establish processing locality; this server can route to cloud models. Verify the selected model and server configuration.",
     "freeTier": true,
-    "privacy": "on_device",
+    "privacy": "unknown",
     "strengths": [
       "private",
       "offline",
@@ -812,16 +928,42 @@
   {
     "id": "android_speech",
     "label": "This phone",
+    "wire": "android_system",
+    "baseUrl": "",
+    "modelsPath": "",
+    "defaultModel": "",
+    "needsKey": false,
+    "local": true,
+    "note": "Uses your configured Android recognition service, which may process audio remotely. Offline recognition is a separate choice.",
+    "capabilities": {
+      "transcribe": {
+        "wire": "android_system"
+      }
+    },
+    "freeTier": true,
+    "privacy": "unknown",
+    "strengths": [
+      "private",
+      "offline",
+      "free",
+      "dictation",
+      "no-account-needed"
+    ]
+  },
+  {
+    "id": "android_speech_offline",
+    "label": "Android speech — on-device only",
     "wire": "on_device",
     "baseUrl": "",
     "modelsPath": "",
     "defaultModel": "",
     "needsKey": false,
     "local": true,
-    "note": "Android's own recogniser. No key, no account, nothing leaves the device.",
+    "note": "Android 12+ with an available on-device recognizer. Never falls back to a network recognizer.",
     "capabilities": {
       "transcribe": {
-        "wire": "on_device"
+        "wire": "on_device",
+        "notes": "Fails closed when the on-device service or requested language model is unavailable."
       }
     },
     "freeTier": true,
@@ -1173,9 +1315,9 @@
     "needsKey": false,
     "local": true,
     "docsUrl": "https://ollama.com",
-    "note": "Nothing leaves the machine it runs on.",
+    "note": "A local endpoint alone does not establish processing locality; this server can route to cloud models. Verify the selected model and server configuration.",
     "freeTier": true,
-    "privacy": "on_device",
+    "privacy": "unknown",
     "strengths": [
       "private",
       "offline",

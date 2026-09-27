@@ -119,6 +119,17 @@ fun HomeScreen(
             )
         }
 
+        SettingsSection("Phone tools") {
+            ActionRow("Files & cloud media", "One browser for local files and connected storage providers",
+                onClick = { onNavigate(MainActivity.ROUTE_MEDIA) })
+            Divider()
+            ActionRow("Passwords & cards", "Device-locked vault, app and browser autofill",
+                onClick = { onNavigate(MainActivity.ROUTE_VAULT) })
+            Divider()
+            ActionRow("Phone capabilities", "What is ready, what needs access, and what is still missing",
+                onClick = { onNavigate(MainActivity.ROUTE_CAPABILITIES) })
+        }
+
         SettingsSection("Settings") {
             ActionRow(
                 "Typing",

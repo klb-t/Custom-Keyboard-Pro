@@ -5,6 +5,7 @@ import com.example.core.layout.InsetsMode
 import com.example.core.layout.PresentationMode
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 
 /** What kind of control a setting needs, and how its value is carried in JSON. */
 enum class SettingKind { BOOL, INT, LONG, FLOAT, STRING, ENUM, STRING_LIST, JSON, COLOR, ACTION }
@@ -84,13 +85,11 @@ object SettingsSchema {
      * everything" survivable once everything is genuinely exposed.
      */
     fun search(query: String): List<SettingSpec> {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) return all
-        return all.filter {
-            it.key.lowercase().contains(q) ||
-                it.label.lowercase().contains(q) ||
-                it.group.lowercase().contains(q) ||
-                (it.help?.lowercase()?.contains(q) ?: false)
+        val tokens = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return all
+        return all.filter { spec ->
+            val text = listOf(spec.key, spec.label, spec.group, spec.help.orEmpty()).joinToString(" ").lowercase()
+            tokens.all { it in text }
         }
     }
 
@@ -106,47 +105,90 @@ object SettingsSchema {
      * persists it. An unknown key, or a value the codec cannot make sense of, changes
      * nothing — a generated panel cannot corrupt the settings by guessing a name.
      */
-    fun withValue(settings: Settings, key: String, value: Any?): Settings {
-        if (spec(key) == null) return settings
-        val json = SettingsStore.toJson(settings)
-        val coerced = coerce(key, value) ?: return settings
-        json.put(key, coerced)
-        return try {
-            SettingsStore.fromJson(json)
-        } catch (e: Exception) {
-            settings
-        }
-    }
+    fun withValue(settings: Settings, key: String, value: Any?): Settings =
+        validatedValue(key, value).fold(
+            onSuccess = { normalised ->
+                runCatching { SettingsStore.fromJson(SettingsStore.toJson(settings).put(key, normalised)) }
+                    .getOrDefault(settings)
+            },
+            onFailure = { settings }
+        )
 
-    /** Puts a value into the shape the codec expects to read back. */
-    private fun coerce(key: String, value: Any?): Any? {
-        val spec = spec(key) ?: return null
-        if (value == null) return null
-        return when (spec.kind) {
+    /** Validate at the boundary, before a slider, JSON editor or profile can mutate state. */
+    fun validatedValue(key: String, value: Any?): Result<Any> = runCatching {
+        val spec = spec(key) ?: error("Unknown setting: $key")
+        require(value != null && value != JSONObject.NULL) { "${spec.label}: a value is required" }
+        val normalised: Any = when (spec.kind) {
             SettingKind.BOOL -> when (value) {
                 is Boolean -> value
-                is String -> value.equals("true", ignoreCase = true)
-                is Number -> value.toDouble() != 0.0
-                else -> null
+                is String -> when (value.trim().lowercase()) {
+                    "true" -> true
+                    "false" -> false
+                    else -> error("${spec.label}: use true or false")
+                }
+                else -> error("${spec.label}: use true or false")
             }
-            SettingKind.INT -> (value as? Number)?.toInt() ?: value.toString().trim().toIntOrNull()
-            SettingKind.LONG, SettingKind.COLOR ->
-                (value as? Number)?.toLong() ?: parseLongLoosely(value.toString())
-            SettingKind.FLOAT -> (value as? Number)?.toDouble() ?: value.toString().trim().toDoubleOrNull()
-            SettingKind.STRING, SettingKind.JSON, SettingKind.ACTION -> value.toString()
-            SettingKind.ENUM -> value.toString().let { raw ->
-                val options = spec.liveOptions
-                // Accept any casing, and ignore an unknown constant rather than
-                // writing one the codec would silently fall back from.
-                options.firstOrNull { it.equals(raw, ignoreCase = true) }
+            SettingKind.INT -> {
+                val n = value.toString().toDoubleOrNull() ?: error("${spec.label}: enter a number")
+                require(n.isFinite() && n % 1.0 == 0.0 && n >= Int.MIN_VALUE && n <= Int.MAX_VALUE) {
+                    "${spec.label}: enter a whole number"
+                }
+                n.toInt()
             }
-            SettingKind.STRING_LIST -> when (value) {
-                is JSONArray -> value
-                is List<*> -> JSONArray(value.map { it.toString() })
-                is String -> JSONArray(value.split(",").map { it.trim() }.filter { it.isNotEmpty() })
-                else -> null
+            SettingKind.LONG, SettingKind.COLOR -> {
+                if (value is Number) {
+                    val n = value.toDouble()
+                    require(n.isFinite() && n % 1.0 == 0.0 && n >= Long.MIN_VALUE.toDouble() && n < Long.MAX_VALUE.toDouble()) {
+                        "${spec.label}: enter a whole number"
+                    }
+                    value.toLong()
+                } else parseLongLoosely(value.toString()) ?: error("${spec.label}: enter a whole number")
+            }
+            SettingKind.FLOAT -> (value.toString().toDoubleOrNull() ?: error("${spec.label}: enter a number"))
+                .also { require(it.isFinite()) { "${spec.label}: number must be finite" } }
+            SettingKind.STRING, SettingKind.ACTION -> {
+                require(value is String) { "${spec.label}: enter text" }
+                value
+            }
+            SettingKind.JSON -> {
+                val raw = if (value is JSONObject || value is JSONArray) value.toString() else {
+                    require(value is String) { "${spec.label}: enter a JSON object or array" }
+                    value
+                }
+                if (raw.isNotBlank()) {
+                    val reader = JSONTokener(raw)
+                    val json = reader.nextValue()
+                    require((json is JSONObject || json is JSONArray) && reader.nextClean() == '\u0000') {
+                        "${spec.label}: enter a complete JSON object or array"
+                    }
+                }
+                raw
+            }
+            SettingKind.ENUM -> {
+                require(value is String) { "${spec.label}: choose an option" }
+                // Runtime registries may not have loaded, and profiles can refer to
+                // user layouts/models. Only closed enum sets reject unknown ids.
+                if (spec.options.isEmpty()) value else spec.options.firstOrNull { it.equals(value, true) }
+                    ?: error("${spec.label}: choose ${spec.options.joinToString()}")
+            }
+            SettingKind.STRING_LIST -> {
+                val items = when (value) {
+                    is JSONArray -> (0 until value.length()).map { value.get(it) }
+                    is List<*> -> value
+                    is String -> value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    else -> error("${spec.label}: enter a list of text values")
+                }
+                require(items.all { it is String }) { "${spec.label}: every entry must be text" }
+                JSONArray(items)
             }
         }
+        if (normalised is Number) {
+            val n = normalised.toDouble()
+            require(spec.min == null || n >= spec.min.toDouble() - 0.000001) { "${spec.label}: minimum is ${spec.min}" }
+            require(spec.max == null || n <= spec.max.toDouble() + 0.000001) { "${spec.label}: maximum is ${spec.max}" }
+            if (spec.kind == SettingKind.COLOR) require(n in 0.0..4294967295.0) { "Use an AARRGGBB colour" }
+        }
+        normalised
     }
 
     private fun parseLongLoosely(raw: String): Long? {
@@ -173,7 +215,7 @@ object SettingsSchema {
                     min = k.min.toFloat(), max = k.max.toFloat(), expert = true
                 )
             }
-            val kind = meta?.kind ?: inferKind(raw)
+            val kind = meta?.kind ?: if (key.endsWith("Json")) SettingKind.JSON else inferKind(raw)
             SettingSpec(
                 key = key,
                 kind = kind,
@@ -212,6 +254,7 @@ object SettingsSchema {
         // Before the generic rules, or "completionDebounceMs" lands under Timing and
         // "completionMaxChars" under Typing — one feature in three places, which is
         // how a settings screen becomes unusable while every setting is present.
+        key.startsWith("pocket") -> GROUP_POCKET
         key.startsWith("completion") -> GROUP_PREDICTION
         key.startsWith("ai") -> GROUP_AI
         key.startsWith("asr") -> GROUP_VOICE
@@ -253,12 +296,13 @@ object SettingsSchema {
     const val GROUP_ENGINE = "Engine: inputs and wires"
     const val GROUP_SPEECH = "Reading aloud"
     const val GROUP_MATRIX = "Converting and streams"
+    const val GROUP_MEDIA = "Media browser"
 
     private val GROUP_ORDER = listOf(
         GROUP_APPEARANCE, GROUP_FREE, GROUP_COVERAGE, GROUP_LAYOUTS, GROUP_TYPING,
         GROUP_TIMING, GROUP_SUGGESTIONS, GROUP_AI, GROUP_VOICE, GROUP_SPEECH, GROUP_CLIPBOARD,
         GROUP_FEEDBACK, GROUP_INDICATORS, GROUP_TOUCH, GROUP_GESTURES, GROUP_ENGINE, GROUP_MATRIX, GROUP_POCKET,
-        GROUP_PRIVACY, GROUP_DATA
+        GROUP_MEDIA, GROUP_PRIVACY, GROUP_DATA
     )
 
     /** Only what JSON cannot tell us. Everything absent here still gets a control. */
@@ -277,6 +321,15 @@ object SettingsSchema {
     )
 
     private val METADATA: Map<String, Meta> = mapOf(
+        "vaultSessionSeconds" to Meta(group = GROUP_PRIVACY, label = "Vault unlock session (seconds)", min = 15f, max = 60f, help = "Automatically relock after this interval. The hardware key authentication ceiling remains 60 seconds."),
+        "mediaMimePatterns" to Meta(group = GROUP_MEDIA, label = "Media types", help = "Comma-separated MIME patterns, e.g. image/*, video/*. */* shows every type."),
+        "mediaShowHidden" to Meta(group = GROUP_MEDIA, label = "Show hidden media"),
+        "mediaShowFolders" to Meta(group = GROUP_MEDIA, label = "Show folders"),
+        "mediaSort" to Meta(kind = SettingKind.ENUM, group = GROUP_MEDIA, label = "Media sort order", options = listOf("NAME", "NEWEST", "LARGEST")),
+        "mediaProviderTimeoutMs" to Meta(group = GROUP_MEDIA, label = "Media provider timeout (ms)", min = 1000f, max = 120000f, help = "Stop waiting for an unavailable cloud provider after this interval."),
+        "mediaEntryLimit" to Meta(group = GROUP_MEDIA, label = "Entries per media source", min = 50f, max = 5000f),
+        "keyboardToolbarVisible" to Meta(group = GROUP_APPEARANCE, label = "Keep toolbar visible", help = "Show actions and configuration even when suggestions are off."),
+        "ioActionProfilesJson" to Meta(kind = SettingKind.JSON, group = GROUP_ENGINE, label = "Action profiles", help = "Overrides and new actions: id, label, command, settingsQuery and optional hidden.", multiline = true, expert = true),
         "expertMode" to Meta(
             group = GROUP_APPEARANCE, label = "Show every setting",
             help = "Off hides the settings most people never touch. Nothing is removed either way."
@@ -401,18 +454,23 @@ object SettingsSchema {
             help = "Locks touch and keys while an app keeps running, to put a talking app in a " +
                 "pocket. TOUCH leaves the screen as it is; SCREEN turns it black at the lowest " +
                 "brightness. Start it from the quick settings tile, the app icon's shortcut, or " +
-                "any key or wire with do:pocket_lock. Needs the accessibility service. The power " +
+                "any key or wire with do:pocket_lock. Uses accessibility or a draw-over-apps overlay. The power " +
                 "button cannot be locked by any app.",
             options = com.example.core.io.PocketMode.entries.map { it.name }
         ),
-        "pocketBlockKeys" to Meta(group = GROUP_POCKET, label = "Lock the volume keys too"),
+        "pocketBlockKeys" to Meta(group = GROUP_POCKET, label = "Block volume keys"),
+        "pocketBlockTouch" to Meta(group = GROUP_POCKET, label = "Block screen touches", help = "Independent from dimming or blanking the screen."),
+        "pocketBlockNavigation" to Meta(group = GROUP_POCKET, label = "Block Back", help = "Android controls Home, Recents, power and system gestures; an ordinary app cannot guarantee blocking them."),
+        "pocketBlockMediaKeys" to Meta(group = GROUP_POCKET, label = "Block media keys", help = "Headset and keyboard media controls, when Android delivers them."),
+        "pocketBlockOtherKeys" to Meta(group = GROUP_POCKET, label = "Block other physical keys", help = "Keys delivered by Android, excluding volume, media and navigation."),
+        "keyboardKeepVisible" to Meta(group = GROUP_LAYOUTS, label = "Keep shortcut keyboard available", help = "Best-effort persistence across app and focus changes. Explicit Hide or Back ends the session. Android may still dismiss an IME."),
         "pocketUnlockKeys" to Meta(
             group = GROUP_POCKET, label = "Unlock with the volume keys",
             help = "In order, within three seconds: up, down, up is +, −, +. Blank turns it off."
         ),
         "pocketUnlockFingers" to Meta(
             group = GROUP_POCKET, label = "…or hold this many fingers on the screen", min = 0f, max = 4f,
-            help = "0 turns the hold off. Two still fingers for two seconds is something a pocket does not do."
+            help = "0 disables the hold. If touches are blocked and no valid key escape remains, a two-finger hold is restored. With touch passthrough, a valid key escape is required."
         ),
         "pocketUnlockHoldMs" to Meta(group = GROUP_POCKET, label = "…for this long", min = 500f, max = 6000f),
         "pocketIgnoreWhenCovered" to Meta(
@@ -649,7 +707,7 @@ object SettingsSchema {
         ),
 
         "aiEnabled" to Meta(group = GROUP_AI, label = "AI features"),
-        "aiProvider" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Provider", options = AiProviders.ALL),
+        "aiProvider" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Provider"),
         "aiBaseUrl" to Meta(group = GROUP_AI, label = "Base URL"),
         "aiApiKey" to Meta(
             group = GROUP_AI, label = "API key", secret = true,
@@ -661,8 +719,7 @@ object SettingsSchema {
             kind = SettingKind.JSON, group = GROUP_AI, label = "Provider profiles",
             multiline = true, secret = true,
             help = "Key, base URL, model and parameters for each provider you have set " +
-                "up, keyed by provider id. Contains your API keys: anything you export " +
-                "from here carries them with it."
+                "up, keyed by provider id. Contains your API keys and is masked here. Portable exports and model requests omit this entire field."
         ),
         "aiModel" to Meta(kind = SettingKind.ENUM, group = GROUP_AI, label = "Model"),
         "aiCompletionEnabled" to Meta(group = GROUP_AI, label = "Inline completion"),
@@ -825,7 +882,7 @@ object SettingsSchema {
             val bits = mutableListOf("${spec.key}: ${spec.kind.name.lowercase()}")
             spec.liveOptions.takeIf { it.isNotEmpty() }?.let { bits += "one of [${it.joinToString(", ")}]" }
             if (spec.min != null || spec.max != null) bits += "range ${spec.min ?: "-"}..${spec.max ?: "-"}"
-            if (includeValues && !spec.secret) bits += "now=${json.opt(spec.key)}"
+            if (includeValues && SettingsProfiles.isPortable(spec)) bits += "now=${json.opt(spec.key)}"
             bits += "\"${spec.label}\""
             bits.joinToString(" | ")
         }

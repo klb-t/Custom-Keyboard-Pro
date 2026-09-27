@@ -14,7 +14,8 @@ import java.util.concurrent.TimeUnit
 data class ModelInfo(
     override val id: String,
     val provider: String = "",
-    val label: String = id
+    val label: String = id,
+    val capabilities: Set<String> = emptySet()
 ) : Discoverable
 
 /**
@@ -28,7 +29,7 @@ data class ModelInfo(
 object ModelDiscovery {
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .build()
@@ -60,11 +61,19 @@ object ModelDiscovery {
         val live = fetch(provider.copy(modelsPath = path), apiKey).getOrNull().orEmpty()
         if (live.isEmpty()) return declared
 
-        // A declared model the provider did not list is still offered: several list
-        // only chat models while happily serving a transcription one.
-        val merged = LinkedHashMap<String, ModelInfo>()
-        (declared + live).forEach { merged.putIfAbsent(it.id, it) }
-        return merged.values.toList()
+        return selectForCapability(live, declared, capability, spec.modelListIsScoped)
+    }
+
+    internal fun selectForCapability(
+        live: List<ModelInfo>, declared: List<ModelInfo>, capability: String, scoped: Boolean
+    ): List<ModelInfo> {
+        val declaredIds = declared.map { it.id }.toSet()
+        val relevant = live.filter {
+            scoped || capability in it.capabilities || it.id in declaredIds ||
+                (capability == AiCapability.CHAT && it.capabilities.isEmpty())
+        }
+        // A catalogue entry remains available offline, visibly as a declaration rather than a test.
+        return (relevant + declared).distinctBy { it.id }
     }
 
     /** A live source for one provider, usable anywhere [Discovery] is. */
@@ -82,17 +91,14 @@ object ModelDiscovery {
                 if (base.isEmpty()) error("This provider has no base URL set.")
                 if (provider.modelsPath.isBlank()) error("This provider does not publish a model list.")
 
-                val url = when (provider.wire) {
-                    AiWire.GEMINI -> "$base${provider.modelsPath}?key=$apiKey"
-                    else -> "$base${provider.modelsPath}"
-                }
+                val url = "$base${provider.modelsPath}"
                 val builder = Request.Builder().url(url).get()
                 when (provider.wire) {
                     AiWire.ANTHROPIC -> {
                         builder.addHeader("x-api-key", apiKey)
                         builder.addHeader("anthropic-version", "2023-06-01")
                     }
-                    AiWire.GEMINI -> Unit // key is in the query string
+                    AiWire.GEMINI -> if (apiKey.isNotBlank()) builder.addHeader("x-goog-api-key", apiKey)
                     else -> if (apiKey.isNotBlank()) builder.addHeader("Authorization", "Bearer $apiKey")
                 }
 
@@ -106,7 +112,7 @@ object ModelDiscovery {
             }
         }
 
-    private fun parse(body: String, provider: ProviderSpec): List<ModelInfo> {
+    internal fun parse(body: String, provider: ProviderSpec): List<ModelInfo> {
         val root = JSONObject(body)
         // OpenAI and Anthropic both use "data"; Gemini uses "models". Accepting any of
         // them means a provider that copied one shape but not the other still works.
@@ -128,7 +134,19 @@ object ModelDiscovery {
                 // Gemini returns "models/gemini-2.5-flash"; the request wants the bare id.
                 id = id.removePrefix("models/"),
                 provider = provider.id,
-                label = (item as? JSONObject)?.optString("display_name")?.ifBlank { null } ?: id
+                label = (item as? JSONObject)?.let {
+                    it.optString("display_name").ifBlank { it.optString("displayName") }
+                }?.ifBlank { null } ?: id,
+                capabilities = (item as? JSONObject)?.let { obj ->
+                    buildSet {
+                        val methods = obj.optJSONArray("supportedGenerationMethods").toStringList()
+                        if ("embedContent" in methods || "batchEmbedContents" in methods) add(AiCapability.EMBED)
+                        if ("generateContent" in methods) add(AiCapability.CHAT)
+                        val outputs = obj.optJSONObject("architecture")?.optJSONArray("output_modalities").toStringList()
+                        if ("embeddings" in outputs) add(AiCapability.EMBED)
+                        if ("text" in outputs) add(AiCapability.CHAT)
+                    }
+                } ?: emptySet()
             )
         }
     }

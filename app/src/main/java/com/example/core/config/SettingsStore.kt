@@ -2,6 +2,15 @@ package com.example.core.config
 
 import android.content.Context
 import com.example.core.layout.enumOf
+import com.example.core.security.EncryptedSettingsPersistence
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,29 +28,86 @@ import org.json.JSONObject
  */
 object SettingsStore {
 
-    private const val PREFS_FILE = "keyboard_settings"
-    private const val KEY_BLOB = "settings_json"
-
     private val _state = MutableStateFlow(Settings())
     val state: StateFlow<Settings> = _state.asStateFlow()
+    private val _persistenceError = MutableStateFlow<String?>(null)
+    val persistenceError: StateFlow<String?> = _persistenceError.asStateFlow()
+    private val _persistencePending = MutableStateFlow(false)
+    val persistencePending: StateFlow<Boolean> = _persistencePending.asStateFlow()
+    private data class WriteRequest(val settings: Settings, val revision: Long)
+    private val writes = Channel<WriteRequest>(Channel.CONFLATED)
+    private var revision = 0L
+    private var startupReadFailure: String? = null
+    private var lastWriteFailure: String? = null
+    private val writer = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        writer.launch {
+            for (first in writes) {
+                // Dragging produces tens of updates per second. Encrypt and fsync
+                // once per burst, on IO, rather than blocking input for every pixel.
+                delay(100)
+                var pending = first
+                while (true) pending = writes.tryReceive().getOrNull() ?: break
+                val outcome = runCatching {
+                    check(startupReadFailure == null) { startupReadFailure.orEmpty() }
+                    appContext?.let { write(it, pending.settings) }
+                }
+                synchronized(this@SettingsStore) {
+                    if (pending.revision == revision) {
+                        lastWriteFailure = outcome.exceptionOrNull()?.message
+                        _persistenceError.value = lastWriteFailure ?: EncryptedSettingsPersistence.warning
+                        _persistencePending.value = false
+                    }
+                }
+            }
+        }
+    }
 
     val current: Settings get() = _state.value
 
     private var appContext: Context? = null
 
+    @Synchronized
     fun init(context: Context) {
         if (appContext != null) return
         val ctx = context.applicationContext
         appContext = ctx
-        _state.value = read(ctx)
+        _state.value = runCatching {
+            read(ctx).also { _persistenceError.value = EncryptedSettingsPersistence.warning }
+        }.getOrElse {
+            startupReadFailure = it.message ?: "Settings could not be opened. Existing data was preserved."
+            _persistenceError.value = startupReadFailure
+            Settings()
+        }
+        SettingsProfiles.init(ctx)
+        SettingsSearch.init(ctx)
     }
 
-    /** Apply a change and persist it. Safe to call from any thread. */
-    fun update(transform: (Settings) -> Settings) {
+    /**
+     * Apply immediately and enqueue device storage on a single IO writer. Success
+     * means accepted, not fsynced: [persistencePending] and [persistenceError] expose
+     * durability. Failure preserves the previous encrypted file and the unsaved
+     * edits remain visible, so a user can retry or export rather than lose work.
+     */
+    @Synchronized
+    fun update(transform: (Settings) -> Settings): Result<Unit> = runCatching {
         val next = transform(_state.value)
         _state.value = next
-        appContext?.let { write(it, next) }
+        if (appContext != null) {
+            revision++
+            _persistencePending.value = true
+            check(writes.trySend(WriteRequest(next, revision)).isSuccess) { "Settings writer is unavailable" }
+        }
+    }.onFailure { _persistenceError.value = it.message ?: "Settings could not be updated" }
+
+    /** For a deliberate save/import flow that needs to wait for durable storage. */
+    suspend fun awaitPersistence(timeoutMs: Long = 10_000): Result<Unit> = runCatching {
+        withTimeout(timeoutMs) { persistencePending.first { !it } }
+        (startupReadFailure ?: lastWriteFailure)?.let { error(it) }
     }
+
+    fun retryPersistence(): Result<Unit> = update { it }
 
     fun replaceAll(settings: Settings) = update { settings }
 
@@ -70,31 +136,21 @@ object SettingsStore {
     // -----------------------------------------------------------------------
 
     private fun read(context: Context): Settings {
-        val raw = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            .getString(KEY_BLOB, null) ?: return Settings()
-        return try {
-            fromJson(JSONObject(raw))
-        } catch (e: Exception) {
-            // A corrupt blob must never stop the keyboard from coming up.
-            Settings()
-        }
+        val raw = EncryptedSettingsPersistence.read(context) ?: return Settings()
+        return fromJson(JSONObject(raw))
     }
 
-    private fun write(context: Context, settings: Settings) {
-        context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_BLOB, toJson(settings).toString())
-            .apply()
-    }
+    private fun write(context: Context, settings: Settings) =
+        EncryptedSettingsPersistence.write(context, toJson(settings).toString())
 
-    fun exportJson(settings: Settings = current): String = toJson(settings).toString(2)
+    /** A portable patch: credentials and opaque account/action data stay on this device. */
+    fun exportJson(settings: Settings = current): String = SettingsProfiles.portableValues(settings).toString(2)
 
-    fun importJson(raw: String): Result<Settings> = try {
-        val parsed = fromJson(JSONObject(com.example.core.layout.LayoutJson.stripCodeFence(raw)))
-        update { parsed }
-        Result.success(parsed)
-    } catch (e: Exception) {
-        Result.failure(e)
+    fun importJson(raw: String): Result<Settings> = runCatching {
+        val parsed = SettingsProfiles.parseImport(raw).getOrThrow()
+        var applied = current
+        update { previous -> SettingsProfiles.apply(previous, parsed).getOrThrow().also { applied = it } }.getOrThrow()
+        applied
     }
 
     // -----------------------------------------------------------------------
@@ -103,7 +159,16 @@ object SettingsStore {
     // -----------------------------------------------------------------------
 
     internal fun toJson(s: Settings): JSONObject = JSONObject().apply {
+        put("mediaMimePatterns", s.mediaMimePatterns)
+        put("mediaShowHidden", s.mediaShowHidden)
+        put("mediaShowFolders", s.mediaShowFolders)
+        put("mediaSort", s.mediaSort)
+        put("mediaEntryLimit", s.mediaEntryLimit)
+        put("mediaProviderTimeoutMs", s.mediaProviderTimeoutMs)
         put("expertMode", s.expertMode)
+        put("vaultSessionSeconds", s.vaultSessionSeconds)
+        put("keyboardToolbarVisible", s.keyboardToolbarVisible)
+        put("ioActionProfilesJson", s.ioActionProfilesJson)
         put("themeId", s.themeId)
         put("presentation", s.presentation.name)
         put("heightPortrait", s.heightPortrait.toDouble())
@@ -147,6 +212,11 @@ object SettingsStore {
         put("netToken", s.netToken)
         put("netAllowCommands", s.netAllowCommands)
         put("pocketMode", s.pocketMode.name)
+        put("pocketBlockTouch", s.pocketBlockTouch)
+        put("pocketBlockNavigation", s.pocketBlockNavigation)
+        put("pocketBlockMediaKeys", s.pocketBlockMediaKeys)
+        put("pocketBlockOtherKeys", s.pocketBlockOtherKeys)
+        put("keyboardKeepVisible", s.keyboardKeepVisible)
         put("pocketBlockKeys", s.pocketBlockKeys)
         put("pocketUnlockKeys", s.pocketUnlockKeys)
         put("pocketUnlockFingers", s.pocketUnlockFingers)
@@ -313,7 +383,16 @@ object SettingsStore {
     internal fun fromJson(o: JSONObject): Settings {
         val d = Settings()
         return Settings(
+            mediaMimePatterns = o.optString("mediaMimePatterns", d.mediaMimePatterns),
+            mediaShowHidden = o.optBoolean("mediaShowHidden", d.mediaShowHidden),
+            mediaShowFolders = o.optBoolean("mediaShowFolders", d.mediaShowFolders),
+            mediaSort = o.optString("mediaSort", d.mediaSort),
+            mediaEntryLimit = o.optInt("mediaEntryLimit", d.mediaEntryLimit),
+            mediaProviderTimeoutMs = o.optInt("mediaProviderTimeoutMs", d.mediaProviderTimeoutMs),
             expertMode = o.optBoolean("expertMode", d.expertMode),
+            vaultSessionSeconds = o.optInt("vaultSessionSeconds", d.vaultSessionSeconds).coerceIn(15, 60),
+            keyboardToolbarVisible = o.optBoolean("keyboardToolbarVisible", d.keyboardToolbarVisible),
+            ioActionProfilesJson = o.optString("ioActionProfilesJson", d.ioActionProfilesJson),
             themeId = o.optString("themeId", d.themeId),
             presentation = enumOf(o.optString("presentation", d.presentation.name), d.presentation),
             heightPortrait = o.optDouble("heightPortrait", d.heightPortrait.toDouble()).toFloat(),
@@ -357,6 +436,11 @@ object SettingsStore {
             netToken = o.optString("netToken", d.netToken),
             netAllowCommands = o.optBoolean("netAllowCommands", d.netAllowCommands),
             pocketMode = enumOf(o.optString("pocketMode", d.pocketMode.name), d.pocketMode),
+            pocketBlockTouch = o.optBoolean("pocketBlockTouch", d.pocketBlockTouch),
+            pocketBlockNavigation = o.optBoolean("pocketBlockNavigation", o.optBoolean("pocketBlockKeys", d.pocketBlockKeys)),
+            pocketBlockMediaKeys = o.optBoolean("pocketBlockMediaKeys", d.pocketBlockMediaKeys),
+            pocketBlockOtherKeys = o.optBoolean("pocketBlockOtherKeys", o.optBoolean("pocketBlockKeys", d.pocketBlockKeys)),
+            keyboardKeepVisible = o.optBoolean("keyboardKeepVisible", d.keyboardKeepVisible),
             pocketBlockKeys = o.optBoolean("pocketBlockKeys", d.pocketBlockKeys),
             pocketUnlockKeys = o.optString("pocketUnlockKeys", d.pocketUnlockKeys),
             pocketUnlockFingers = o.optInt("pocketUnlockFingers", d.pocketUnlockFingers),

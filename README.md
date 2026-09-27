@@ -34,8 +34,9 @@ weights, and a long swipe across the keyboard bound to any action you like.
 
 **Dictation that lets you choose.** The recogniser returns a ranked list and the
 second entry is often the right one, so the alternatives are shown and you pick.
-System recogniser by default — free, no key, usually on-device — or any
-Whisper-compatible endpoint.
+The system recogniser needs no key; whether it sends audio to a server depends on
+the installed service. An explicit on-device-only engine is offered when Android
+reports it available. Remote Whisper-compatible endpoints are also supported.
 
 **AI, if you want it and on your terms.** Any OpenAI-compatible endpoint, Anthropic,
 Gemini, or a model on your own machine through Ollama, LM Studio or vLLM. Inline
@@ -50,6 +51,32 @@ list.
 **Shapes.** Full width, one-handed left or right, split, or a floating panel you drag
 where you want — with touches outside it going through to the app underneath.
 
+## Configuration and phone tools
+
+The toolbar's settings button opens contextual customization, expert settings and
+profiles, provider setup, files/media and the vault. Holding the button opens the
+expert view directly; the toolbar remains available when suggestions are off.
+
+* **Expert controls and profiles:** searchable controls, exact numeric values,
+  validated JSON, per-option reset, ten partial settings profiles and local intent
+  search that works without an AI account. Profile imports preview changes and
+  preserve unrelated settings; credentials are excluded from portable exports.
+* **Quick settings:** hold either tile for its options. Keyboard launch collapses the
+  shade; optional shortcut sessions keep the keyboard active across focus changes.
+  Touch, volume, media and delivered navigation keys have separate lock policies.
+* **Models first:** choose a capability or name a model, inspect providers and evidence,
+  follow signup/key steps, then explicitly test and save the route. Embeddings,
+  speech, OCR and chat have separate configuration.
+* **Files and cloud media:** one browser over folders/files explicitly selected from
+  Android storage providers, with MIME profiles, search, open/share/copy and visible
+  errors when an account or grant is unavailable.
+* **Passwords and cards:** a separate device-authenticated vault, login CSV import,
+  explicit app/browser trust and authenticated Autofill. Existing managers and
+  wallet apps stay accessible. This is not a payment processor or NFC wallet.
+
+See [the implementation handoff](docs/HANDOFF_2026-09-27.md) for exact scope,
+verification limits and remaining integrations.
+
 ## Privacy
 
 Two rules, enforced in the code that could break them rather than at each call site:
@@ -57,7 +84,16 @@ Two rules, enforced in the code that could break them rather than at each call s
 1. In a password field, or an editor that asked not to be personalised, nothing is
    suggested, learned, recorded to the clipboard, or sent to a model — whatever else
    is switched on.
-2. Anything that leaves the device is off by default and needs a provider you supply.
+2. User content is sent only through configured features or an explicit request.
+   Public catalogue refreshes need no account and send neither typed content nor API
+   keys. System dictation follows the installed recogniser's processing policy;
+   select the available on-device-only engine for a strict local speech route.
+
+Settings are encrypted with a device-bound Android Keystore key and excluded from
+backup; hardware backing depends on the device. API keys are omitted from portable
+profile exports. The vault uses a separate
+key requiring device authentication. Read [vault behavior and recovery
+limits](docs/VAULT_AND_AUTOFILL.md) before relying on it as your only credential store.
 
 ## Building
 

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "profileId": "unified_media_browser",
+  "abstractionId": "storage.document_provider",
+  "adapter": "android_saf",
+  "sourceProfileFields": ["uri", "label", "kind", "enabled"],
+  "sourceKinds": [
+    {"kind": "FOLDER", "selectionAction": "android.intent.action.OPEN_DOCUMENT_TREE", "examples": ["local photo album", "SD-card audio folder", "cloud folder when exposed by its provider"]},
+    {"kind": "DOCUMENT", "selectionAction": "android.intent.action.OPEN_DOCUMENT", "examples": ["cloud document", "download", "virtual document opened by its provider app"]}
+  ],
+  "viewProfilesAsset": "media_view_profiles.json",
+  "requiredGrant": "user_selected_persistable_read_uri",
+  "providerDiscovery": "system_document_picker",
+  "searchScope": "currently_loaded_directory_level",
+  "operations": ["list", "inspect_metadata", "filter", "open", "share_file", "copy_file"],
+  "unsupportedRawFileOperations": {"virtual": ["share_file", "copy_file"]},
+  "notes": "Examples are source-profile instances. No grant exists until the user selects an actual source. Services absent from the Android picker require a separate adapter."
+}

@@ -50,13 +50,20 @@ fun SettingControl(
     val label = labelOverride ?: spec.label
     val help = helpOverride ?: spec.help
     val value = SettingsSchema.valueOf(settings, spec.key)
+    var writeError by remember(spec.key) { mutableStateOf<String?>(null) }
+    fun write(raw: Any?) {
+        SettingsSchema.validatedValue(spec.key, raw).mapCatching {
+            SettingsStore.setByKey(spec.key, it).getOrThrow()
+        }.fold(onSuccess = { writeError = null }, onFailure = { writeError = it.message })
+    }
 
+    Column {
     when (spec.kind) {
         SettingKind.BOOL -> SwitchRow(
             label = label,
             description = help,
             checked = value as? Boolean ?: false,
-            onChange = { SettingsStore.setByKey(spec.key, it) }
+            onChange = { write(it) }
         )
 
         SettingKind.ENUM -> {
@@ -66,7 +73,7 @@ fun SettingControl(
                     label = label,
                     description = help,
                     value = value?.toString().orEmpty(),
-                    onChange = { SettingsStore.setByKey(spec.key, it) }
+                    onChange = { write(it) }
                 )
             } else {
                 ChoiceRow(
@@ -75,7 +82,7 @@ fun SettingControl(
                     options = options,
                     selected = value?.toString().orEmpty().ifEmpty { options.first() },
                     optionLabel = { prettyOption(it) },
-                    onSelect = { SettingsStore.setByKey(spec.key, it) }
+                    onSelect = { write(it) }
                 )
             }
         }
@@ -93,19 +100,18 @@ fun SettingControl(
                     range = min..max,
                     format = { if (whole) it.roundToInt().toString() else "%.2f".format(it) },
                     onChange = { raw ->
-                        SettingsStore.setByKey(spec.key, if (whole) raw.roundToInt() else raw)
+                        write(if (whole) raw.roundToInt() else raw)
                     }
                 )
+                var exact by remember(spec.key) { mutableStateOf(false) }
+                TextButton(onClick = { exact = !exact }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text(if (exact) "Hide exact value" else "Enter exact value")
+                }
+                if (exact) ValidatedDraftRow(spec, "Exact value", null, value?.toString().orEmpty(), ::write)
             } else {
                 // No range means no honest slider: a text field says "type what you
                 // mean" instead of inventing bounds the setting does not have.
-                TextRow(
-                    label = label,
-                    description = help,
-                    value = if (spec.kind == SettingKind.FLOAT) number.toString() else number.toLong().toString(),
-                    numeric = true,
-                    onChange = { SettingsStore.setByKey(spec.key, it) }
-                )
+                ValidatedDraftRow(spec, label, help, value?.toString().orEmpty(), ::write)
             }
         }
 
@@ -113,7 +119,7 @@ fun SettingControl(
             label = label,
             description = help,
             argb = (value as? Number)?.toLong() ?: 0xFF000000L,
-            onChange = { SettingsStore.setByKey(spec.key, it) }
+            onChange = { write(it) }
         )
 
         SettingKind.STRING_LIST -> {
@@ -124,17 +130,13 @@ fun SettingControl(
                 label = label,
                 description = (help?.plus("  ") ?: "") + "Comma separated.",
                 value = items.joinToString(", "),
-                onChange = { SettingsStore.setByKey(spec.key, it) }
+                onChange = { write(it) }
             )
         }
 
-        SettingKind.JSON, SettingKind.ACTION -> TextRow(
-            label = label,
-            description = help,
-            value = value?.toString().orEmpty(),
-            singleLine = false,
-            minLines = if (spec.kind == SettingKind.JSON) 4 else 2,
-            onChange = { SettingsStore.setByKey(spec.key, it) }
+        SettingKind.JSON, SettingKind.ACTION -> ValidatedDraftRow(
+            spec = spec, label = label, help = help,
+            value = value?.toString().orEmpty(), onApply = ::write
         )
 
         SettingKind.STRING -> TextRow(
@@ -142,8 +144,33 @@ fun SettingControl(
             description = help,
             value = value?.toString().orEmpty(),
             secret = spec.secret,
-            onChange = { SettingsStore.setByKey(spec.key, it) }
+            onChange = { write(it) }
         )
+    }
+    writeError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
+    }
+}
+
+/** Drafts can be temporarily incomplete; only a valid, explicit Apply reaches live settings. */
+@Composable
+private fun ValidatedDraftRow(spec: SettingSpec, label: String, help: String?, value: String, onApply: (Any?) -> Unit) {
+    var draft by remember(spec.key, value) { mutableStateOf(value) }
+    val validation = remember(spec.key, draft) { SettingsSchema.validatedValue(spec.key, draft) }
+    TextRow(
+        label = label, description = help, value = draft, secret = spec.secret,
+        numeric = spec.kind in listOf(SettingKind.FLOAT, SettingKind.INT, SettingKind.LONG),
+        singleLine = spec.kind !in listOf(SettingKind.JSON, SettingKind.ACTION),
+        minLines = if (spec.kind == SettingKind.JSON) 4 else 1,
+        onChange = { draft = it }
+    )
+    if (draft != value) {
+        validation.exceptionOrNull()?.let {
+            Text(it.message.orEmpty(), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+        Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { onApply(validation.getOrThrow()) }, enabled = validation.isSuccess) { Text("Apply") }
+            TextButton(onClick = { draft = value }) { Text("Discard") }
+        }
     }
 }
 

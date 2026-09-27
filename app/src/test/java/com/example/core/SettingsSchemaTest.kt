@@ -30,6 +30,17 @@ import org.robolectric.annotation.Config
 class SettingsSchemaTest {
 
     @Test
+    fun `every Settings property is persisted and exposed including flattened knobs`() {
+        val fields = Settings::class.java.declaredFields
+            .filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) || it.isSynthetic }
+            .map { it.name }.toSet() - "knobs"
+        val persisted = SettingsStore.toJson(Settings()).keys().asSequence()
+            .filterNot { it.startsWith(com.example.core.config.Knobs.PREFIX) }.toSet()
+        assertEquals("a Settings property was omitted from its codec and every expert screen", fields, persisted)
+    }
+
+
+    @Test
     fun `the schema covers every setting the codec persists`() {
         val persisted = SettingsStore.toJson(Settings()).keys().asSequence().toSet()
         val described = SettingsSchema.all.map { it.key }.toSet()

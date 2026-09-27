@@ -36,6 +36,17 @@ class PocketLockTest {
     }
 
     @Test
+    fun `overlapping unlock prefixes are not discarded`() {
+        assertTrue(seq("up", "up", "up", "down", pattern = "up, up, down"))
+        val s = KeySequence(listOf("up", "up", "down"), 1000)
+        assertFalse(s.press("up", 0))
+        assertFalse(s.press("up", 800))
+        // The first press expired, but the suffix starting at 800 remains valid.
+        assertFalse(s.press("up", 1100))
+        assertTrue(s.press("down", 1400))
+    }
+
+    @Test
     fun `plus and minus mean the volume keys`() {
         assertEquals(listOf("up", "down", "up"), KeySequence.parse("+ - +"))
         assertEquals(listOf("up", "down"), KeySequence.parse("vol+, vol-"))

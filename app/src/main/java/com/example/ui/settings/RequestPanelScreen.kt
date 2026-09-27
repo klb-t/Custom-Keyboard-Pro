@@ -19,7 +19,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.core.config.Settings
+import com.example.core.ai.AiConfig
 import com.example.core.config.SettingsSchema
+import com.example.core.config.SettingsSearch
+import com.example.core.panels.PanelControl
 import com.example.core.panels.PanelGenerator
 import com.example.core.panels.PanelSpec
 import kotlinx.coroutines.launch
@@ -38,20 +41,22 @@ import kotlinx.coroutines.launch
  * looks real and does nothing would be worse than no panel at all.
  */
 @Composable
-fun RequestPanelScreen(settings: Settings) {
+fun RequestPanelScreen(settings: Settings, initialRequest: String = "") {
     val scope = rememberCoroutineScope()
-    var request by remember { mutableStateOf("") }
+    var request by remember(initialRequest) { mutableStateOf(initialRequest) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<PanelGenerator.Outcome?>(null) }
     val saved = remember(settings.generatedPanelsJson) { PanelGenerator.saved(settings) }
+    val modelReady = settings.aiEnabled && AiConfig.from(settings).isUsable
+    val localMatches = remember(request) { SettingsSearch.matches(request) }
+    var includedKeys by remember(request) { mutableStateOf(localMatches.map { it.key }.toSet()) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
 
         SettingsSection(
             title = "Ask for a panel",
-            subtitle = "Describe what you want to be able to change. A model picks the " +
-                "settings that answer it and builds you a panel for exactly those."
+            subtitle = "Describe what you want to change. Local search works immediately; a configured model can optionally arrange a more focused panel."
         ) {
             TextRow(
                 label = "What would you like to change?",
@@ -62,10 +67,9 @@ fun RequestPanelScreen(settings: Settings) {
                 minLines = 3,
                 onChange = { request = it }
             )
-            if (!settings.aiEnabled || settings.aiApiKey.isBlank()) {
+            if (!modelReady) {
                 InfoRow(
-                    "This needs a model configured — AI screen, your own provider and key. " +
-                        "Nothing is sent anywhere until you set one up."
+                    "Local matches below need no account. To ask a model, set up a provider on the AI screen. Only the model button sends your request and shareable settings to that provider."
                 )
             }
             Button(
@@ -81,15 +85,33 @@ fun RequestPanelScreen(settings: Settings) {
                         busy = false
                     }
                 },
-                enabled = !busy && request.isNotBlank(),
+                enabled = !busy && request.isNotBlank() && modelReady,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(if (busy) "Building…" else "Build the panel")
+                Text(if (busy) "Building…" else "Ask configured model")
             }
             if (busy) {
                 CircularProgressIndicator(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
             error?.let { InfoRow("Could not build it: $it") }
+        }
+
+        if (request.isNotBlank()) {
+            SettingsSection("Local matches", "Keyword and intent hints, processed on this device. Choose what belongs in your panel.") {
+                if (localMatches.isEmpty()) InfoRow("No matching controls. Try a concrete word such as pocket, opacity, cursor or model.")
+                localMatches.forEach { spec ->
+                    SwitchRow(label = "Include: ${spec.label}", checked = spec.key in includedKeys,
+                        onChange = { checked -> includedKeys = if (checked) includedKeys + spec.key else includedKeys - spec.key })
+                    if (spec.key in includedKeys) SettingControl(spec, settings)
+                }
+                if (includedKeys.isNotEmpty()) ActionRow("Keep selected controls as a panel", onClick = {
+                    runCatching { PanelGenerator.save(PanelSpec(
+                        id = "local_${System.currentTimeMillis()}", title = request.take(60),
+                        description = "Selected from local settings search", request = request,
+                        controls = localMatches.filter { it.key in includedKeys }.map { PanelControl(it.key) }
+                    )) }.onSuccess { request = "" }.onFailure { error = it.message }
+                })
+            }
         }
 
         preview?.let { outcome ->
@@ -136,9 +158,8 @@ fun RequestPanelScreen(settings: Settings) {
                         "Keep this panel",
                         "It gets its own entry on the home screen",
                         onClick = {
-                            PanelGenerator.save(panel)
-                            preview = null
-                            request = ""
+                            runCatching { PanelGenerator.save(panel) }
+                                .onSuccess { preview = null; request = "" }.onFailure { error = it.message }
                         }
                     )
                 }

@@ -75,12 +75,15 @@ class VoiceController(
         if (s.asrEngine == AsrEngines.PROVIDER && s.asrProvider.isNotBlank()) {
             val spec = ProviderCatalog.byId(s.asrProvider, s)
             val wire = spec?.capability(AiCapability.TRANSCRIBE)?.wire
-            if (wire == AiWire.ON_DEVICE) return AndroidAsr(context)
+            if (wire == AiWire.ON_DEVICE) return AndroidAsr(context, onDeviceOnly = true)
+            if (wire == AiWire.ANDROID_SYSTEM) return AndroidAsr(context)
             if (spec != null) {
                 return RemoteAsr.forProvider(
                     context = context,
                     scope = scope,
-                    provider = { ProviderCatalog.byId(settings().asrProvider, settings()) },
+                    provider = { val current = settings()
+                        ProviderCatalog.byId(current.asrProvider, current)?.let { ProviderProfiles.resolved(it, current) }
+                    },
                     // The dictation provider's own key, with the capability-specific
                     // one as an override for anybody who deliberately set a separate
                     // key for transcription.
@@ -89,7 +92,10 @@ class VoiceController(
                             ProviderProfiles.keyFor(settings().asrProvider, settings())
                         }
                     },
-                    model = { settings().asrModel }
+                    model = { settings().asrModel },
+                    params = { val current = settings()
+                        ProviderProfiles.paramsFor(current.asrProvider, AiCapability.TRANSCRIBE, current)
+                    }
                 )
             }
             AppLogger.e(

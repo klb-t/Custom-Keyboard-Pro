@@ -42,23 +42,38 @@ enum class PocketMode {
  */
 class KeySequence(private val pattern: List<String>, private val windowMs: Long = 3000) {
     private var matched = 0
-    private var startedAt = -1L
+    private val pressTimes = java.util.ArrayDeque<Long>()
+    private val prefix = IntArray(pattern.size).also { table ->
+        for (i in 1 until pattern.size) {
+            var j = table[i - 1]
+            while (j > 0 && pattern[i] != pattern[j]) j = table[j - 1]
+            if (pattern[i] == pattern[j]) j++
+            table[i] = j
+        }
+    }
+
+    private fun retainPrefix(length: Int) {
+        repeat(matched - length) { pressTimes.removeFirst() }
+        matched = length
+    }
 
     val isEmpty: Boolean get() = pattern.isEmpty()
 
     /** True when this press completes the sequence. */
     fun press(key: String, atMs: Long): Boolean {
         if (pattern.isEmpty()) return false
-        if (matched > 0 && atMs - startedAt > windowMs) matched = 0
+        // Retain a matching suffix after a mismatch or timeout. A simple reset
+        // loses valid overlapping sequences such as up, up, up, down for up/up/down.
+        while (matched > 0 &&
+            (pattern[matched] != key || atMs < pressTimes.first || atMs - pressTimes.first > windowMs)) {
+            retainPrefix(prefix[matched - 1])
+        }
         if (pattern[matched] == key) {
-            if (matched == 0) startedAt = atMs
+            pressTimes.addLast(atMs)
             matched++
-        } else {
-            matched = if (pattern[0] == key) 1 else 0
-            if (matched == 1) startedAt = atMs
         }
         if (matched == pattern.size) {
-            matched = 0
+            retainPrefix(0)
             return true
         }
         return false

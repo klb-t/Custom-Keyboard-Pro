@@ -2,6 +2,8 @@ package com.example.ui.kb
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -43,64 +45,6 @@ import com.example.core.layout.KeyAction
 import com.example.core.layout.TextUnit as EditUnit
 import com.example.io.IoAccessibilityService
 import kotlin.math.abs
-
-/** A ready-made line, so the common actions are one tap away before anyone binds a key. */
-private data class Preset(val line: String, val label: String) {
-    val command: Command = Command.parse(line) ?: Command(line)
-}
-
-/**
- * The first of these a user sees. Ordered by how often a phone needs them from a
- * keyboard: the system buttons, then reading and selecting, then media and the rest.
- * Every one of them is also bindable to any key as `do:<line>`.
- */
-private val PRESETS = listOf(
-    Preset("pocket_lock on", "Pocket lock"),
-    Preset("read_aloud", "Read aloud"),
-    Preset("read_control toggle", "Pause / resume reading"),
-    Preset("read_control stop", "Stop reading"),
-    Preset("read_aloud source=page", "Read the page"),
-    Preset("read_aloud source=clipboard", "Read clipboard"),
-    Preset("convert to=text", "Convert → text"),
-    Preset("convert to=audio", "Convert → sound"),
-    Preset("convert to=midi", "Convert → MIDI"),
-    Preset("convert to=midi lyrics=on", "Song → melody + words"),
-    Preset("convert to=image", "Convert → picture"),
-    Preset("convert to=image use=draw", "Text → AI picture"),
-    Preset("convert to=notes", "Convert → note names"),
-    Preset("convert to=audio use=typeset", "Hide text in sound"),
-    Preset("convert to=spectrogram", "Sound → spectrogram"),
-    Preset("convert to=scalogram", "Sound → scalogram"),
-    Preset("provenance", "Where it came from"),
-    Preset("recenter", "Recenter streams"),
-    Preset("streams", "What the streams do"),
-    Preset("record toggle", "Record / stop"),
-    Preset("play", "Play recording"),
-    Preset("back", "Back"),
-    Preset("home", "Home"),
-    Preset("recents", "Recent apps"),
-    Preset("notifications", "Notifications"),
-    Preset("quick_settings", "Quick settings"),
-    Preset("screenshot", "Screenshot"),
-    Preset("scroll down", "Scroll down"),
-    Preset("scroll up", "Scroll up"),
-    Preset("read_screen to=clipboard", "Copy the screen"),
-    Preset("read_screen to=ai", "Screen → AI"),
-    Preset("sweep mode=checkboxes pages=1", "Tick all"),
-    Preset("sweep mode=longpress pages=3", "Select 3 pages"),
-    Preset("pointer toggle", "Pointer"),
-    Preset("media play_pause", "Play / pause"),
-    Preset("media previous", "Previous"),
-    Preset("media next", "Next"),
-    Preset("volume down", "Volume −"),
-    Preset("volume up", "Volume +"),
-    Preset("torch toggle", "Torch"),
-    Preset("search", "Search selection"),
-    Preset("share", "Share selection"),
-    Preset("split_screen", "Split screen"),
-    Preset("lock", "Lock"),
-    Preset("system_settings wifi", "Wi-Fi settings")
-)
 
 /**
  * Actions beyond the text field, and a trackpad.
@@ -151,28 +95,49 @@ fun IoPanel(theme: KeyboardTheme, onClose: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActionGrid(theme: KeyboardTheme, running: Boolean) {
     val host = LocalKeyboardHost.current
+    val context = LocalContext.current
+    val settings by com.example.core.config.SettingsStore.state.collectAsState()
+    val profiles = remember(settings.ioActionProfilesJson) {
+        com.example.core.io.ActionProfiles.load(context, settings.ioActionProfilesJson)
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(78.dp),
         modifier = Modifier.fillMaxSize().padding(4.dp)
     ) {
-        items(PRESETS) { preset ->
-            val spec = Verbs.byId(preset.command.verb)
+        if (profiles.errors.isNotEmpty()) {
+            item {
+                PanelText("Action profiles: ${profiles.errors.joinToString("; ")}", theme.keyHintText, 10.sp)
+            }
+        }
+        items(profiles.profiles, key = { it.id }) { preset ->
+            val command = preset.command?.let(Command::parse)
+            val spec = command?.let { Verbs.byId(it.verb) }
             val dim = spec?.needsAccessibility == true && !running
             Column(
                 Modifier
                     .padding(3.dp)
                     .height(58.dp)
                     .background(theme.keyBackground, RoundedCornerShape(8.dp))
-                    .clickable { host.perform(KeyAction.Do(preset.command)) }
+                    .combinedClickable(
+                        onClick = {
+                            if (command != null) host.perform(KeyAction.Do(command))
+                            else com.example.ui.settings.SettingsNavigation.open(context, preset.route ?: "all", preset.settingsQuery)
+                        },
+                        onLongClick = {
+                            com.example.ui.settings.SettingsNavigation.open(context, "all", preset.settingsQuery.ifBlank { "ioActionProfilesJson" })
+                        },
+                        onLongClickLabel = "Configure ${preset.label}"
+                    )
                     .alpha(if (dim) 0.45f else 1f)
                     .padding(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                PanelText(Verbs.glyphFor(preset.command), theme.keyText, 18.sp)
+                PanelText(preset.glyph ?: command?.let(Verbs::glyphFor) ?: "⚙", theme.keyText, 18.sp)
                 androidx.compose.material3.Text(
                     preset.label,
                     color = theme.keyHintText,

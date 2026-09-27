@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {"id": "all", "label": "All files", "mimePatterns": ["*/*"]},
+    {"id": "images", "label": "Pictures", "mimePatterns": ["image/*"]},
+    {"id": "video", "label": "Video", "mimePatterns": ["video/*"]},
+    {"id": "audio", "label": "Audio", "mimePatterns": ["audio/*"]},
+    {"id": "documents", "label": "Documents", "mimePatterns": ["text/*", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.text"]},
+    {"id": "books", "label": "Books", "mimePatterns": ["application/pdf", "application/epub+zip", "application/x-mobipocket-ebook"]},
+    {"id": "spreadsheets", "label": "Spreadsheets", "mimePatterns": ["text/csv", "text/tab-separated-values", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.oasis.opendocument.spreadsheet"]},
+    {"id": "archives", "label": "Archives", "mimePatterns": ["application/zip", "application/x-7z-compressed", "application/x-tar", "application/gzip", "application/vnd.rar"]}
+  ]
+}

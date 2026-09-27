@@ -22,6 +22,8 @@ import android.util.Base64
 import com.example.core.clipboard.ClipStore
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.config.knobInt
+import com.example.core.config.knobLong
 import com.example.core.convert.Convertible
 import com.example.core.convert.Field
 import com.example.core.convert.Luma
@@ -128,11 +130,15 @@ object ConvertRunner {
             AiCapability.OCR -> return PasteConversion.providerFor(Convertible.PICTURE, settings)
             AiCapability.TRANSCRIBE -> return PasteConversion.providerFor(Convertible.RECORDING, settings)
         }
+        com.example.core.setup.CapabilitySetup.selected(capability, settings)?.let { (provider, _) ->
+            return provider.takeIf { (!it.needsKey || ProviderProfiles.keyFor(it.id, settings).isNotBlank()) &&
+                it.capability(capability)?.call != null }
+        }
         val described = ProviderCatalog.serving(capability, settings).filter {
             (!it.needsKey || ProviderProfiles.keyFor(it.id, settings).isNotBlank()) && it.capability(capability)?.call != null
         }
-        if (capability == AiCapability.SPEECH) described.firstOrNull { it.id == settings.ttsProvider }?.let { return it }
-        return described.firstOrNull()
+        if (capability == AiCapability.SPEECH) described.firstOrNull { it.id == settings.ttsProvider }?.let { return ProviderProfiles.resolved(it, settings) }
+        return described.firstOrNull()?.let { ProviderProfiles.resolved(it, settings) }
     }
 
     /** Whether an implementation can run now: the phone's always, a provider's when one is set up. */
@@ -579,13 +585,23 @@ object ConvertRunner {
                     val bytes = if (want == Representations.PNG) Png.withText(v.bytes, HISTORY_KEY, history()) else v.bytes
                     Out.File(bytes, v.mime, want.extension ?: "png", p)
                 } else {
-                    val luma = raster(context, v)
-                    if (want.lossy == true) p = p.then(encodeRecord(want.label, listOf(Change(ChangeKind.DISCARDED, "fine detail"))))
-                    val bytes = when (want) {
-                        Representations.JPEG -> compress(luma, Bitmap.CompressFormat.JPEG)
-                        Representations.WEBP -> compress(luma, Bitmap.CompressFormat.WEBP)
-                        else -> Png.withText(png(luma), HISTORY_KEY, history())
+                    // An encoding change is not a luminance transform. Decoding an
+                    // ordinary color file through raster()/Luma used to discard all
+                    // chroma and silently downsample it before even writing a PNG.
+                    val source = when (v) {
+                        is Value.Encoded -> v.bytes
+                        is Value.Raster -> png(v.luma)
+                        else -> error("expected a picture")
                     }
+                    val settings = SettingsStore.current
+                    val result = ImageReencoder.convert(source, want,
+                        settings.knobInt(com.example.core.config.Knobs.IMAGE_REENCODE_QUALITY),
+                        settings.knobLong(com.example.core.config.Knobs.IMAGE_REENCODE_MAX_PIXELS))
+                    val changes = if (v is Value.Encoded) result.changes else result.changes.filterNot {
+                        it.what.startsWith("original container metadata")
+                    }
+                    p = p.then(encodeRecord(want.label, changes).copy(parameters = result.parameters))
+                    val bytes = if (want == Representations.PNG) Png.withText(result.bytes, HISTORY_KEY, history()) else result.bytes
                     Out.File(bytes, want.mime ?: "image/png", want.extension ?: "png", p)
                 }
             }
@@ -702,10 +718,11 @@ object ConvertRunner {
         val capability = impl.capability ?: error("${impl.id} names no capability")
         val p = providerFor(impl, settings) ?: error("nothing is set up to ${AiCapability.label(capability).lowercase()}")
         val speechProvider = capability == AiCapability.SPEECH && p.id == settings.ttsProvider
-        val params = if (speechProvider && settings.ttsCloudVoice.isNotBlank()) mapOf("voice" to settings.ttsCloudVoice) else emptyMap()
+        val params = ProviderProfiles.paramsFor(p.id, capability, settings) + if (speechProvider && settings.ttsCloudVoice.isNotBlank()) mapOf("voice" to settings.ttsCloudVoice) else emptyMap()
         val result = CallEngine.run(
             p, capability,
-            CallInput(model = if (speechProvider) settings.ttsModel else "", prompt = prompt, params = params),
+            CallInput(model = if (speechProvider) settings.ttsModel else ProviderProfiles.of(p.id, settings).capabilities[capability]?.model.orEmpty(),
+                prompt = prompt, params = params),
             ProviderProfiles.keyFor(p.id, settings)
         ).getOrThrow()
         val bytes = result.bytes

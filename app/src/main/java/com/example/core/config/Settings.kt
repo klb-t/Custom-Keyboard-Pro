@@ -22,6 +22,16 @@ data class Settings(
 
     // --- presentation -----------------------------------------------------
     val expertMode: Boolean = false,
+    val vaultSessionSeconds: Int = 60,
+    val mediaMimePatterns: String = "*/*",
+    val mediaShowHidden: Boolean = false,
+    val mediaShowFolders: Boolean = true,
+    val mediaSort: String = "NAME",
+    val mediaEntryLimit: Int = 500,
+    val mediaProviderTimeoutMs: Int = 15000,
+    val keyboardToolbarVisible: Boolean = true,
+    /** Overrides and extensions of the bundled action catalogue. */
+    val ioActionProfilesJson: String = "[]",
     val themeId: String = "dark",
     val presentation: PresentationMode = PresentationMode.NORMAL,
 
@@ -156,6 +166,12 @@ data class Settings(
     val pocketMode: com.example.core.io.PocketMode = com.example.core.io.PocketMode.SCREEN,
     /** Volume keys (and any others the system passes on) are taken while locked. */
     val pocketBlockKeys: Boolean = true,
+    /** Consume touches while locked; independent from blanking the display. */
+    val pocketBlockTouch: Boolean = true,
+    /** Consume Back when Android delivers it; Home, Recents and system gestures remain OS controlled. */
+    val pocketBlockNavigation: Boolean = true,
+    val pocketBlockMediaKeys: Boolean = false,
+    val pocketBlockOtherKeys: Boolean = true,
     /** The key sequence that unlocks: "up, down, up" is volume +, −, +. Blank: none. */
     val pocketUnlockKeys: String = "up, down, up",
     /** Fingers held on the screen to unlock; 0 turns the hold off. */
@@ -193,6 +209,8 @@ data class Settings(
      * settings tile) — a board of shortcuts, arrows, Escape. Blank keeps the current one.
      */
     val fieldlessLayoutId: String = "hacker",
+    /** Keep a shortcut session available across focus changes until explicitly hidden. */
+    val keyboardKeepVisible: Boolean = false,
 
     /** Offer shortcuts in the strip — learned per app and situation, with defaults. */
     val actionSuggestions: Boolean = true,
@@ -348,9 +366,9 @@ data class Settings(
      * which is anybody comparing them — retyped it on every switch, and the times they
      * forgot produced a 401 that is indistinguishable from a bad key.
      *
-     * Stored in app-private storage like the rest of the settings, which keeps it from
-     * other apps and is not a hardware-backed keystore. An exported settings file
-     * contains these keys.
+     * Encrypted with the other settings using a device-bound Android Keystore key
+     * in no-backup storage. Hardware backing depends on the device. Portable
+     * settings profiles omit these keys.
      */
     val providerProfilesJson: String = "",
 

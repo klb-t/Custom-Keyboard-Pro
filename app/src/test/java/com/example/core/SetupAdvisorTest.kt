@@ -62,7 +62,7 @@ class SetupAdvisorTest {
                 Privacy.ON_DEVICE, it.provider.privacy
             )
         }
-        assertTrue(advice.any { it.provider.id == "android_speech" })
+        assertTrue(advice.any { it.provider.id == "android_speech_offline" })
     }
 
     @Test
@@ -74,7 +74,7 @@ class SetupAdvisorTest {
                 noCard = true, freeOnly = true, avoidTraining = true
             )
         )
-        assertEquals("android_speech", advice.first().provider.id)
+        assertEquals("android_speech_offline", advice.first().provider.id)
         assertTrue(advice.first().reasons.any { it.contains("nothing is sent", ignoreCase = true) })
     }
 
@@ -151,18 +151,13 @@ class SetupAdvisorTest {
     }
 
     @Test
-    fun `impossible wants produce an explained compromise, never an empty list`() {
-        // Everything at once, on device, free, private: nothing can do this.
+    fun `impossible local wants never relax the device boundary or replace the operation`() {
         val impossible = SetupWants(
             capabilities = setOf(AiCapability.VIDEO, AiCapability.OCR),
             mustStayOnDevice = true
         )
         assertTrue(SetupAdvisor.recommend(catalogue, impossible).isEmpty())
-
-        val (compromise, explanation) = SetupAdvisor.fallback(catalogue, impossible)
-            ?: error("the advisor gave up instead of proposing a compromise")
-        assertTrue(compromise.isNotEmpty())
-        assertFalse("the compromise was not explained", explanation.isBlank())
+        assertNull(SetupAdvisor.fallback(catalogue, impossible))
     }
 
     @Test

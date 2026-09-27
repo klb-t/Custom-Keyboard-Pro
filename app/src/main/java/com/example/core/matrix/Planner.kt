@@ -28,7 +28,7 @@ data class Policy(
     val allowLeavingDevice: Boolean = true,
     /** Steps that make up content. Off unless asked: generated is not converted. */
     val allowGenerative: Boolean = false,
-    /** Transforms or implementations to go through, in this order. Asking for one also allows it. */
+    /** Steps to require, in order. Explicit generation is allowed, but privacy restrictions still apply. */
     val through: List<String> = emptyList(),
     /** Transforms or implementations never to use. */
     val avoid: Set<String> = emptySet(),
@@ -102,7 +102,7 @@ object Planner {
         if (t.mapping == Mapping.GENERATIVE && !policy.allowGenerative && !asked) {
             return "${t.label} makes things up — ask for it with use=${t.id}"
         }
-        if (c.implementation.leavesDevice && !policy.allowLeavingDevice && !asked) return "${t.label} would send it off the phone"
+        if (c.implementation.leavesDevice && !policy.allowLeavingDevice) return "${t.label} would send it off the phone"
         if (!ready(c.implementation)) return "${t.label} needs ${c.implementation.label}"
         return null
     }

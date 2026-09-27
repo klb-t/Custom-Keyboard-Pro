@@ -262,7 +262,14 @@ data class CapabilitySpec(
      * Known values for a placeholder, when the provider publishes a fixed set: voices,
      * sizes, styles. Offered as a list in the settings; anything else is still accepted.
      */
-    val choices: Map<String, List<String>> = emptyMap()
+    val choices: Map<String, List<String>> = emptyMap(),
+    /** Evidence belongs to the capability: a chat listing proves nothing about embeddings. */
+    val docsUrl: String = "",
+    val verifiedOn: String = "",
+    /** A capability-specific list may be trusted without guessing from model names. */
+    val modelListIsScoped: Boolean = false,
+    /** Optional provider-neutral input preparation, with {{prompt}} and parameter placeholders. */
+    val inputTemplate: String = ""
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         if (wire.isNotBlank()) put("wire", wire)
@@ -272,6 +279,10 @@ data class CapabilitySpec(
         if (models.isNotEmpty()) put("models", JSONArray(models))
         if (notes.isNotBlank()) put("notes", notes)
         if (defaults.isNotEmpty()) put("defaults", JSONObject(defaults.toMap()))
+        if (docsUrl.isNotBlank()) put("docsUrl", docsUrl)
+        if (verifiedOn.isNotBlank()) put("verifiedOn", verifiedOn)
+        if (modelListIsScoped) put("modelListIsScoped", true)
+        if (inputTemplate.isNotBlank()) put("inputTemplate", inputTemplate)
         if (choices.isNotEmpty()) put("choices", JSONObject().apply { choices.forEach { (k, v) -> put(k, JSONArray(v)) } })
     }
 
@@ -286,7 +297,11 @@ data class CapabilitySpec(
             defaults = o.optJSONObject("defaults").toStringMap(),
             choices = o.optJSONObject("choices")?.let { c ->
                 buildMap { c.keys().forEach { k -> put(k, c.optJSONArray(k).toStringList()) } }
-            } ?: emptyMap()
+            } ?: emptyMap(),
+            docsUrl = o.optString("docsUrl"),
+            verifiedOn = o.optString("verifiedOn"),
+            modelListIsScoped = o.optBoolean("modelListIsScoped", false),
+            inputTemplate = o.optString("inputTemplate")
         )
     }
 }

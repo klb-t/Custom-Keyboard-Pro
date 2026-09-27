@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,6 +36,11 @@ data class CallInput(
     /** Everything the user set for this model — standard and model-specific alike. */
     val params: Map<String, String> = emptyMap()
 ) {
+    companion object {
+        /** Payload strings stay strings even when the user types "123" or "true". */
+        val TEXT_INPUTS = setOf("model", "prompt", "language", "imageBase64", "imageMime", "audioMime", "key")
+    }
+
     fun values(apiKey: String): Map<String, String> = buildMap {
         // Params go in first so a provider's own defaults can be overridden by the
         // user, and never the other way round.
@@ -80,10 +86,17 @@ object CallEngine {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(180, TimeUnit.SECONDS)
             .writeTimeout(180, TimeUnit.SECONDS)
             .build()
+    }
+
+    // Result downloads carry no provider credential and may legitimately redirect to a CDN.
+    private val downloadClient: OkHttpClient by lazy {
+        client.newBuilder().followRedirects(true).followSslRedirects(true).build()
     }
 
     suspend fun run(
@@ -97,13 +110,19 @@ object CallEngine {
                 ?: error("${provider.label} cannot ${AiCapability.label(capability).lowercase()}.")
             val call = spec.call
                 ?: error("${provider.label} handles ${capability} in code, not as a described call.")
-            val resolved = input.copy(
-                model = input.model.ifBlank { spec.defaultModel },
-                // The capability's own defaults first, so anything the user set wins.
-                params = spec.defaults + input.params.filterValues { it.isNotBlank() }
-            )
+            val resolved = prepareInput(spec, input)
             execute(provider, call, resolved, apiKey)
         }
+    }
+
+    internal fun prepareInput(spec: CapabilitySpec, input: CallInput): CallInput {
+        val resolved = input.copy(
+            model = input.model.ifBlank { spec.defaultModel },
+            params = spec.defaults + input.params
+        )
+        return if (spec.inputTemplate.isBlank()) resolved else resolved.copy(
+            prompt = Templates.fill(spec.inputTemplate, resolved.values(""))
+        )
     }
 
     private suspend fun execute(
@@ -127,13 +146,13 @@ object CallEngine {
             else -> request.post(body ?: emptyBody())
         }
 
-        AppLogger.d("CallEngine", "${call.method} $url (${provider.id})")
+        AppLogger.d("CallEngine", "${call.method} (${provider.id})")
         val first = send(request.build())
 
         val root = first.json ?: return literal(first, call)
         if (!call.isAsync) return extract(root, call, first)
 
-        val polled = poll(provider, call, root, apiKey, values)
+        val polled = poll(provider, call, root, apiKey, values, url)
         return extract(polled, call, first)
     }
 
@@ -168,7 +187,7 @@ object CallEngine {
             val call = spec.call ?: error("${provider.label} has no described call to stream.")
             if (!call.stream) error("${provider.label} is not set up to stream this.")
 
-            val resolved = input.copy(model = input.model.ifBlank { spec.defaultModel })
+            val resolved = prepareInput(spec, input)
             val values = resolved.values(apiKey)
             val url = resolveUrl(provider.baseUrl, Templates.fill(call.path, values), call, values)
 
@@ -218,7 +237,7 @@ object CallEngine {
             failure?.let { error("The provider stopped: $it") }
             StreamOutcome(cut.text, cut.stoppedBecause)
         }.onFailure {
-            AppLogger.d("CallEngine", "stream from ${provider.id} ended: ${it.message}")
+            AppLogger.d("CallEngine", "stream from ${provider.id} ended (${it::class.java.simpleName})")
         }
     }
 
@@ -236,8 +255,8 @@ object CallEngine {
         if (call.auth != AuthStyle.QUERY || call.authName.isBlank()) return full
         val key = values["key"].orEmpty()
         if (key.isBlank()) return full
-        val separator = if (full.contains('?')) "&" else "?"
-        return "$full$separator${call.authName}=$key"
+        return (full.toHttpUrlOrNull() ?: error("The provider URL is invalid."))
+            .newBuilder().setQueryParameter(call.authName, key).build().toString()
     }
 
     private fun applyAuth(request: Request.Builder, call: CallSpec, apiKey: String) {
@@ -277,7 +296,7 @@ object CallEngine {
             }
             else -> {
                 val json = if (call.bodyTemplate.isBlank()) JSONObject()
-                else Templates.fillJson(call.bodyTemplate, values)
+                else Templates.fillJson(call.bodyTemplate, values, CallInput.TEXT_INPUTS)
                 json.toString().toRequestBody(JSON_MEDIA)
             }
         }
@@ -296,7 +315,8 @@ object CallEngine {
                 text.trimStart().startsWith("[")
     }
 
-    private fun send(request: Request): Reply = client.newCall(request).execute().use { response ->
+    private fun send(request: Request, credentialFreeDownload: Boolean = false): Reply =
+        (if (credentialFreeDownload) downloadClient else client).newCall(request).execute().use { response ->
         val bytes = response.body?.bytes() ?: ByteArray(0)
         val mime = response.body?.contentType()?.toString().orEmpty()
         val reply = Reply(response.code, bytes, mime)
@@ -319,12 +339,13 @@ object CallEngine {
         call: CallSpec,
         first: JSONObject,
         apiKey: String,
-        values: Map<String, String>
+        values: Map<String, String>,
+        requestUrl: String
     ): JSONObject {
         val found = JsonPath.string(first, call.pollUrlPath)
             ?: error("The provider accepted the job but did not say where to watch it: " +
                 first.toString().take(300))
-        val pollUrl = when {
+        val target = when {
             found.startsWith("http") -> found
             call.pollUrlTemplate.isNotBlank() ->
                 resolveUrl(
@@ -336,6 +357,8 @@ object CallEngine {
             else -> error("'$found' is not somewhere this can be watched.")
         }
 
+        requireSameOrigin(requestUrl, target)
+        val pollUrl = resolveUrl(provider.baseUrl, target, call, values)
         val deadline = System.currentTimeMillis() + call.pollTimeoutMs
         var last: JSONObject? = null
         while (System.currentTimeMillis() < deadline) {
@@ -370,7 +393,7 @@ object CallEngine {
             else -> value.toString()
         }
         if (call.resultIsUrl) {
-            val fetched = send(Request.Builder().url(text).get().build())
+            val fetched = send(Request.Builder().url(text).get().build(), credentialFreeDownload = true)
             return CallResult(bytes = fetched.bytes, mime = fetched.mime, raw = first.text)
         }
         // Anything that is not a URL and decodes cleanly as base64 of a sensible size
@@ -378,6 +401,15 @@ object CallEngine {
         // picture endpoint that does not hand back a link answers.
         decodeBase64(text)?.let { return CallResult(bytes = it, mime = "", raw = first.text) }
         return CallResult(text = text, raw = first.text)
+    }
+
+    /** A response cannot delegate the caller's credential to a different origin. */
+    internal fun requireSameOrigin(requestUrl: String, targetUrl: String) {
+        val source = requestUrl.toHttpUrlOrNull() ?: error("Invalid request origin.")
+        val target = targetUrl.toHttpUrlOrNull() ?: error("Invalid polling origin.")
+        require(source.scheme == target.scheme && source.host == target.host && source.port == target.port) {
+            "Refusing to send provider credentials to a polling URL on a different origin."
+        }
     }
 
     private fun decodeBase64(value: String): ByteArray? {

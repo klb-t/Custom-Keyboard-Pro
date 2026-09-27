@@ -129,7 +129,8 @@ class EditorController(
 
     /** True when nothing typed here should be stored, learned from or sent anywhere. */
     val isSensitive: Boolean
-        get() = isPasswordField || noPersonalisedLearning
+        get() = isPasswordField || noPersonalisedLearning ||
+            com.example.core.security.PrivateInputContract.isPrivate(editorInfo()?.privateImeOptions)
 
     val isMultiline: Boolean
         get() {
@@ -149,6 +150,14 @@ class EditorController(
         connection()?.getTextAfterCursor(n, 0) ?: ""
 
     fun selectedText(): CharSequence? = connection()?.getSelectedText(0)
+
+    /** Context for models, search and sharing. Never even read a private editor. */
+    fun textForExternalUse(contextChars: Int): String {
+        if (isSensitive) return ""
+        val selected = selectedText()?.toString()
+        if (!selected.isNullOrBlank()) return selected
+        return allText(4000).toString().takeLast(contextChars.coerceAtLeast(0))
+    }
 
     /** Whole field text when the editor will hand it over, else the nearby window. */
     fun allText(limit: Int = 20_000): CharSequence {

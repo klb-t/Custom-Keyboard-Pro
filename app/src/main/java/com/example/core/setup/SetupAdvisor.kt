@@ -67,10 +67,10 @@ object SetupAdvisor {
         .asSequence()
         .filter { it.id != "openai_compatible" }
         .filter { serves(it, wants.capabilities) }
-        .filter { !wants.mustStayOnDevice || it.privacy == Privacy.ON_DEVICE }
+        .filter { !wants.mustStayOnDevice || staysOnDevice(it) }
         .filter { !wants.noCard || !it.needsCard }
         .filter { !wants.freeOnly || it.freeTier }
-        .filter { !wants.avoidTraining || it.privacy != Privacy.TRAINS_BY_DEFAULT }
+        .filter { !wants.avoidTraining || it.privacy in setOf(Privacy.NO_TRAINING, Privacy.ON_DEVICE) }
         .map { score(it, wants) }
         .filter { it.score > Int.MIN_VALUE }
         .sortedWith(compareByDescending<Recommendation> { it.score }.thenBy { it.provider.label })
@@ -80,24 +80,28 @@ object SetupAdvisor {
     /**
      * The honest fallback: what to offer when the filters left nothing.
      *
-     * An empty list is the worst possible answer to "help me choose", so this drops
-     * the preferences one at a time, hardest-to-give-up last, and says which one had
-     * to go. A user told "nothing matches, but here is what you get if you accept a
-     * free tier that trains on your text" can decide. A user told nothing cannot.
+     * Offers explicit commercial/privacy compromises without changing the requested
+     * operation or the user's device boundary. Null is correct when no such route exists.
      */
     fun fallback(providers: List<ProviderSpec>, wants: SetupWants): Pair<List<Recommendation>, String>? {
+        // Never relax the device boundary or replace the requested operation with chat.
         val relaxations = listOf(
-            wants.copy(avoidTraining = false) to "if you accept a provider that may train on your text",
+            wants.copy(avoidTraining = false) to "if you explicitly allow unknown or training policies",
             wants.copy(preferOneAccount = false, freeOnly = false) to "if you are willing to pay for use",
-            wants.copy(noCard = false, freeOnly = false) to "if you will give payment details",
-            wants.copy(capabilities = setOf(AiCapability.CHAT)) to "for writing only, without the rest",
-            SetupWants(capabilities = wants.capabilities) to "with none of your preferences applied"
+            wants.copy(noCard = false, freeOnly = false) to "if you will give payment details"
         )
         relaxations.forEach { (relaxed, explanation) ->
             val found = recommend(providers, relaxed)
             if (found.isNotEmpty()) return found to explanation
         }
         return null
+    }
+
+    internal fun staysOnDevice(provider: ProviderSpec): Boolean {
+        if (provider.privacy != Privacy.ON_DEVICE) return false
+        if (provider.baseUrl.isBlank()) return provider.wire == com.example.core.discovery.AiWire.ON_DEVICE
+        val host = runCatching { java.net.URI(provider.baseUrl).host?.lowercase() }.getOrNull()
+        return host in setOf("localhost", "127.0.0.1", "::1", "[::1]")
     }
 
     private fun serves(provider: ProviderSpec, capabilities: Set<String>): Boolean =
@@ -125,7 +129,8 @@ object SetupAdvisor {
         when (provider.privacy) {
             Privacy.ON_DEVICE -> {
                 score += if (wants.avoidTraining || wants.mustStayOnDevice) 50 else 20
-                reasons += "Runs here; nothing is sent anywhere"
+                reasons += if (staysOnDevice(provider)) "Runs here; nothing is sent anywhere"
+                else "Self-hosted endpoint; data still leaves the phone when it is remote"
             }
             Privacy.NO_TRAINING -> {
                 score += if (wants.avoidTraining) 25 else 8
@@ -140,7 +145,7 @@ object SetupAdvisor {
 
         if (provider.router) {
             score += if (wants.preferOneAccount) 35 else 12
-            reasons += "One key reaches many models, so this is the last account you need"
+            reasons += "One key reaches several models; availability depends on the gateway"
         }
 
         // A provider that covers everything asked for in one place beats two that

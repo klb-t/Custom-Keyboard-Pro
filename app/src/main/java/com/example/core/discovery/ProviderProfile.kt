@@ -29,7 +29,8 @@ data class ProviderProfile(
     /** When a probe last got a usable answer, or 0. Shown, never used as permission. */
     val verifiedAt: Long = 0L,
     /** Why the last check failed, when it did. Kept so the screen can say. */
-    val problem: String = ""
+    val problem: String = "",
+    val capabilities: Map<String, CapabilityProfile> = emptyMap()
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
@@ -41,6 +42,9 @@ data class ProviderProfile(
         if (params.isNotEmpty()) put("params", JSONObject(params.toMap()))
         if (verifiedAt != 0L) put("verifiedAt", verifiedAt)
         if (problem.isNotBlank()) put("problem", problem)
+        if (capabilities.isNotEmpty()) put("capabilities", JSONObject().apply {
+            capabilities.forEach { (id, profile) -> put(id, profile.toJson()) }
+        })
     }
 
     companion object {
@@ -56,9 +60,35 @@ data class ProviderProfile(
                 model = o.optString("model"),
                 params = params,
                 verifiedAt = o.optLong("verifiedAt", 0L),
-                problem = o.optString("problem")
+                problem = o.optString("problem"),
+                capabilities = o.optJSONObject("capabilities")?.let { caps ->
+                    caps.keys().asSequence().mapNotNull { key ->
+                        caps.optJSONObject(key)?.let { key to CapabilityProfile.fromJson(it) }
+                    }.toMap()
+                } ?: emptyMap()
             )
         }
+    }
+}
+
+/** One capability's route; selecting embeddings must never replace the chat model. */
+data class CapabilityProfile(
+    val model: String = "",
+    val params: Map<String, String> = emptyMap(),
+    val selected: Boolean = false,
+    val verifiedAt: Long = 0L
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("model", model)
+        put("params", JSONObject(params.toMap()))
+        put("selected", selected)
+        put("verifiedAt", verifiedAt)
+    }
+    companion object {
+        fun fromJson(o: JSONObject) = CapabilityProfile(
+            o.optString("model"), o.optJSONObject("params").toStringMap(),
+            o.optBoolean("selected"), o.optLong("verifiedAt")
+        )
     }
 }
 
@@ -98,7 +128,7 @@ object ProviderProfiles {
      */
     fun keyFor(id: String, settings: Settings = SettingsStore.current): String {
         val profile = all(settings)[id]
-        if (profile != null && profile.apiKey.isNotBlank()) return profile.apiKey
+        if (profile != null) return profile.apiKey
         // Only the provider the loose key was entered against may use it.
         return if (id == settings.aiProvider) settings.aiApiKey else ""
     }
@@ -117,6 +147,15 @@ object ProviderProfiles {
         return ProviderCatalog.byId(id, settings)?.defaultModel.orEmpty()
     }
 
+    /** Apply the selected account's endpoint to any capability adapter. */
+    fun resolved(provider: ProviderSpec, settings: Settings = SettingsStore.current): ProviderSpec =
+        provider.copy(baseUrl = baseUrlFor(provider.id, settings).ifBlank { provider.baseUrl })
+
+    fun paramsFor(id: String, capability: String, settings: Settings = SettingsStore.current): Map<String, String> {
+        val profile = of(id, settings)
+        return profile.params + profile.capabilities[capability]?.params.orEmpty()
+    }
+
     /** Every provider with a key, which is the list worth showing as "set up". */
     fun configured(settings: Settings = SettingsStore.current): List<ProviderProfile> =
         all(settings).values.filter { it.hasKey }.sortedBy { it.id }
@@ -133,10 +172,20 @@ object ProviderProfiles {
     fun update(id: String, change: (ProviderProfile) -> ProviderProfile) {
         SettingsStore.update { s ->
             val current = all(s)
-            val updated = change(current[id] ?: ProviderProfile(id))
+            val previous = editableProfile(id, s)
+            var updated = change(previous)
+            if (updated.apiKey != previous.apiKey || updated.baseUrl != previous.baseUrl) {
+                updated = updated.copy(verifiedAt = 0L, capabilities = updated.capabilities.mapValues { (_, cap) ->
+                    cap.copy(verifiedAt = 0L)
+                })
+            }
             s.copy(providerProfilesJson = toJson(current + (id to updated)))
         }
     }
+
+    internal fun editableProfile(id: String, settings: Settings): ProviderProfile = all(settings)[id]
+        ?: if (id == settings.aiProvider) ProviderProfile(id, apiKey = settings.aiApiKey,
+            baseUrl = settings.aiBaseUrl, model = settings.aiModel) else ProviderProfile(id)
 
     fun forget(id: String) {
         SettingsStore.update { s ->
@@ -154,7 +203,7 @@ object ProviderProfiles {
     fun adoptLooseKey(settings: Settings = SettingsStore.current) {
         val id = settings.aiProvider
         if (id.isBlank() || settings.aiApiKey.isBlank()) return
-        if (all(settings)[id]?.apiKey?.isNotBlank() == true) return
+        if (all(settings).containsKey(id)) return
         update(id) {
             it.copy(
                 apiKey = settings.aiApiKey,

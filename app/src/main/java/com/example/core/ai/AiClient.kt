@@ -48,8 +48,9 @@ data class AiConfig(
             .trimEnd('/')
 
     companion object {
-        fun from(s: Settings, maxTokens: Int = s.aiMaxTokens): AiConfig {
+        fun from(s: Settings, maxTokens: Int? = null): AiConfig {
             val spec = ProviderCatalog.byId(s.aiProvider, s)
+            val params = ProviderProfiles.paramsFor(s.aiProvider, com.example.core.discovery.AiCapability.CHAT, s)
             // Read against the provider rather than off the top level, so switching
             // provider switches credential too. The loose top-level key is still
             // honoured for the provider it was entered against — see [ProviderProfiles].
@@ -60,8 +61,8 @@ data class AiConfig(
                 model = ProviderProfiles.modelFor(s.aiProvider, s)
                     .ifBlank { spec?.defaultModel.orEmpty() }
                     .ifBlank { AiProviders.defaultModel(s.aiProvider) },
-                temperature = s.aiTemperature,
-                maxTokens = maxTokens,
+                temperature = params["temperature"]?.toFloatOrNull()?.takeIf { it.isFinite() } ?: s.aiTemperature,
+                maxTokens = maxTokens ?: params["maxTokens"]?.toIntOrNull()?.takeIf { it > 0 } ?: s.aiMaxTokens,
                 wire = spec?.wire ?: legacyWire(s.aiProvider),
                 requiresKey = spec?.needsKey ?: true
             )
