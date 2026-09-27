@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class RichClipboardPasteTest {
-    private class Connection(var accepts: Boolean = true) : BaseInputConnection(null, false) {
+    private class Connection(var accepts: Boolean = true) : BaseInputConnection(android.view.View(androidx.test.core.app.ApplicationProvider.getApplicationContext()), false) {
         var content: InputContentInfo? = null
         var flags = 0
         var nativePaste = 0
