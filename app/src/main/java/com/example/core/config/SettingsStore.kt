@@ -343,6 +343,11 @@ object SettingsStore {
 
         put("clipboardEnabled", s.clipboardEnabled)
         put("clipboardRetentionDays", s.clipboardRetentionDays)
+        put("syncClipboard", s.syncClipboard)
+        put("syncSettings", s.syncSettings)
+        put("syncImages", s.syncImages)
+        put("syncMaxItems", s.syncMaxItems)
+        put("syncMaxImageMb", s.syncMaxImageMb)
         put("clipboardTrashHours", s.clipboardTrashHours)
         put("screenshotToClipboard", s.screenshotToClipboard)
         put("clipboardMaxItems", s.clipboardMaxItems)
@@ -575,6 +580,11 @@ object SettingsStore {
 
             clipboardEnabled = o.optBoolean("clipboardEnabled", d.clipboardEnabled),
             clipboardRetentionDays = o.optInt("clipboardRetentionDays", d.clipboardRetentionDays),
+            syncClipboard = o.optBoolean("syncClipboard", d.syncClipboard),
+            syncSettings = o.optBoolean("syncSettings", d.syncSettings),
+            syncImages = o.optBoolean("syncImages", d.syncImages),
+            syncMaxItems = o.optInt("syncMaxItems", d.syncMaxItems).coerceIn(10, 1000),
+            syncMaxImageMb = o.optInt("syncMaxImageMb", d.syncMaxImageMb).coerceIn(1, 8),
             clipboardTrashHours = o.optInt("clipboardTrashHours", d.clipboardTrashHours).coerceIn(1, 168),
             screenshotToClipboard = o.optBoolean("screenshotToClipboard", d.screenshotToClipboard),
             clipboardMaxItems = o.optInt("clipboardMaxItems", d.clipboardMaxItems),

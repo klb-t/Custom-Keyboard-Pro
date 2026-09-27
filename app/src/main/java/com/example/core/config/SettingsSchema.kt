@@ -828,6 +828,11 @@ object SettingsSchema {
 
         "clipboardEnabled" to Meta(group = GROUP_CLIPBOARD, label = "Keep clipboard history"),
         "clipboardRetentionDays" to Meta(group = GROUP_CLIPBOARD, label = "Keep for (days, 0 = forever)", min = 0f, max = 365f),
+        "syncClipboard" to Meta(group = GROUP_CLIPBOARD, label = "Sync: clipboard history", help = "Included only when you explicitly run encrypted device sync. Nothing uploads automatically."),
+        "syncSettings" to Meta(group = GROUP_CLIPBOARD, label = "Sync: portable settings", help = "Credentials, provider accounts and opaque command data stay local."),
+        "syncImages" to Meta(group = GROUP_CLIPBOARD, label = "Sync: images and screenshots", help = "Copies image bytes inside the encrypted sync file."),
+        "syncMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Sync: recent entries per device", min = 10f, max = 1000f),
+        "syncMaxImageMb" to Meta(group = GROUP_CLIPBOARD, label = "Sync: maximum image MiB", min = 1f, max = 8f),
         "clipboardTrashHours" to Meta(group = GROUP_CLIPBOARD, label = "Keep deleted clips in Trash (hours)", min = 1f, max = 168f, help = "Manual deletion is recoverable until this interval expires. Bulk clearing always needs confirmation and preserves pinned entries."),
         "screenshotToClipboard" to Meta(group = GROUP_CLIPBOARD, label = "Screenshots to clipboard history", help = "The Screenshot action captures image bytes through Accessibility on Android 11+. Otherwise use the system screenshot Share action or Add image in the clipboard panel."),
         "clipboardMaxItems" to Meta(group = GROUP_CLIPBOARD, label = "Maximum entries", min = 10f, max = 2000f),

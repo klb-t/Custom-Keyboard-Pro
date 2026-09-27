@@ -336,8 +336,8 @@ class VaultActivity : ComponentActivity() {
         val exporting = request.mode == FileMode.BACKUP_EXPORT
         Text(if (exporting) "Encrypt a portable backup" else "Unlock the selected backup", style = MaterialTheme.typography.titleMedium)
         Text("Use a long, unique backup passphrase, separate from your device PIN. Store it independently of the backup file. Losing it prevents recovery. App/browser Autofill bindings are not transferred.")
-        VaultInput("Backup passphrase", passphrase, { passphrase = it }, secret = true, limit = 1024)
-        if (exporting) VaultInput("Repeat backup passphrase", confirmation, { confirmation = it }, secret = true, limit = 1024)
+        com.example.ui.PrivateTextField("Backup passphrase", passphrase, { passphrase = it }, secret = true, limit = 1024)
+        if (exporting) com.example.ui.PrivateTextField("Repeat backup passphrase", confirmation, { confirmation = it }, secret = true, limit = 1024)
         Button(enabled = !transferBusy && passphrase.length >= 12 && (!exporting || passphrase == confirmation), onClick = {
             val secret = passphrase.toCharArray()
             passphrase = ""; confirmation = ""
@@ -402,25 +402,25 @@ class VaultActivity : ComponentActivity() {
         var chooseTarget by remember { mutableStateOf(false) }
         var targetQuery by remember { mutableStateOf("") }
         val installedApps = remember { runCatching { VaultTargets.installedApps(this) }.getOrDefault(emptyList()) }
-        VaultInput("Label", label, { label = it }, limit = 200)
+        com.example.ui.PrivateTextField("Label", label, { label = it }, limit = 200)
         if (entry.kind == VaultKind.LOGIN) {
-            VaultInput("Username", username, { username = it }, limit = 1000)
-            VaultInput("Password", password, { password = it }, secret = true, limit = 4096)
+            com.example.ui.PrivateTextField("Username", username, { username = it }, limit = 1000)
+            com.example.ui.PrivateTextField("Password", password, { password = it }, secret = true, limit = 4096)
             TextButton(onClick = {
                 val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*-_=+"
                 val random = SecureRandom()
                 password = buildString { repeat(24) { append(alphabet[random.nextInt(alphabet.length)]) } }
             }) { Text("Generate 24-character password") }
         } else {
-            VaultInput("Cardholder", holder, { holder = it }, limit = 200)
-            VaultInput("Card number", number, { number = it.filter(Char::isDigit) }, secret = true, limit = 23)
-            VaultInput("Expiry month (1–12)", month, { month = it.filter(Char::isDigit) }, limit = 2)
-            VaultInput("Expiry year (YYYY)", year, { year = it.filter(Char::isDigit) }, limit = 4)
+            com.example.ui.PrivateTextField("Cardholder", holder, { holder = it }, limit = 200)
+            com.example.ui.PrivateTextField("Card number", number, { number = it.filter(Char::isDigit) }, secret = true, limit = 23)
+            com.example.ui.PrivateTextField("Expiry month (1–12)", month, { month = it.filter(Char::isDigit) }, limit = 2)
+            com.example.ui.PrivateTextField("Expiry year (YYYY)", year, { year = it.filter(Char::isDigit) }, limit = 4)
             Text("CVV is never collected or stored. This does not provision a payment method in Android.")
         }
-        VaultInput("Exact HTTPS origin (blank for native app)", website, { website = it }, limit = 300)
+        com.example.ui.PrivateTextField("Exact HTTPS origin (blank for native app)", website, { website = it }, limit = 300)
         OutlinedButton(onClick = { chooseTarget = true }) { Text(installedApps.firstOrNull { it.packageName == target }?.let { "Target: ${it.label}" } ?: "Choose target app or browser") }
-        VaultInput("Target package (expert; optional)", target, { target = it }, limit = 200)
+        com.example.ui.PrivateTextField("Target package (expert; optional)", target, { target = it }, limit = 200)
         Text("Example package: com.android.chrome. An empty target keeps the entry vault-only. Website entries require you to trust the target browser. A signing-key change requires an explicit new binding.", style = MaterialTheme.typography.bodySmall)
         if (chooseTarget) AlertDialog(onDismissRequest = { chooseTarget = false }, title = { Text("Choose installed app / browser") },
             text = { Column {
@@ -492,38 +492,4 @@ class VaultActivity : ComponentActivity() {
     }
 
     companion object { const val EXTRA_FILL_TOKEN = "vault.fill.token" }
-}
-
-@Composable
-private fun VaultInput(label: String, value: String, onChange: (String) -> Unit, secret: Boolean = false, limit: Int) {
-    var reveal by remember { mutableStateOf(false) }
-    val options = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password,
-        platformImeOptions = PlatformImeOptions(privateImeOptions = PrivateInputContract.MARKER))
-    if (secret) {
-        // Do not use rememberTextFieldState: its saver could serialize a password.
-        val state = remember { TextFieldState(initialText = value) }
-        LaunchedEffect(value) {
-            if (state.text.toString() != value) state.edit { replace(0, length, value) }
-        }
-        LaunchedEffect(state) { snapshotFlow { state.text.toString() }.collect { onChange(it) } }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
-                Text(label, style = MaterialTheme.typography.labelMedium)
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    BasicSecureTextField(state = state, modifier = Modifier.weight(1f),
-                        inputTransformation = InputTransformation.maxLength(limit),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                        keyboardOptions = options,
-                        textObfuscationMode = if (reveal) TextObfuscationMode.Visible else TextObfuscationMode.Hidden)
-                    TextButton(onClick = { reveal = !reveal }) { Text(if (reveal) "Hide" else "Show") }
-                }
-            }
-        }
-        return
-    }
-    OutlinedTextField(value = value, onValueChange = { if (it.length <= limit) onChange(it) }, label = { Text(label) },
-        modifier = Modifier.fillMaxWidth(), singleLine = true,
-        // All vault fields are private, including labels/usernames/origins/cardholder names.
-        // Password input type suppresses learning in compliant IMEs independently of visual masking.
-        keyboardOptions = options)
 }

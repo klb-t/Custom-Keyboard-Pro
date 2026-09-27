@@ -536,6 +536,11 @@ data class Settings(
     // --- clipboard --------------------------------------------------------
     val clipboardEnabled: Boolean = true,
     val clipboardRetentionDays: Int = 0,
+    val syncClipboard: Boolean = true,
+    val syncSettings: Boolean = true,
+    val syncImages: Boolean = true,
+    val syncMaxItems: Int = 200,
+    val syncMaxImageMb: Int = 2,
     val clipboardTrashHours: Int = 24,
     val screenshotToClipboard: Boolean = true,
     val clipboardMaxItems: Int = 200,

@@ -87,6 +87,14 @@ jobs:
           PYEOF
             exit 1
           fi
+          python3 - <<'PYEOF'
+          import glob, xml.etree.ElementTree as ET
+          roots = [ET.parse(path).getroot() for path in glob.glob("app/build/test-results/testDebugUnitTest/TEST-*.xml")]
+          counts = {k: sum(int(r.get(k, 0)) for r in roots) for k in ("tests", "failures", "errors", "skipped")}
+          print("Verified unit test totals:", counts)
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write("Unit tests: " + str(counts) + "\n")
+          PYEOF
 
       - name: Android lint
         run: gradle :app:lintDebug --console=plain
@@ -160,7 +168,7 @@ jobs:
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: test-reports
           path: |

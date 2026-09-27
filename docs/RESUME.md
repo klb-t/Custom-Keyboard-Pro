@@ -6,8 +6,8 @@ Branch: `claude/keyboard-app-all-features-78fkrd`.
 
 ## Last verified release
 
-4.2 / version code 6, commit `badb73f3e9cdde5cd873a5301c4ceed583ba9d44`.
-GitHub Actions run `36355797115` passed compile, tests, lint, build and publication.
+4.3 / version code 7, commit `b698ac463cb835b4212cd95b646800250330ddeb`.
+GitHub Actions run `36357311558` passed compile, tests, lint, build and publication.
 The rolling release preserves previous assets; commit-specific releases are immutable checkpoints.
 See `HANDOFF_2026-09-27.md` and `VAULT_BACKUP.md` for scope.
 
@@ -36,8 +36,12 @@ of the client freeze is unknown; do not claim that changing this repository fixe
    the next APK, and record exact results here. Keep the signing identity unchanged.
 
 Vault backup/restore and safer release publication passed the 4.2 gate.
-Clipboard recovery, image ingress and workspace geometry are implemented for 4.3,
-pending CI and device checks; see `CLIPBOARD_WORKSPACE.md`. Google sync is next. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
+Clipboard recovery, image ingress and workspace geometry passed the 4.3 CI gate;
+physical device checks remain. See `CLIPBOARD_WORKSPACE.md`.
+4.4 adds manually reviewed, encrypted device sync via file and Google Drive app-data.
+Implementation awaits CI. Google account consent cannot be verified here; the app
+shows actual package/signing identity and setup steps, and does not invent a client ID.
+Read `DEVICE_SYNC.md` for data/merge/privacy limits and precise acceptance gates. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
 strict input/work-factor bounds and explicit merge choices. UI locks on leaving.
 
 ## Recovery procedure

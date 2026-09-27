@@ -44,6 +44,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
 
+        <activity android:name=".sync.DeviceSyncActivity" android:exported="false" android:label="Device sync" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

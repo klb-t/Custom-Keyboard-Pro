@@ -120,6 +120,9 @@ fun HomeScreen(
         }
 
         SettingsSection("Phone tools") {
+            ActionRow("Device sync", "Encrypted clipboard, screenshots and settings across phones",
+                onClick = { context.startActivity(android.content.Intent(context, com.example.sync.DeviceSyncActivity::class.java)) })
+            Divider()
             ActionRow("Files & cloud media", "One browser for local files and connected storage providers",
                 onClick = { onNavigate(MainActivity.ROUTE_MEDIA) })
             Divider()

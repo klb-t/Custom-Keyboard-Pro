@@ -13,8 +13,8 @@ android {
     applicationId = "com.aistudio.qwertykey.xyzabc"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "4.3"
+    versionCode = 8
+    versionName = "4.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -89,6 +89,7 @@ dependencies {
   implementation(libs.okhttp)
   // Standard authenticated, password-protected JWE archives; no custom cipher format.
   implementation(libs.nimbus.jose)
+  implementation(libs.google.play.auth)
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

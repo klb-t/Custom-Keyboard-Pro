@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ClipboardDao {
+    @Query("SELECT * FROM clipboard_items ORDER BY timestamp DESC LIMIT 10001")
+    suspend fun syncEntries(): List<ClipboardEntity>
+
+    @Query("SELECT * FROM clipboard_items WHERE syncId = :syncId LIMIT 1")
+    suspend fun bySyncId(syncId: String): ClipboardEntity?
+
 
     @Query("SELECT * FROM clipboard_items WHERE deletedAt = 0 ORDER BY pinned DESC, timestamp DESC")
     fun observeAll(): Flow<List<ClipboardEntity>>
