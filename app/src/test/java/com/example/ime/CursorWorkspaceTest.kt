@@ -35,4 +35,14 @@ class CursorWorkspaceTest {
         assertNull(CursorWorkspace.shift(RectF(0f, 30f, 400f, 830f), RectF(0f, 80f, 400f, 250f), work, 10f))
         assertEquals(0f, CursorWorkspace.shift(RectF(0f, 500f, 100f, 800f), RectF(200f, 600f, 300f, 640f), work, 10f)!!, 0f)
     }
+    @Test fun `a cursor escape cannot cover another keyboard element`() {
+        val panel = RectF(0f, 400f, 300f, 600f)
+        val focus = RectF(0f, 500f, 300f, 550f)
+        val workspace = RectF(0f, 20f, 400f, 1000f)
+        val above = RectF(0f, 200f, 300f, 410f)
+        assertEquals(-160f, CursorWorkspace.shift(panel, focus, workspace, 10f, listOf(above))!!, 0.1f)
+        val below = RectF(0f, 650f, 300f, 900f)
+        assertNull(CursorWorkspace.shift(panel, focus, workspace, 10f, listOf(above, below)))
+    }
+
 }

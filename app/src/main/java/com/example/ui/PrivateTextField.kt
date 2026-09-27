@@ -19,6 +19,18 @@ fun PrivateTextField(label: String, value: String, onChange: (String) -> Unit, s
     if (secret) {
         // Do not use rememberTextFieldState: its saver could serialize a password.
         val state = remember { TextFieldState(initialText = value) }
+        val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+        val currentOnChange by rememberUpdatedState(onChange)
+        DisposableEffect(state, lifecycle) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                    state.edit { replace(0, length, "") }
+                    currentOnChange("")
+                }
+            }
+            lifecycle.addObserver(observer)
+            onDispose { lifecycle.removeObserver(observer); state.edit { replace(0, length, "") } }
+        }
         LaunchedEffect(value) {
             if (state.text.toString() != value) state.edit { replace(0, length, value) }
         }

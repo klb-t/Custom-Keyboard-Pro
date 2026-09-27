@@ -29,6 +29,12 @@ object ScreenshotClipboard {
         if (com.example.ime.liveKeyboard?.let { it.isInputViewShown && it.editor.isSensitive } == true) {
             notice("Screenshots are not saved while a private input is active."); return
         }
+        val activeRoot = service.rootInActiveWindow
+        try {
+            val focus = activeRoot?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+            try { if (focus?.isPassword == true) { notice("Screenshots are not saved while a password field is active."); return } }
+            finally { @Suppress("DEPRECATION") focus?.recycle() }
+        } finally { @Suppress("DEPRECATION") activeRoot?.recycle() }
         val settings = SettingsStore.current
         if (!settings.clipboardEnabled || !settings.clipboardKeepFiles) {
             notice("Enable clipboard history and file copies to keep screenshots."); return
@@ -45,11 +51,15 @@ object ScreenshotClipboard {
                 if (!pending.compareAndSet(id, 0)) { buffer.close(); return }
                 scope.launch {
                     try {
+                        if (!SettingsStore.current.clipboardEnabled || !SettingsStore.current.clipboardKeepFiles ||
+                            com.example.ime.liveKeyboard?.let { it.isInputViewShown && it.editor.isSensitive } == true) {
+                            notice("Screenshot capture cancelled after clipboard/privacy settings changed."); return@launch
+                        }
                         withContext(Dispatchers.IO) {
-                            buffer.use {
-                                val hardware = Bitmap.wrapHardwareBuffer(it, result.colorSpace) ?: error("Cannot read captured image")
+                            run {
+                                val hardware = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace) ?: error("Cannot read captured image")
                                 try {
-                                    require(hardware.width.toLong() * hardware.height <= 32_000_000L)
+                                    require(hardware.width.toLong() * hardware.height <= minOf(12_000_000L, Runtime.getRuntime().maxMemory() / 12))
                                     val bitmap = hardware.copy(Bitmap.Config.ARGB_8888, false) ?: error("Cannot copy screenshot")
                                     try { save(service, bitmap, settings.clipboardMaxFileMb.coerceAtLeast(0) * 1_000_000L, settings.clipboardMaxItems) }
                                     finally { bitmap.recycle() }
@@ -57,8 +67,10 @@ object ScreenshotClipboard {
                             }
                         }
                         notice("Screenshot saved as an image in clipboard history.")
-                    } catch (e: CancellationException) { buffer.close(); throw e }
-                    catch (_: Exception) { buffer.close(); notice("Could not keep screenshot bytes. Check the clipboard file-size limit and available storage.") }
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: OutOfMemoryError) { notice("Screenshot is too large for available memory. Share a smaller image instead.") }
+                    catch (_: Exception) { notice("Could not keep screenshot bytes. Check the clipboard file-size limit and available storage.") }
+                    finally { buffer.close() }
                 }
             }
         }

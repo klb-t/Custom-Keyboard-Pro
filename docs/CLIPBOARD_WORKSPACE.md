@@ -23,8 +23,10 @@ immediate report and ongoing reports; settings, system bars and layout changes
 coalesce to one check per frame. No disk/network work occurs there.
 Floating panels stay within current safe constraints and choose above or below the
 field; if neither fits the configured fade is used. Reserve-space policy remains
-stable rather than alternating on each editor resize. Compound layout elements keep
-their authored constraints; independent per-element cursor avoidance is future work.
+stable rather than alternating on each editor resize. Compound layout elements report geometry separately from touch ownership. Movable
+elements clear the field independently, respecting pinned pieces, docked panels and
+other obstacles; an impossible move uses the configured fade. Authored positions
+remain unchanged.
 
 New installations enable cursor avoidance. Existing explicit choices are retained.
 For applications refusing cursor reports or ignoring IME insets, Android does not

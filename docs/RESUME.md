@@ -39,7 +39,9 @@ Vault backup/restore and safer release publication passed the 4.2 gate.
 Clipboard recovery, image ingress and workspace geometry passed the 4.3 CI gate;
 physical device checks remain. See `CLIPBOARD_WORKSPACE.md`.
 4.4 adds manually reviewed, encrypted device sync via file and Google Drive app-data.
-Implementation awaits CI. Google account consent cannot be verified here; the app
+Initial 4.4 CI compiled and ran 684 tests (zero failures/errors, one existing skip).
+Lint caught a content-capture API guard; corrected to API 30, with a full rerun pending.
+Google account consent cannot be verified here; the app
 shows actual package/signing identity and setup steps, and does not invent a client ID.
 Read `DEVICE_SYNC.md` for data/merge/privacy limits and precise acceptance gates. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
 strict input/work-factor bounds and explicit merge choices. UI locks on leaving.

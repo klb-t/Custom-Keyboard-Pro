@@ -319,7 +319,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             insets
         }
 
-        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> scheduleWorkspaceCheck() }
+        view.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                avoidance.clear()
+                requestCursorMonitoring()
+            }
+            scheduleWorkspaceCheck()
+        }
         composeView = view
         ViewCompat.requestApplyInsets(view)
         AppLogger.d(tag, "done, view returned")
@@ -385,7 +391,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         view.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             if (whole) ViewGroup.LayoutParams.MATCH_PARENT else (heightPx + bars.bottom).coerceAtMost(
-                (view.rootView.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels) - statusTopPx
+                (resources.configuration.screenHeightDp * resources.displayMetrics.density).toInt() - statusTopPx
             ).coerceAtLeast(bars.bottom + 1)
         )
         view.requestLayout()
@@ -631,7 +637,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         insets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
         val reserveAll = settings.avoidCoveringCursor && settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE
         val keepClear = if (restricted && !reserveAll) null
-        else panels.filter { it.reservesContent || reserveAll }.minOfOrNull { it.rect.top }
+        else (panels.filter { it.reservesContent || reserveAll }.map { it.rect.top } +
+            if (reserveAll) workspaceObstacles.values.map { it.rect.top } else emptyList()).minOrNull()
         val top = keepClear ?: (IntArray(2).also { view.getLocationInWindow(it) }[1] + view.height)
         insets.contentTopInsets = top
         insets.visibleTopInsets = top
@@ -711,6 +718,30 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             (onScreen[0] + view.width - view.paddingRight).toFloat(),
             (onScreen[1] + view.height - view.paddingBottom).toFloat())
         val focus = CursorWorkspace.focus(info, view.rootView.height * 0.3f) ?: run { avoidance.clear(); return }
+        val margin = settings.cursorAvoidMarginDp.coerceIn(0f, 96f) * resources.displayMetrics.density
+        if (layout.elements.isNotEmpty()) {
+            avoidance.shiftPx = 0f; avoidance.fade = 1f
+            val guarded = android.graphics.RectF(focus).apply { inset(-margin, -margin) }
+            val obstacles = workspaceObstacles.toMap()
+            avoidance.shifts.keys.toList().filter { it !in obstacles }.forEach { avoidance.shifts.remove(it); avoidance.fades.remove(it) }
+            obstacles.toSortedMap().forEach { (id, obstacle) ->
+                val base = android.graphics.RectF(obstacle.rect).apply { offset(dx, dy + (avoidance.shifts[id] ?: 0f)) }
+                val bounds = android.graphics.RectF(workspace)
+                if (obstacle.movable) panelRectsBySource.values.filter { it.reservesContent }.minOfOrNull { it.rect.top }
+                    ?.let { bounds.bottom = minOf(bounds.bottom, it + dy) }
+                val overlaps = android.graphics.RectF.intersects(base, guarded)
+                val others = obstacles.filterKeys { it != id }.values.map { android.graphics.RectF(it.rect).apply { offset(dx, dy) } }
+                val shift = when {
+                    settings.cursorAvoidStrategy == CursorAvoidStrategy.RESERVE_SPACE || !overlaps -> 0f
+                    settings.cursorAvoidStrategy == CursorAvoidStrategy.FADE || !obstacle.movable -> null
+                    else -> CursorWorkspace.shift(base, focus, bounds, margin, others)
+                }
+                avoidance.shifts[id] = shift ?: 0f
+                avoidance.fades[id] = if (shift == null) settings.cursorAvoidFadeTo.coerceIn(0.05f, 1f) else 1f
+            }
+            return
+        }
+        avoidance.shifts.clear(); avoidance.fades.clear()
         val rectangles = if (wholeScreen) panelRectsBySource.values.map { android.graphics.RectF(it.rect).apply { offset(dx, dy) } }
             .ifEmpty { keyRects.map { android.graphics.RectF(it).apply { offset(dx, dy) } } }
         else listOf(android.graphics.RectF(workspace))
@@ -721,7 +752,6 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         val base = android.graphics.RectF(rectangles.first())
         rectangles.drop(1).forEach { base.union(it) }
         if (movable) base.offset(0f, avoidance.shiftPx)
-        val margin = settings.cursorAvoidMarginDp.coerceIn(0f, 96f) * resources.displayMetrics.density
         val guarded = android.graphics.RectF(focus).apply { inset(-margin, -margin) }
         val overlaps = android.graphics.RectF.intersects(base, guarded)
         when (settings.cursorAvoidStrategy) {
@@ -1355,6 +1385,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     private data class PanelRect(val rect: Rect, val reservesContent: Boolean)
 
     private val panelRectsBySource = java.util.concurrent.ConcurrentHashMap<String, PanelRect>()
+    private data class WorkspaceObstacle(val rect: Rect, val movable: Boolean)
+    private val workspaceObstacles = java.util.concurrent.ConcurrentHashMap<String, WorkspaceObstacle>()
+    override fun reportWorkspaceObstacle(sourceId: String, rect: Rect?, movable: Boolean) {
+        val next = rect?.let { WorkspaceObstacle(Rect(it), movable) }
+        val previous = if (next == null) workspaceObstacles.remove(sourceId) else workspaceObstacles.put(sourceId, next)
+        if (previous != next) regionChanged()
+    }
+
 
     override fun reportPanelRect(sourceId: String, rect: Rect?, reservesContent: Boolean) {
         val next = rect?.let { PanelRect(it, reservesContent) }

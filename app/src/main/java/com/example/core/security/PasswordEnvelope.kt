@@ -20,7 +20,7 @@ class PasswordEnvelope(private val purpose: String, private val maxPlaintext: In
         val plaintext = data.copyOf()
         val password = utf8(passphrase)
         try {
-            require(plaintext.size <= maxPlaintext) { "Vault is too large for a backup." }
+            require(plaintext.size <= maxPlaintext) { "Encrypted payload exceeds its size limit." }
             val header = JWEHeader.Builder(JWEAlgorithm.PBES2_HS512_A256KW, EncryptionMethod.A256GCM)
                 .type(JOSEObjectType(purpose)).contentType("application/json").build()
             val jwe = JWEObject(header, Payload(plaintext))

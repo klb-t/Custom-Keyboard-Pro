@@ -97,7 +97,7 @@ fun KeyboardRoot(
     val indicatorHeight = 20.dp
 
     val keyboardHeightDp = (screenHeightDp * settings.heightFor(landscape))
-        .coerceIn(120f, screenHeightDp * 0.85f)
+        .coerceIn(minOf(120f, screenHeightDp.coerceAtLeast(1) * 0.85f), screenHeightDp.coerceAtLeast(1) * 0.85f)
 
     val suggestions by host.suggestions.suggestions.collectAsState()
     val aiBusy by host.suggestions.aiBusy.collectAsState()
@@ -877,6 +877,8 @@ private fun ElementComposition(
                     // The one piece the app is asked to stay above, as a keyboard
                     // always was; the rest of the screen stays the app's.
                     .panelArea("element:dock", reservesContent = true)
+                    .workspaceObstacle("element:dock", movable = false)
+                    .alpha(host.avoidance.fades["element:dock"] ?: 1f)
             ) {
                 DockedElements(
                     settings = settings,
@@ -952,20 +954,21 @@ private fun LooseElement(
     fun liveBox() = ElementGeometry.resolve(bounds, livePose, areaW, areaH, currentCeiling)
     fun livePoseOrAuthored() = livePose ?: ElementGeometry.poseOf(bounds)
 
-    val shift = if (element.pinned) 0f else host.avoidance.shiftPx
+    val shift = if (element.pinned) 0f else host.avoidance.shifts["element:${element.id}"] ?: 0f
     val floating = element.placement == ElementPlacement.FLOATING
     val movable = floating && element.draggable
 
     Box(
         Modifier
             .offset {
-                IntOffset(box.left.roundToInt(), (box.top - shift).coerceIn(0f, (areaH - box.height).coerceAtLeast(0f)).roundToInt())
+                IntOffset(box.left.roundToInt(), (box.top - shift).coerceIn(0f, ((ceiling ?: areaH) - box.height).coerceAtLeast(0f)).roundToInt())
             }
             .size(
                 width = with(density) { box.width.toDp() },
                 height = with(density) { box.height.toDp() }
             )
-            .alpha((settings.keyboardOpacity * element.opacity).coerceIn(0.05f, 1f))
+            .alpha((settings.keyboardOpacity * element.opacity * (host.avoidance.fades["element:${element.id}"] ?: 1f)).coerceIn(0.05f, 1f))
+            .workspaceObstacle("element:${element.id}", movable && !element.pinned)
             .then(
                 if (floating)
                     Modifier.background(

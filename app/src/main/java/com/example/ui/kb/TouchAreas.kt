@@ -44,6 +44,14 @@ fun Modifier.panelArea(id: String, reservesContent: Boolean): Modifier {
     return this.onGloballyPositioned { host.reportPanelRect(id, it.windowRect(), reservesContent) }
 }
 
+/** Reports even transparent/pinned elements without changing their touch policy. */
+@Composable
+fun Modifier.workspaceObstacle(id: String, movable: Boolean): Modifier {
+    val host = LocalKeyboardHost.current
+    DisposableEffect(host, id) { onDispose { host.reportWorkspaceObstacle(id, null, false) } }
+    return onGloballyPositioned { host.reportWorkspaceObstacle(id, it.windowRect(), movable) }
+}
+
 internal fun LayoutCoordinates.windowRect(): Rect {
     val b = boundsInWindow()
     return Rect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt())

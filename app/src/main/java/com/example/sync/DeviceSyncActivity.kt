@@ -43,6 +43,7 @@ class DeviceSyncActivity : ComponentActivity() {
     private var task: Job? = null
     private var generation = 0
     private var authorizationPending = false
+    private val signingIdentity by lazy { signingFingerprint() }
     private val repository by lazy { SyncRepository(this) }
     private val exportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/jose")) { uri ->
         if (uri != null) { destination = Destination.EXPORT; fileUri = uri; status = "File selected. Enter your device-sync passphrase, then preview." }
@@ -62,7 +63,7 @@ class DeviceSyncActivity : ComponentActivity() {
         SettingsStore.init(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (android.os.Build.VERSION.SDK_INT >= 26) window.decorView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-        if (android.os.Build.VERSION.SDK_INT >= 29) window.decorView.importantForContentCapture = android.view.View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS
+        if (android.os.Build.VERSION.SDK_INT >= 30) window.decorView.importantForContentCapture = android.view.View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS
         setContent { MyApplicationTheme {
             val settings by SettingsStore.state.collectAsState()
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
@@ -104,7 +105,7 @@ class DeviceSyncActivity : ComponentActivity() {
                 HorizontalDivider()
                 Text("Google setup", style = MaterialTheme.typography.titleMedium)
                 Text("If connection is unavailable: enable Google Drive API in one Google Cloud project, configure consent, add an Android OAuth client for this package and signing SHA-1, and add your account as a test user while the project is in testing. Every phone must use the same app/project. No server client secret is placed in the APK.", style = MaterialTheme.typography.bodySmall)
-                Text("Package: $packageName\nSHA-1: ${signingFingerprint()}", style = MaterialTheme.typography.bodySmall)
+                Text("Package: $packageName\nSHA-1: ${signingIdentity}", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(enabled = !busy, onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://console.cloud.google.com/auth/clients"))) }) { Text("Open Google project setup") }
                 TextButton(onClick = { finish() }) { Text("Close") }
             }

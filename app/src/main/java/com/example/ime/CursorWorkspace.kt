@@ -28,13 +28,14 @@ internal object CursorWorkspace {
         rect.width() > 0f && rect.height() > 0f
 
     /** Return a signed upward translation. Null means neither side has enough room. */
-    fun shift(panel: RectF, focus: RectF, workspace: RectF, margin: Float): Float? {
+    fun shift(panel: RectF, focus: RectF, workspace: RectF, margin: Float, obstacles: List<RectF> = emptyList()): Float? {
         val guarded = RectF(focus).apply { inset(-margin.coerceAtLeast(0f), -margin.coerceAtLeast(0f)) }
         if (!RectF.intersects(panel, guarded)) return 0f
         val above = panel.bottom - guarded.top
         val below = panel.top - guarded.bottom
         val choices = listOf(above, below).filter { shift ->
-            panel.top - shift >= workspace.top && panel.bottom - shift <= workspace.bottom
+            panel.top - shift >= workspace.top && panel.bottom - shift <= workspace.bottom &&
+                obstacles.none { RectF.intersects(RectF(panel).apply { offset(0f, -shift) }, it) }
         }
         return choices.minByOrNull { abs(it) }
     }

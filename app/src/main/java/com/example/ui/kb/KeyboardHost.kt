@@ -113,6 +113,9 @@ interface KeyboardHost {
      */
     fun reportPanelRect(sourceId: String, rect: android.graphics.Rect?, reservesContent: Boolean)
 
+    /** Geometry-only report; does not claim touches or expose editor text. */
+    fun reportWorkspaceObstacle(sourceId: String, rect: android.graphics.Rect?, movable: Boolean) = Unit
+
     /** How the keyboard is currently getting out of the cursor's way, if at all. */
     val avoidance: AvoidanceState
 
@@ -141,6 +144,8 @@ private val NO_CHIPS = kotlinx.coroutines.flow.MutableStateFlow(emptyList<com.ex
  * next launch.
  */
 class AvoidanceState {
+    val shifts = androidx.compose.runtime.mutableStateMapOf<String, Float>()
+    val fades = androidx.compose.runtime.mutableStateMapOf<String, Float>()
     /** Upward shift, in pixels, applied to the keyboard to clear the cursor. */
     var shiftPx by androidx.compose.runtime.mutableStateOf(0f)
 
@@ -148,6 +153,7 @@ class AvoidanceState {
     var fade by androidx.compose.runtime.mutableStateOf(1f)
 
     fun clear() {
+        shifts.clear(); fades.clear()
         shiftPx = 0f
         fade = 1f
     }
