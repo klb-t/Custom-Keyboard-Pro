@@ -1,15 +1,23 @@
 # IO Matrix — current work and recovery point
 
-Updated: 2026-09-28 (Europe/Amsterdam).
+Updated: 2026-09-28 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
 Branch: `claude/keyboard-app-all-features-78fkrd`.
 
 ## Last verified release
 
-4.4.1 / version code 9, commit `17842a146db8854273e080add948a1b2a7321f86`.
-GitHub Actions run `36359443296` passed compile, tests, lint, build and publication.
+4.4.2 / version code 10, source commit `f2fc6348975450dd0f3fb0a8877bfa34292aad00`.
+[GitHub Actions run 36360084060](https://github.com/klb-t/Custom-Keyboard-Pro/actions/runs/36360084060)
+passed compile, tests, Android lint, APK build and publication. Test reports contain
+698 tests: 697 passed, zero failures/errors, one existing ClipStore skip. These are
+automated checks, not evidence of physical-device or Google account acceptance.
+
+[Installable APK](https://github.com/klb-t/Custom-Keyboard-Pro/releases/download/build-f2fc6348975450dd0f3fb0a8877bfa34292aad00/custom-keyboard-f2fc634.apk)
+is 20,975,533 bytes, with GitHub asset SHA-256
+`62b1c2383c4086059ec9e24f621f23ac214a41d282aeb8d7b5a0261c6710624a`.
 The rolling release preserves previous assets; commit-specific releases are immutable checkpoints.
-See `HANDOFF_2026-09-27.md` and `VAULT_BACKUP.md` for scope.
+The package/signing identity is unchanged. Later documentation-only commits do not
+change this APK's source. See the feature documents below for scope.
 
 ## Current user instruction
 
@@ -18,38 +26,48 @@ the app and recovered this conversation. Preserve progress outside the chat,
 reduce blocking operations, and continue the original IO Matrix work. The cause
 of the client freeze is unknown; do not claim that changing this repository fixes it.
 
-## Current next steps
+## Completed implementation
 
-1. Add an explicit encrypted vault backup/restore workflow so device loss does not
-   make the new vault unusable as a long-term store. Keep standard cryptography,
-   authenticated access, private input, bounded parsing and review-before-import.
-2. User's 00:31 follow-up: prevent one-tap clipboard-history deletion, include
-   screenshots as clipboard content, and fix keyboard/editor/navigation-bar
-   occlusion (reported in the ChatGPT Android app). Keep monitoring viewport changes.
-3. Design and implement feasible multi-device sharing of history, clipboard and
-   settings without an application server, initially through the same Google
-   account. Handle concurrent edits and account setup explicitly; do not invent an
-   OAuth client ID or claim Google integration before the actual grant works.
-4. Implement notification access as an optional source after these concrete user
-   regressions. Permission alone is not an integration.
-5. Run the full existing suite, new focused regressions and Android lint, publish
-   the next APK, and record exact results here. Keep the signing identity unchanged.
+* The original 4.1 takeover covers canonical expert controls/profiles, contextual
+  customization, tile/lock/shortcut sessions, model-first setup, a SAF media hub and
+  an authenticated vault/Autofill. See `HANDOFF_2026-09-27.md` for its exact scope.
+* Vault backup/restore and safer release publication passed the 4.2 gate. Backups
+  use bounded standard JWE and authenticated, reviewed import; target trust must be
+  rebound on the receiving device. See `VAULT_BACKUP.md`.
+* Clipboard bulk deletion requires confirmation of a snapshot, preserves pins and
+  later copies, and moves entries to persistent Trash with restore. Images and
+  screenshots have owned bytes, bounded previews and native rich-content paste.
+  Failed DB cleanup preserves referenced image files. See `CLIPBOARD_WORKSPACE.md`.
+* Cursor geometry uses screen transforms and actual window insets. Cursor/layout/
+  navigation changes trigger coalesced checks; movable elements avoid the focused
+  field, safe-area bounds and other panels, with a fade fallback when space runs out.
+* Explicitly reviewed encrypted sync shares clipboard history, supported images and
+  portable settings through a file or Google Drive app-data, without an IO Matrix
+  server. It handles concurrent revisions, stale previews and deletion markers.
+  Room 4→5 keeps manual deletion intent after Trash expiry. Automatic age/capacity
+  cleanup stays local by default; expert policy can explicitly propagate it.
+  See `DEVICE_SYNC.md` for limits, setup and acceptance gates.
 
-Vault backup/restore and safer release publication passed the 4.2 gate.
-Clipboard recovery, image ingress and workspace geometry passed the 4.3 CI gate;
-physical device checks remain. See `CLIPBOARD_WORKSPACE.md`.
-4.4 adds manually reviewed, encrypted device sync via file and Google Drive app-data.
-4.4 passed the full gate: 685 tests, zero failures/errors, one existing skip, Android
-lint, APK build and publication. The content-capture API guard is corrected to API 30.
-4.4.1 passed the complete CI gate with rich-content paste for screenshot/image
-receivers and an explicit native-paste fallback setting.
-4.4.2 separates manual deletion from automatic local history cleanup. Room 4→5
-preserves deletion intent after Trash expiry; local pruning no longer clears other
-devices by default. Its complete CI/device acceptance gate is pending.
-Google account consent cannot be verified here; the app
-shows actual package/signing identity and setup steps, and does not invent a client ID.
-Read `DEVICE_SYNC.md` for data/merge/privacy limits and precise acceptance gates. New code uses Nimbus JOSE 10.10 with PBES2-HS512+A256KW/A256GCM,
-strict input/work-factor bounds and explicit merge choices. UI locks on leaving.
+All the source above passed the 4.4.2 gate. Sync is manual, not continuous background
+sync. History means clipboard history, not other applications' conversation history.
+
+## Remaining acceptance and extension work
+
+1. Install the published APK on a phone and validate ChatGPT Android field avoidance,
+   rotation/split screen, gesture/three-button navigation, image paste, shade return
+   and shortcut-session lifecycle. No phone/emulator was connected for this work.
+2. Provision the Android OAuth app with the exact package/signing SHA-1 shown in
+   Device sync, enable Drive API/consent and test account grants on two phones.
+   This Google project is not provisioned or verified here; no client ID was invented.
+   Encrypted file exchange is available without that setup. Test interruption and
+   permission revocation before treating the Drive path as device-validated.
+3. Validate real device authentication, browser Autofill and granted cloud
+   DocumentsProviders. Preserve the documented boundaries around secrets and
+   destination trust.
+4. Broad extensions remain explicit in the original handoff: real notification and
+   playback-capture adapters, provider-specific cloud adapters where SAF is
+   insufficient, passkeys/payment integration and sync group/key management.
+   Do not enable permissions or present these planned integrations as implemented.
 
 ## Recovery procedure
 
