@@ -62,6 +62,25 @@
             </intent-filter>
         </activity>
 
+        <!-- This link opens consent controls only; external callers cannot start a capture. -->
+        <activity android:name=".io.capture.ConversationCaptureEntryActivity"
+            android:exported="true" android:noHistory="true" android:excludeFromRecents="true"
+            android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="iomatrix" android:host="capture" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".io.capture.ConversationCaptureReviewActivity"
+            android:exported="false" android:excludeFromRecents="true" android:label="Conversation capture" />
+        <service android:name=".io.capture.ConversationCaptureTile" android:exported="true"
+            android:icon="@drawable/ic_conversation_capture" android:label="Capture conversation"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+
         <activity
             android:name=".io.TileActionActivity"
             android:exported="false"

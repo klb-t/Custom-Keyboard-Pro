@@ -1,8 +1,29 @@
 # IO Matrix — current work and recovery point
 
-Updated: 2026-09-28 (UTC).
+Updated: 2026-09-29 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
 Branch: `claude/keyboard-app-all-features-78fkrd`.
+
+## Current task: conversation capture — feature branch, not released
+
+Work branch: `feat/conversation-capture-2026-09-29`, based on the active branch's
+`9b76a39b4fbbfb98e961eeeb225091381b7983eb`. The user requested native selection or
+scrolling screen capture, automatic expansion of visible reasoning/tool details,
+and a copyable/exportable conversation structure, including a browser alternative.
+
+Implemented source: a bounded platform-free capture state machine/archive,
+conservative disclosure policy, Android accessibility driver, consent/stop/review,
+text/JSON exports, canonical action profile and Quick Settings tile; plus a local
+DOM helper that preserves exposed structure and message IDs. Existing single-screen,
+TTS/page-reader, clipboard/sync and release mechanisms are left intact.
+
+Validation: 24 standalone Kotlin/JVM regression methods and 24 offline Chromium
+fixture checks passed. The Android adapter/UI and full Gradle suite have NOT been
+built/run here; no device/live-chatbot validation or new APK is claimed. Keep 4.4.2.
+See `CONVERSATION_CAPTURE.md` for exact limits, invocation and remaining gates.
+Next: build/lint/full unit suite with the repository SDK, fix actual diagnostics,
+then device-test native apps and browsers before merging/publishing. Do not confuse
+raw exposed UI snapshots with guaranteed-complete internal conversation records.
 
 ## Last verified release
 
@@ -19,7 +40,7 @@ The rolling release preserves previous assets; commit-specific releases are immu
 The package/signing identity is unchanged. Later documentation-only commits do not
 change this APK's source. See the feature documents below for scope.
 
-## Current user instruction
+## Earlier workflow instruction (preserved)
 
 The ChatGPT client stopped accepting messages for a long period. The user updated
 the app and recovered this conversation. Preserve progress outside the chat,

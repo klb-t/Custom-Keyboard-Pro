@@ -182,6 +182,13 @@
       "settingsQuery": "ioActionProfilesJson"
     },
     {
+      "id": "conversation-capture",
+      "label": "Capture conversation",
+      "command": "open iomatrix://capture",
+      "settingsQuery": "ioActionProfilesJson",
+      "glyph": "▤"
+    },
+    {
       "id": "action-31",
       "label": "Screen → AI",
       "command": "read_screen to=ai",
