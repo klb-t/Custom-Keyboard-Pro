@@ -319,6 +319,18 @@
       "label": "Expert settings",
       "route": "all",
       "glyph": "⚙"
+    },
+    {
+      "id": "goal-assistant",
+      "label": "Goal assistant",
+      "command": "open iomatrix://assistant",
+      "settingsQuery": "ai"
+    },
+    {
+      "id": "colour-organ",
+      "label": "Colour organ setup",
+      "command": "open iomatrix://colour-organ",
+      "settingsQuery": "streams"
     }
   ]
 }

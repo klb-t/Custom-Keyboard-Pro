@@ -2,7 +2,40 @@
 
 Updated: 2026-09-29 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
-Branch: `claude/keyboard-app-all-features-78fkrd`.
+Active work branch: `feat/goal-assistant-2026-09-29`.
+
+## Current implementation: first goal-assistant and reactive-light slice
+
+Work branch: `feat/goal-assistant-2026-09-29`, stacked on
+`feat/conversation-capture-2026-09-29` at `b3db2c8663bb64e57429df92869f1a8231f6bac6`.
+Keep the capture branch and existing APK intact; no merge/release is implied.
+Read [GOAL_ASSISTANT_IMPLEMENTATION.md](GOAL_ASSISTANT_IMPLEMENTATION.md).
+
+Runtime source now includes structured goal proposals from the configured model,
+strict bounded import, typed prerequisite/DAG assessment, reviewed execution through
+canonical `Verbs`/`Performer`, evidence-bound approvals, explicit outcome states,
+on-device push-to-talk and the ACTION_ASSIST/RoleManager activity entry. Six audited
+verbs are executable by this first host; the rest remain visible capability gaps.
+This is not an arbitrary-code runner or a completed autonomous API-discovery agent.
+
+The separate explicit colour-organ panel composes microphone RMS, the existing
+Matrix smoothing stage, level-to-colour mapping, a latest-value queue and a Yeelight
+LAN music-mode sink. It queries only the selected private IPv4 address and validates
+advertised capabilities. This is level-reactive output, not beat detection or support
+for every Wi-Fi bulb. No implicit recording, external server or background session.
+Both hosts stop/invalidate on pause. Stop does not claim rollback of applied effects.
+
+Validation: **78/78 standalone JVM goal/light tests** and **51/51 existing capture
+regressions** passed. A host syntax/type smoke compile used signature stand-ins,
+NOT the Android SDK. Eight new Robolectric JSON-codec tests are committed but were
+NOT executed here. Full Gradle build, lint, complete suite, actual model, microphone,
+assistant-role/device and physical-bulb validation remain open. No new APK, signing,
+SDK/dependency change or verified-release claim. Preserve 4.4.2.
+
+Next: run the repository-version Gradle suite/build/lint, then real device and bulb
+checks; inspect failures before extending. Further assistant hosts, researched API
+catalogues, reusable light profiles, streaming graph discovery and full voice-session
+service integration remain explicit follow-up work, not silently completed features.
 
 ## Product direction clarified: universal capabilities and voice assistant
 
@@ -14,7 +47,7 @@ the result. External devices are included: the concrete example is turning a Wi-
 LED bulb into a music-responsive colour organ. Do not narrow this to predefined
 voice phrases, a finite command list or only currently implemented adapters.
 
-The requirement is now linked from `AGENTS.md` and `README.md`. This checkpoint is
+The requirement is now linked from `AGENTS.md` and `README.md`. At `b3db2c8` that checkpoint was
 **documentation only**: no new planner, voice-service host, bulb adapter, permission,
 APK or test pass is claimed. Existing `Abilities`, `Wires`, Matrix transforms and
 network streams are groundwork, not proof that the full assistant exists. Preserve
@@ -23,8 +56,8 @@ the immediate capture acceptance gates below; the new target does not erase them
 ## Current task: conversation capture and accessibility-tree inspection — draft PR #3
 
 Work branch: `feat/conversation-capture-2026-09-29`, based on the active branch's
-`9b76a39b4fbbfb98e961eeeb225091381b7983eb`. Continue on this feature branch, not
-`main`. The initial capture checkpoint was `5566d824ec336c3a9841db63775bf5608a2715e6`.
+`9b76a39b4fbbfb98e961eeeb225091381b7983eb`. Its changes are inherited by the
+current goal-assistant work branch above; do not continue on `main`. The initial capture checkpoint was `5566d824ec336c3a9841db63775bf5608a2715e6`.
 The follow-up adds non-visible provider-node capture, bounded read-only full-window
 inspection, node semantics/actions, API-guarded expanded state, temporary extended
 accessibility-tree flags, show-on-screen and nested-panel scrolling. Genuine
