@@ -11,7 +11,10 @@ data class CaptureOptions(
     val maxFrames: Int = 200,
     val maxChars: Int = 1_000_000,
     val maxMillis: Long = 600_000,
-    val settleMillis: Long = 700
+    val settleMillis: Long = 700,
+    val includeOffscreenNodes: Boolean = true,
+    val includeNotImportantViews: Boolean = false,
+    val captureNestedScrolls: Boolean = true
 ) {
     init {
         require(maxFrames in 1..1000)
@@ -30,14 +33,16 @@ data class CapturedNode(
     val className: String = "",
     val resourceId: String = "",
     val state: String = "",
-    val bounds: List<Int> = emptyList()
+    val bounds: List<Int> = emptyList(),
+    val semantics: NodeSemantics = NodeSemantics()
 )
 
 data class CaptureFrame(
     val elapsedMillis: Long,
     val phase: String,
     val nodes: List<CapturedNode>,
-    val clipped: Boolean = false
+    val clipped: Boolean = false,
+    val diagnostics: Map<String, Int> = emptyMap()
 ) {
     fun textLines(): List<String> = nodes.flatMap { n ->
         listOf(n.text, n.description.takeUnless { it == n.text }.orEmpty())
@@ -60,7 +65,9 @@ object DisclosurePolicy {
         val editable: Boolean = false,
         val password: Boolean = false,
         val checkable: Boolean = false,
-        val link: Boolean = false
+        val link: Boolean = false,
+        val enabled: Boolean = true,
+        val expandedState: Int? = null
     )
     val labels: List<Regex> = listOf(
         "^(show|view|read) (more|details|reasoning|thinking|thought process|tool calls|tool results|sources)(\\s*[:·(].{0,60})?$",
@@ -74,11 +81,16 @@ object DisclosurePolicy {
     private val collapsed = setOf("collapsed", "zwinięte", "zwinięty", "zwinięta", "ingeklapt")
 
     fun action(c: Control): Action? {
-        if (c.editable || c.password || c.checkable || c.link) return null
+        if (!c.enabled || c.editable || c.password || c.checkable || c.link || c.expandedState == 3) return null
         val label = c.label.trim().replace(Regex("\\s+"), " ")
-        if (labels.none { it.matches(label) }) return null
+        // A genuine EXPAND capability takes priority over a translated button caption.
+        // Refuse clearly unrelated/destructive controls even if a provider mislabels them.
+        if (Regex("^(delete|send|retry|share|buy|next conversation|usuń|wyślij|kup|verwijder|verstuur)(\\b|$)", RegexOption.IGNORE_CASE).containsMatchIn(label)) return null
         if (c.expand) return Action.EXPAND
-        if (c.clickable && !c.collapse && c.state.trim().lowercase(Locale.ROOT) in collapsed) return Action.CLICK
+        if (labels.none { it.matches(label) }) return null
+        val isCollapsed = c.expandedState == 1 ||
+            ((c.expandedState == null || c.expandedState == 0) && c.state.trim().lowercase(Locale.ROOT) in collapsed)
+        if (c.clickable && !c.collapse && isCollapsed) return Action.CLICK
         return null
     }
 }
@@ -98,7 +110,11 @@ class ConversationArchive(
     var truncated: Boolean = false
         private set
     var startStatus: String = "not_requested"
+    /** Accepted requests, NOT proof that the provider changed its UI or exposed content. */
     var expanded: Int = 0
+    var showOnScreenRequests: Int = 0
+    var nestedScrollRequests: Int = 0
+    val detailRequests: Int get() = expanded + showOnScreenRequests + nestedScrollRequests
     val characters: Int get() = used
     val full: Boolean get() = captured.size >= options.maxFrames || used >= options.maxChars || truncated
 
@@ -108,13 +124,13 @@ class ConversationArchive(
         val safe = mutableListOf<CapturedNode>()
         for (n in frame.nodes.take(2048)) {
             val cost = n.text.length + n.description.length + n.className.length + n.resourceId.length +
-                n.state.length + n.path.length + (n.parent?.length ?: 0) + 128
+                n.state.length + n.path.length + (n.parent?.length ?: 0) + n.semantics.json().length + 128
             if (used + cost > options.maxChars) { clipped = true; break }
-            safe += n.copy(bounds = n.bounds.toList())
+            safe += n.copy(bounds = n.bounds.toList(), semantics = n.semantics.detached())
             used += cost
         }
         if (frame.nodes.size > 2048) clipped = true
-        captured += frame.copy(nodes = safe.toList(), clipped = clipped)
+        captured += frame.copy(nodes = safe.toList(), clipped = clipped, diagnostics = frame.diagnostics.toMap())
         truncated = truncated || clipped
         return true
     }
@@ -127,7 +143,9 @@ class ConversationArchive(
         append("Start coverage: ").append(startStatus).append('\n')
         append("Started: ").append(startedAt).append("; stop: ").append(reason).append('\n')
         append("Completeness: unverified. Only exposed UI text; no hidden reasoning or unexposed tool payloads.\n")
-        append("Inputs/password subtrees excluded. Roles are not inferred. JSON retains viewport hierarchy and revisions.\n")
+        append("Read non-visible exposed nodes: ").append(options.includeOffscreenNodes).append("; extended tree requested: ").append(options.includeNotImportantViews).append('\n')
+        append("Accepted detail requests: expand=").append(expanded).append(", show=").append(showOnScreenRequests).append(", nested scroll=").append(nestedScrollRequests).append(". Effects are unverified; inspect subsequent frames.\n")
+        append("Inputs/password/sensitive subtrees excluded. Roles are not inferred. JSON retains viewport hierarchy and revisions.\n")
         if (truncated) append("WARNING: capture was clipped by a resource limit.\n")
         var previous = emptyList<String>()
         captured.forEachIndexed { i, frame ->
@@ -143,30 +161,53 @@ class ConversationArchive(
     }
 
     fun json(): String = buildString {
-        append("{\"schemaVersion\":1,\"source\":\"android-accessibility\",\"completeness\":\"unverified\",")
+        append("{\"schemaVersion\":2,\"source\":\"android-accessibility\",\"completeness\":\"unverified\",")
         append("\"package\":").append(quote(packageName)).append(",\"windowId\":").append(windowId)
         append(",\"startedAt\":").append(quote(startedAt)).append(",\"stopReason\":").append(quote(reason))
         append(",\"startStatus\":").append(quote(startStatus))
         append(",\"truncated\":").append(truncated).append(",\"expanded\":").append(expanded)
+        append(",\"showOnScreenRequests\":").append(showOnScreenRequests)
+        append(",\"nestedScrollRequests\":").append(nestedScrollRequests)
+        append(",\"actionEffects\":\"unverified; counters record accepted requests\"")
         append(",\"options\":{\"autoScroll\":").append(options.autoScroll)
         append(",\"seekStart\":").append(options.seekStart).append(",\"expandDetails\":").append(options.expandDetails)
+        append(",\"includeOffscreenNodes\":").append(options.includeOffscreenNodes)
+        append(",\"includeNotImportantViews\":").append(options.includeNotImportantViews)
+        append(",\"captureNestedScrolls\":").append(options.captureNestedScrolls)
         append(",\"maxFrames\":").append(options.maxFrames).append(",\"maxChars\":").append(options.maxChars)
         append(",\"maxMillis\":").append(options.maxMillis).append("},\"frames\":[")
         captured.forEachIndexed { index, frame ->
             if (index > 0) append(',')
             append("{\"sequence\":").append(index).append(",\"elapsedMillis\":").append(frame.elapsedMillis)
             append(",\"phase\":").append(quote(frame.phase)).append(",\"clipped\":").append(frame.clipped)
+            append(",\"diagnostics\":{").append(frame.diagnostics.entries.joinToString(",") { quote(it.key) + ":" + it.value }).append('}')
             append(",\"nodes\":[")
             frame.nodes.forEachIndexed { j, n ->
                 if (j > 0) append(',')
                 append("{\"path\":").append(quote(n.path)).append(",\"parent\":").append(n.parent?.let { quote(it) } ?: "null")
                 append(",\"text\":").append(quote(n.text)).append(",\"description\":").append(quote(n.description))
                 append(",\"className\":").append(quote(n.className)).append(",\"resourceId\":").append(quote(n.resourceId))
-                append(",\"state\":").append(quote(n.state)).append(",\"bounds\":[").append(n.bounds.joinToString(",")).append("]}")
+                append(",\"state\":").append(quote(n.state)).append(",\"bounds\":[").append(n.bounds.joinToString(",")).append(']')
+                append(",\"semantics\":").append(n.semantics.json()).append('}')
             }
             append("]}")
         }
         append("]}")
+    }
+
+    /** Selectable inspector view; JSON remains the authoritative structured record. */
+    fun treeText(): String = buildString {
+        append("IO Matrix — accessibility tree (not an app heap or a completeness claim)\n")
+        captured.forEachIndexed { i, f ->
+            append("\nFRAME ").append(i).append(" ").append(f.phase).append(" ").append(f.diagnostics).append('\n')
+            f.nodes.forEach { n ->
+                append(n.path).append(" ").append(n.className).append(" #").append(n.resourceId).append('\n')
+                append("  ").append(n.semantics.json()).append(" bounds=").append(n.bounds).append('\n')
+                if (n.text.isNotEmpty()) append("  text: ").append(n.text).append('\n')
+                if (n.description.isNotEmpty()) append("  description: ").append(n.description).append('\n')
+                if (n.state.isNotEmpty()) append("  state: ").append(n.state).append('\n')
+            }
+        }
     }
 
     companion object {

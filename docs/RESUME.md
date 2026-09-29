@@ -4,26 +4,36 @@ Updated: 2026-09-29 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
 Branch: `claude/keyboard-app-all-features-78fkrd`.
 
-## Current task: conversation capture — feature branch, not released
+## Current task: conversation capture and accessibility-tree inspection — draft PR #3
 
 Work branch: `feat/conversation-capture-2026-09-29`, based on the active branch's
-`9b76a39b4fbbfb98e961eeeb225091381b7983eb`. The user requested native selection or
-scrolling screen capture, automatic expansion of visible reasoning/tool details,
-and a copyable/exportable conversation structure, including a browser alternative.
+`9b76a39b4fbbfb98e961eeeb225091381b7983eb`. Continue on this feature branch, not
+`main`. The initial capture checkpoint was `5566d824ec336c3a9841db63775bf5608a2715e6`.
+The follow-up adds non-visible provider-node capture, bounded read-only full-window
+inspection, node semantics/actions, API-guarded expanded state, temporary extended
+accessibility-tree flags, show-on-screen and nested-panel scrolling. Genuine
+EXPAND actions precede caption heuristics. Toggle clicks require a freshly checked,
+recognized collapsed control; no blind coordinate taps or generic custom actions.
 
-Implemented source: a bounded platform-free capture state machine/archive,
-conservative disclosure policy, Android accessibility driver, consent/stop/review,
-text/JSON exports, canonical action profile and Quick Settings tile; plus a local
-DOM helper that preserves exposed structure and message IDs. Existing single-screen,
-TTS/page-reader, clipboard/sync and release mechanisms are left intact.
+Browser helper v2 adds a read-only DOM inspector and an explicit option to read
+already-present text in collapsed native/recognized ARIA disclosures. Hidden form
+values, independently hidden content and uncreated payloads are not harvested.
+Exports distinguish exposed DOM from collapsed-disclosure DOM and preserve raw
+frames/revisions. This remains a standalone script, not a mobile browser extension.
 
-Validation: 24 standalone Kotlin/JVM regression methods and 24 offline Chromium
-fixture checks passed. The Android adapter/UI and full Gradle suite have NOT been
-built/run here; no device/live-chatbot validation or new APK is claimed. Keep 4.4.2.
-See `CONVERSATION_CAPTURE.md` for exact limits, invocation and remaining gates.
-Next: build/lint/full unit suite with the repository SDK, fix actual diagnostics,
-then device-test native apps and browsers before merging/publishing. Do not confuse
-raw exposed UI snapshots with guaranteed-complete internal conversation records.
+Validation performed for this follow-up: **51 standalone Kotlin/JVM regressions**,
+**16 adapter control-flow checks using deterministic fake Android classes**, and
+**43 offline Chromium fixture checks** passed. The adapter test doubles do NOT
+validate Android SDK/API compatibility, Binder, UI, permissions or real apps.
+**No full Gradle/Android SDK compile, lint, full project suite, phone test or real
+chatbot acceptance ran here. No new APK or CI success is claimed. Keep 4.4.2.**
+
+Read `ACCESSIBILITY_TREE_CAPTURE.md` and `CONVERSATION_CAPTURE.md` for invocation,
+precise source boundaries, test commands and remaining gates. Next: build/lint/full
+suite with the repository SDK, fix diagnostics, then inspect real native/browser
+chatbot trees and validate lazy content, panels, selection and lifecycle on devices.
+Do not equate an accepted UI action, a local scroll boundary or an empty subtree
+with complete conversation capture. Source publication is not APK validation.
 
 ## Last verified release
 

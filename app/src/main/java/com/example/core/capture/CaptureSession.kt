@@ -5,7 +5,11 @@ interface CaptureDriver {
     fun frame(elapsed: Long, phase: String): CaptureFrame
     fun scroll(forward: Boolean): Boolean
     fun expand(attempted: MutableSet<String>): Boolean
+    fun advanceDetails(attempted: MutableSet<String>, options: CaptureOptions): DetailProgress =
+        if (options.expandDetails && expand(attempted)) DetailProgress.EXPAND_REQUESTED else DetailProgress.NONE
 }
+
+enum class DetailProgress { NONE, EXPAND_REQUESTED, SHOW_REQUESTED, NESTED_SCROLL_REQUESTED }
 
 /** One bounded step per timer tick; no threads, permissions or platform objects in the mechanism. */
 class CaptureSession(val archive: ConversationArchive, private val driver: CaptureDriver) {
@@ -21,6 +25,7 @@ class CaptureSession(val archive: ConversationArchive, private val driver: Captu
     private var seekLast: String? = null
     private var changedTicks = 0
     private var pendingExpansion = false
+    private var lastDetailRequests = 0
     private val attempted = mutableSetOf<String>()
 
     init { archive.startStatus = if (state == State.SEEKING) "seeking" else "current_position" }
@@ -80,9 +85,19 @@ class CaptureSession(val archive: ConversationArchive, private val driver: Captu
             state = State.CAPTURING
             if (archive.full) { stop(if (archive.truncated) "content_limit" else "frame_limit"); return state }
             if (noProgress >= 3) { stop("local_no_progress_completeness_unverified"); return state }
-            if (archive.options.expandDetails && attempted.size < 32 && archive.expanded < 1000 && driver.expand(attempted)) {
-                archive.expanded++; pendingExpansion = true; candidate = null
-                return state
+            if ((archive.options.expandDetails || (archive.options.autoScroll && archive.options.captureNestedScrolls)) &&
+                attempted.size < 128 && archive.detailRequests < 1000) {
+                when (driver.advanceDetails(attempted, archive.options)) {
+                    DetailProgress.EXPAND_REQUESTED -> archive.expanded++
+                    DetailProgress.SHOW_REQUESTED -> archive.showOnScreenRequests++
+                    DetailProgress.NESTED_SCROLL_REQUESTED -> archive.nestedScrollRequests++
+                    DetailProgress.NONE -> Unit
+                }
+                if (archive.detailRequests > lastDetailRequests) {
+                    lastDetailRequests = archive.detailRequests
+                    pendingExpansion = true; candidate = null
+                    return state
+                }
             }
             if (!archive.options.autoScroll) return state
             if (!driver.scroll(true)) { stop("forward_action_unavailable_or_boundary"); return state }

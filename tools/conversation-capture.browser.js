@@ -5,7 +5,7 @@
 (() => {
   'use strict';
   if (window.IOConversationCapture) { window.IOConversationCapture.show(); return; }
-  const VERSION = 1;
+  const VERSION = 2;
   let host, running;
   const labels = [
     /^(show|view|read) (more|details|reasoning|thinking|thought process|tool calls|tool results|sources)(\s*[:·(].{0,60})?$/i,
@@ -16,7 +16,7 @@
     /^(toon|bekijk|lees) (meer|details|redenering|gedachten|bronnen)$/i
   ];
   const privateSelector = 'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],script,style,noscript,template';
-  const attributes = ['id', 'role', 'aria-label', 'aria-expanded', 'data-message-id', 'data-message-author-role', 'data-testid', 'alt', 'href'];
+  const attributes = ['id', 'role', 'aria-label', 'aria-expanded', 'data-message-id', 'data-message-author-role', 'data-testid', 'alt', 'href', 'aria-controls', 'aria-busy', 'aria-hidden', 'hidden'];
   const visible = e => {
     if (e === host || e.closest(privateSelector)) return false;
     for (let a = e; a; a = a.parentElement) {
@@ -45,7 +45,40 @@
       if (signal.aborted) abort(); else signal.addEventListener('abort', abort, { once: true });
     });
   }
-  function snapshot(root, budget) {
+  // Only existing DOM inside a disclosure is eligible, never arbitrary hidden app state.
+  function disclosurePanels(root) {
+    const panels = new Set();
+    for (const b of root.querySelectorAll('button[aria-expanded="false"][aria-controls],[role="button"][aria-expanded="false"][aria-controls]')) {
+      if (!visible(b) || b.closest('form') || b.querySelector(privateSelector)) continue;
+      const label = (b.getAttribute('aria-label') || b.textContent).trim().replace(/\s+/g, ' ');
+      if (!labels.some(r => r.test(label))) continue;
+      for (const id of (b.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean)) {
+        const panel = document.getElementById(id);
+        if (panel && panel !== root && root.contains(panel) && !panel.contains(b) && !panel.closest(privateSelector)) panels.add(panel);
+      }
+    }
+    return panels;
+  }
+  function snapshot(root, budget, options = {}) {
+    const panels = options.readCollapsedDom ? disclosurePanels(root) : new Set();
+    const diagnostics = { collapsedDomNodes: 0, hiddenOrPrivateNodesOmitted: 0, offscreenLayoutNodes: 0 };
+    function exposure(e) {
+      if (e === host || e.closest(privateSelector)) return null;
+      let collapsed = false;
+      for (let a = e; a; a = a.parentElement) {
+        const style = getComputedStyle(a);
+        const hidden = a.hidden || a.getAttribute('aria-hidden') === 'true' || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse';
+        if (hidden) {
+          if (!options.readCollapsedDom || !panels.has(a)) return null;
+          collapsed = true;
+        }
+        if (a.localName === 'details' && !a.open && e !== a && !a.querySelector(':scope > summary')?.contains(e)) {
+          if (!options.readCollapsedDom || !root.contains(a)) return null;
+          collapsed = true;
+        }
+      }
+      return collapsed ? 'collapsed-disclosure-dom' : 'exposed-dom';
+    }
     let nodes = 0, chars = 0, clipped = false;
     const take = s => {
       const allowed = Math.max(0, Math.min(100000, budget - chars));
@@ -56,20 +89,32 @@
       if (++nodes > 20000 || depth > 64 || chars >= budget) { clipped = true; return null; }
       if (n.nodeType === Node.TEXT_NODE) {
         const parent = n.parentElement;
-        if (!parent || !visible(parent)) return null;
-        const closed = parent.closest('details:not([open])');
-        if (closed && !closed.querySelector(':scope > summary')?.contains(parent)) return null;
-        if (!n.textContent.trim()) return n.parentElement?.closest('pre,code') ? { path, text: take(n.textContent) } : null;
-        return { path, text: take(n.textContent) };
+        const access = parent && exposure(parent);
+        if (!access) { diagnostics.hiddenOrPrivateNodesOmitted++; return null; }
+        // Direct text under closed details has the summary as a sibling, not an ancestor.
+        const directClosed = parent.localName === 'details' && !parent.open;
+        if (directClosed && !options.readCollapsedDom) return null;
+        const origin = directClosed ? 'collapsed-disclosure-dom' : access;
+        if (origin === 'collapsed-disclosure-dom') diagnostics.collapsedDomNodes++;
+        if (!n.textContent.trim()) return parent.closest('pre,code') ? { path, exposure: origin, text: take(n.textContent) } : null;
+        return { path, exposure: origin, text: take(n.textContent) };
       }
-      if (!(n instanceof Element) || !visible(n)) return null;
+      if (!(n instanceof Element)) return null;
+      const access = exposure(n);
+      if (!access) { diagnostics.hiddenOrPrivateNodesOmitted++; return null; }
+      const bounds = n.getBoundingClientRect(), viewport = root.getBoundingClientRect();
+      const hasLayoutBox = n.getClientRects().length > 0;
+      const intersectsRootBounds = hasLayoutBox && bounds.bottom > viewport.top && bounds.top < viewport.bottom && bounds.right > viewport.left && bounds.left < viewport.right;
+      if (hasLayoutBox && !intersectsRootBounds) diagnostics.offscreenLayoutNodes++;
       const a = {};
       // Never read values, event handlers, application state or arbitrary data-* fields.
       for (const key of attributes) if (n.hasAttribute(key)) {
         if (key === 'aria-label' && n.querySelector(privateSelector)) continue;
         a[key] = take(n.getAttribute(key));
       }
-      const value = { path, tag: n.localName, attributes: a, children: [] };
+      const value = { path, tag: n.localName, exposure: access, layout: { hasLayoutBox, intersectsRootBounds }, attributes: a, children: [] };
+      if (n.localName === 'details' && !n.open) value.disclosure = options.readCollapsedDom ? 'closed; reading existing DOM only' : 'closed; content omitted';
+      if (n.shadowRoot) value.omitted = 'Open shadow-root content is not traversed by this adapter';
       if (['iframe', 'canvas', 'video', 'audio'].includes(n.localName)) {
         value.uninspected = 'media/frame content not extracted'; return value;
       }
@@ -80,7 +125,7 @@
       }
       return value;
     }
-    return { tree: walk(root, '0', 0), clipped };
+    return { tree: walk(root, '0', 0), clipped, diagnostics };
   }
   const descendants = tree => {
     const out = [];
@@ -116,8 +161,11 @@
     return /^(p|div|article|section|li|h[1-6]|tr|summary)$/.test(n.tag) ? `\n${body}\n` : body;
   }
   function text(result) {
-    let out = `IO Matrix · rendered conversation capture\n${result.sourcePath}\nStop: ${result.stopReason}; completeness: UNVERIFIED; start: ${result.startCoverage}\n`;
-    out += 'Only exposed DOM content. Editable inputs, hidden panels and unexposed reasoning/tool data are excluded. Raw JSON retains hierarchy and revisions.\n';
+    let out = `IO Matrix · DOM conversation capture\n${result.sourcePath}\nStop: ${result.stopReason}; completeness: UNVERIFIED; start: ${result.startCoverage}\n`;
+    out += result.options.readCollapsedDom
+      ? 'Includes text already present in native/recognized collapsed disclosure DOM, labelled in JSON. Unrelated hidden elements, inputs, scripts and private application/model state are excluded.\n'
+      : 'Only exposed DOM content. Editable inputs, hidden panels and unexposed reasoning/tool data are excluded. Raw JSON retains hierarchy and revisions.\n';
+    out += 'Expansion counters record requests, not verified provider effects. Missing lazy content cannot be read before the page creates it.\n';
     if (result.warnings.length) out += `Warnings: ${result.warnings.join('; ')}\n`;
     const known = result.turns;
     if (known.length) for (const t of known) out += `\n--- ${t.role || 'role not exposed'} · ${t.key} ---\n${treeText(t.tree)}\n`;
@@ -138,8 +186,8 @@
       if (!visible(d) || d.closest('form') || attempted.has(d)) continue;
       attempted.add(d); d.open = true; return true;
     }
-    for (const b of root.querySelectorAll('button[aria-expanded="false"]')) {
-      if (!visible(b) || b.form || b.getAttribute('type') === 'submit' || attempted.has(b)) continue;
+    for (const b of root.querySelectorAll('button[aria-expanded="false"],[role="button"][aria-expanded="false"]')) {
+      if (!(b instanceof HTMLElement) || !visible(b) || b.closest('form') || b.matches(':disabled,a[href]') || b.getAttribute('aria-disabled') === 'true' || b.querySelector(privateSelector) || b.getAttribute('type') === 'submit' || attempted.has(b)) continue;
       const label = (b.getAttribute('aria-label') || b.textContent).trim().replace(/\s+/g, ' ');
       if (!labels.some(r => r.test(label))) continue;
       const ids = (b.getAttribute('aria-controls') || '').trim().split(/\s+/).filter(Boolean);
@@ -156,12 +204,13 @@
     if (!(scroller instanceof Element) || scroller.ownerDocument !== document || !(root.contains(scroller) || scroller.contains(root))) throw new Error('Scroller must belong to this conversation document');
     const config = { autoScroll: options.autoScroll !== false, seekStart: options.seekStart !== false, expand: options.expand !== false,
       maxFrames: options.maxFrames ?? 200, maxChars: options.maxChars ?? 8000000, maxSteps: options.maxSteps ?? 500,
-      maxMillis: options.maxMillis ?? 600000, settleMs: options.settleMs ?? 600 };
+      maxMillis: options.maxMillis ?? 600000, settleMs: options.settleMs ?? 600,
+      readCollapsedDom: options.readCollapsedDom === true };
     for (const [key, min, max] of [['maxFrames',1,1000],['maxChars',1000,16000000],['maxSteps',1,2000],['maxMillis',1000,1800000],['settleMs',100,5000]])
       if (!Number.isInteger(config[key]) || config[key] < min || config[key] > max) throw new Error(`Invalid ${key}`);
     const controller = new AbortController(), signal = controller.signal;
-    const locationKey = location.origin + location.pathname, began = performance.now();
-    const result = { schemaVersion: VERSION, source: 'rendered-dom', sourcePath: locationKey, startedAt: new Date().toISOString(),
+    const locationKey = location.origin + location.pathname, targetLocation = location.href, began = performance.now();
+    const result = { schemaVersion: VERSION, source: config.readCollapsedDom ? 'disclosure-dom' : 'rendered-dom', sourcePath: locationKey, startedAt: new Date().toISOString(),
       completeness: 'unverified', startCoverage: 'current_position', stopReason: 'in_progress',
       order: config.autoScroll ? 'first observation in forward pass' : 'observation order; may not be chronological',
       options: config, warnings: [], frames: [], turns: [], hasUnkeyedTurns: false, expanded: 0 };
@@ -170,19 +219,19 @@
     const stop = reason => { if (result.stopReason === 'in_progress') result.stopReason = reason; controller.abort(); };
     const valid = () => {
       if (signal.aborted) return false;
-      if (!root.isConnected || location.origin + location.pathname !== locationKey || document.hidden) { stop('target_changed_or_hidden'); return false; }
+      if (!root.isConnected || location.href !== targetLocation || document.hidden) { stop('target_changed_or_hidden'); return false; }
       if (performance.now() - began >= config.maxMillis) { stop('time_limit'); return false; }
       return true;
     };
     const record = phase => {
       if (!valid()) return;
-      const s = snapshot(root, Math.min(2000000, Math.max(0, config.maxChars - stored)));
+      const s = snapshot(root, Math.min(2000000, Math.max(0, config.maxChars - stored)), config);
       const encoded = JSON.stringify(s.tree);
       if (s.clipped) warn('DOM node/text/depth limit reached');
       if (encoded === last && phase === lastPhase) return;
       if (result.frames.length >= config.maxFrames || stored + encoded.length > config.maxChars) { warn('Archive limit reached; later content omitted'); stop('archive_limit'); return; }
       last = encoded; lastPhase = phase; stored += encoded.length;
-      result.frames.push({ sequence: result.frames.length, elapsedMillis: Math.round(performance.now() - began), phase, clipped: s.clipped, tree: s.tree });
+      result.frames.push({ sequence: result.frames.length, elapsedMillis: Math.round(performance.now() - began), phase, clipped: s.clipped, diagnostics: s.diagnostics, tree: s.tree });
       if (phase === 'capture') {
         const observed = turns(s.tree);
         if (!observed.length || observed.some(t => !t.key)) result.hasUnkeyedTurns = true;
@@ -198,7 +247,13 @@
       }
       if (s.clipped) stop('dom_limit');
     };
-    const settle = async () => { if (!await quiet(root, config.settleMs, signal) && !signal.aborted) warn('Content did not settle; delayed content may be missing'); };
+    const settle = async () => {
+      const settled = await quiet(root, config.settleMs, signal);
+      if (!settled && !signal.aborted) warn('Content did not settle; delayed content may be missing');
+      const busy = [...root.querySelectorAll('[aria-busy="true"]')].some(visible);
+      if (busy) warn('Provider reported loading; capture waited before acting');
+      return settled && !busy;
+    };
     const move = direction => {
       if (!valid()) return false;
       const before = scroller.scrollTop;
@@ -221,13 +276,18 @@
         }
         let idle = 0, attempted = new WeakSet();
         for (let i = 0; i < config.maxSteps && valid(); i++) {
-          await settle(); record('capture');
+          const settled = await settle(); record('capture');
           if (!valid()) break;
+          if (!settled) { await delay(config.settleMs, signal); continue; }
+          let detailsReady = true;
           if (config.expand) for (let j = 0; j < 32 && result.expanded < 1000 && valid(); j++) {
             if (!expandOne(root, attempted)) break;
-            result.expanded++; await settle(); record('capture');
+            result.expanded++;
+            detailsReady = await settle(); record('capture');
+            if (!detailsReady) break;
           }
           if (!valid()) break;
+          if (!detailsReady) continue;
           if (!config.autoScroll) { await delay(config.settleMs, signal); continue; }
           if (!move(1)) idle++; else { idle = 0; attempted = new WeakSet(); }
           if (idle >= 3) { stop('local_boundary_completeness_unverified'); break; }
@@ -239,6 +299,20 @@
     })();
     return handle;
   }
+  function inspect(options = {}) {
+    if (running) throw new Error('Stop the active capture before inspecting');
+    const root = options.root || document.querySelector('main,[role="main"]');
+    if (!(root instanceof Element) || root.ownerDocument !== document || !visible(root)) throw new Error('Choose a visible conversation root in this document');
+    const maxChars = options.maxChars ?? 2000000;
+    if (!Number.isInteger(maxChars) || maxChars < 1000 || maxChars > 2000000) throw new Error('Invalid maxChars');
+    const config = { readCollapsedDom: options.readCollapsedDom === true, autoScroll: false, seekStart: false, expand: false, maxChars };
+    const s = snapshot(root, maxChars, config);
+    return { schemaVersion: VERSION, source: 'dom-inspection', sourcePath: location.origin + location.pathname,
+      startedAt: new Date().toISOString(), completeness: 'unverified', startCoverage: 'single_dom_snapshot',
+      stopReason: 'inspection_no_actions', order: 'DOM traversal order', options: config,
+      warnings: s.clipped ? ['DOM inspection resource limit reached'] : [], expanded: 0, turns: [], hasUnkeyedTurns: true,
+      frames: [{ sequence: 0, elapsedMillis: 0, phase: 'capture', clipped: s.clipped, diagnostics: s.diagnostics, tree: s.tree }] };
+  }
   function download(name, type, content) {
     const url = URL.createObjectURL(new Blob([content], { type }));
     const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -248,29 +322,39 @@
     host = document.createElement('div'); host.style.cssText = 'position:fixed;right:12px;top:12px;z-index:2147483647;max-width:calc(100vw - 24px)';
     const ui = host.attachShadow({ mode: 'closed' });
     const panel = document.createElement('div'); panel.style.cssText = 'background:#fff;color:#111;border:1px solid #888;border-radius:10px;padding:12px;width:340px;max-width:calc(100vw - 50px);max-height:80vh;overflow:auto;font:14px system-ui;box-shadow:0 2px 16px #0005';
-    const status = document.createElement('p'); status.textContent = 'IO Matrix: capture the rendered conversation. Start can scroll and expand details. Inputs, hidden model internals and media bytes are not read. Nothing is uploaded. Stay in this chat until stopped.';
+    const status = document.createElement('p'); status.textContent = 'IO Matrix: capture the conversation DOM. Start can scroll and expand details. Inputs, hidden model internals and media bytes are not read. Nothing is uploaded. Stay in this chat until stopped.';
     panel.append(status);
     function choice(label, checked) { const c = document.createElement('input'); c.type = 'checkbox'; c.checked = checked; const l = document.createElement('label'); l.append(c, document.createTextNode(label)); panel.append(l, document.createElement('br')); return c; }
     const auto = choice(' Scroll automatically', true), top = choice(' Start at beginning', true), expand = choice(' Expand exposed details', true);
+    const collapsed = choice(' Read DOM already inside collapsed disclosures', true);
     const controls = document.createElement('div'); panel.append(controls);
     const btn = (label, action) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'margin:5px;padding:7px'; b.onclick = action; controls.append(b); return b; };
     let task;
+    function review(result) {
+      status.textContent = `Stopped: ${result.stopReason}. ${result.frames.length} snapshots; ${result.expanded} expansion requests. Completeness UNVERIFIED.`;
+      const preview = document.createElement('textarea'); preview.readOnly = true; preview.value = text(result); preview.style.cssText = 'width:100%;height:220px;box-sizing:border-box'; panel.append(preview);
+      btn('Select all', () => { preview.focus(); preview.select(); });
+      btn('Show text', () => { preview.value = text(result); });
+      btn('Show tree / JSON', () => { preview.value = JSON.stringify(result, null, 2); });
+      btn('Save text', () => download('IO-Matrix-conversation.txt', 'text/plain;charset=utf-8', text(result)));
+      btn('Save JSON', () => download('IO-Matrix-conversation.json', 'application/json', JSON.stringify(result, null, 2)));
+    }
     const begin = btn('Start', async () => {
       try {
-        task = start({ autoScroll: auto.checked, seekStart: top.checked, expand: expand.checked }); begin.disabled = true;
+        task = start({ autoScroll: auto.checked, seekStart: top.checked, expand: expand.checked, readCollapsedDom: collapsed.checked }); begin.disabled = true;
         status.textContent = 'Capturing locally. Keep this tab active. Stop is always available.';
         const result = await task.done;
-        status.textContent = `Stopped: ${result.stopReason}. ${result.frames.length} snapshots; ${result.expanded} expanded. Completeness UNVERIFIED.`;
-        const preview = document.createElement('textarea'); preview.readOnly = true; preview.value = text(result); preview.style.cssText = 'width:100%;height:220px;box-sizing:border-box'; panel.append(preview);
-        btn('Select all', () => { preview.focus(); preview.select(); });
-        btn('Save text', () => download('IO-Matrix-conversation.txt', 'text/plain;charset=utf-8', preview.value));
-        btn('Save JSON', () => download('IO-Matrix-conversation.json', 'application/json', JSON.stringify(result, null, 2)));
+        review(result);
       } catch (e) { status.textContent = e.message; }
+    });
+    btn('Inspect DOM (no actions)', () => {
+      try { const result = inspect({ readCollapsedDom: collapsed.checked }); begin.disabled = true; review(result); }
+      catch (e) { status.textContent = e.message; }
     });
     btn('Stop', () => task?.stop());
     btn('Close', () => { if (task && !confirm('Close capture controls? Save/copy the result first.')) return; task?.stop(); host.remove(); });
     ui.append(panel); document.body.append(host);
   }
-  window.IOConversationCapture = Object.freeze({ version: VERSION, start, text, show });
+  window.IOConversationCapture = Object.freeze({ version: VERSION, start, inspect, text, show });
   show();
 })();

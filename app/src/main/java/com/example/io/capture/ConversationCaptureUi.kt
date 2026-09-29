@@ -193,7 +193,11 @@ private class CapturePanel(private val service: IoAccessibilityService, private 
         val auto = CheckBox(context).apply { text = "Scroll automatically"; isChecked = true }
         val beginning = CheckBox(context).apply { text = "Try to reach the beginning first"; isChecked = true }
         val expand = CheckBox(context).apply { text = "Expand recognized collapsed details"; isChecked = true }
-        listOf(auto, beginning, expand).forEach { box.addView(it) }
+        val offscreen = CheckBox(context).apply { text = "Read non-visible nodes exposed by the app"; isChecked = true }
+        val extended = CheckBox(context).apply { text = "Request extended tree (not-important views)"; isChecked = false }
+        val nested = CheckBox(context).apply { text = "Capture nested scrollable panels"; isChecked = true }
+        listOf(auto, beginning, expand, offscreen, extended, nested).forEach { box.addView(it) }
+        box.addView(line("Non-visible nodes may contain text, or only a collapsed control. Missing/lazy content still needs expansion and scrolling. Extended-tree access cannot create nodes or expose private app objects."))
         val limits = listOf(50, 200, 500)
         val limit = Spinner(context).apply {
             adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, limits.map { "Limit: $it captured views" })
@@ -201,26 +205,35 @@ private class CapturePanel(private val service: IoAccessibilityService, private 
         }
         box.addView(limit)
         box.addView(button("Try system selection of focused text") {
-            runCatching { source.selectFocused(source.bind()) }.fold(
+            runCatching {
+                source.begin(CaptureOptions(autoScroll = false, expandDetails = false))
+                try { source.selectFocused(source.bind()) } finally { source.close() }
+            }.fold(
                 onSuccess = { message(if (it) "Selection requested in the focused text node" else "This text does not expose system selection. Capture, then select text in the review instead.") },
                 onFailure = { message("Return to the conversation first. No content was copied.") }
             )
         })
+        fun options() = CaptureOptions(autoScroll = auto.isChecked, seekStart = beginning.isChecked,
+            expandDetails = expand.isChecked, maxFrames = limits[limit.selectedItemPosition],
+            includeOffscreenNodes = offscreen.isChecked, includeNotImportantViews = extended.isChecked,
+            captureNestedScrolls = nested.isChecked)
+        box.addView(button("Inspect full accessibility tree (no actions)") { inspect(options()) })
         box.addView(row(button("Start") {
-            start(CaptureOptions(autoScroll = auto.isChecked, seekStart = beginning.isChecked,
-                expandDetails = expand.isChecked, maxFrames = limits[limit.selectedItemPosition]))
+            start(options())
         }, button("Cancel") { dispose() }))
         wm.addView(shell, params); attached = true; shell.requestApplyInsets()
     }
     private fun start(options: CaptureOptions) {
         try {
+            source.begin(options)
             val target = source.bind()
             val date = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
             val archive = ConversationArchive(target.pkg, target.window, date, options)
             val driver = object : CaptureDriver {
                 override fun frame(elapsed: Long, phase: String) = source.frame(target, elapsed, phase)
                 override fun scroll(forward: Boolean) = source.scroll(target, forward)
-                override fun expand(attempted: MutableSet<String>) = source.expandOne(target, attempted)
+                override fun expand(attempted: MutableSet<String>) = false
+                override fun advanceDetails(attempted: MutableSet<String>, options: CaptureOptions) = source.advanceDetails(target, attempted)
             }
             session = CaptureSession(archive, driver)
             started = SystemClock.elapsedRealtime()
@@ -228,14 +241,32 @@ private class CapturePanel(private val service: IoAccessibilityService, private 
             status = handle("Starting… ↕").also { box.addView(it) }
             box.addView(row(button("Stop & review") { session?.stop(); review() }, button("Discard…") { confirmDiscard() }))
             main.post(tick)
-        } catch (_: Exception) { message("No readable application window. Close the shade/dialog and return to the conversation, then press Start.") }
+        } catch (_: Exception) { source.close(); message("No readable application window. Close the shade/dialog and return to the conversation, then press Start.") }
+    }
+    private fun inspect(selected: CaptureOptions) {
+        val options = selected.copy(autoScroll = false, seekStart = false, expandDetails = false,
+            captureNestedScrolls = false, maxFrames = 1)
+        try {
+            source.begin(options)
+            val target = source.bind(fullWindow = true)
+            val date = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
+            val archive = ConversationArchive(target.pkg, target.window, date, options)
+            archive.startStatus = "single_window_inspection"
+            archive.append(source.frame(target, 0, "tree_inspection"))
+            archive.finish("tree_inspection_no_actions")
+            ConversationCaptureUi.result = archive
+            service.startActivity(Intent(service, ConversationCaptureReviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            dispose()
+        } catch (_: Exception) { message("Inspection failed or the application changed. No action was sent to it.") }
+        finally { source.close() }
     }
     private val tick = object : Runnable {
         override fun run() {
             val s = session ?: return
             s.step(SystemClock.elapsedRealtime() - started)
-            status?.text = "${s.state} · ${s.archive.frames.size} views · ${s.archive.expanded} expanded ↕"
+            status?.text = "${s.state} · ${s.archive.frames.size} views · ${s.archive.detailRequests} detail requests ↕"
             if (s.state == CaptureSession.State.FINISHED) {
+                source.close()
                 status?.text = "Stopped: ${s.archive.reason}\n${s.archive.frames.size} views · Review before copying ↕"
                 if (IoAccessibilityService.instance !== service) { ConversationCaptureUi.result = s.archive; dispose() }
             } else main.postDelayed(this, s.archive.options.settleMillis)
@@ -243,6 +274,7 @@ private class CapturePanel(private val service: IoAccessibilityService, private 
     }
     private fun confirmDiscard() {
         main.removeCallbacks(tick)
+        session?.stop("review_requested"); source.close()
         box.removeAllViews()
         box.addView(line("Discard this capture? It has not been saved or copied."))
         box.addView(row(button("Keep & review") { session?.stop(); review() }, button("Discard") { session?.stop("discarded"); dispose() }))
@@ -257,6 +289,8 @@ private class CapturePanel(private val service: IoAccessibilityService, private 
         } catch (_: Exception) { message("Cannot open review right now. The capture is still in memory; try Stop & review again.") }
     }
     fun dispose() {
+        session?.stop()
+        source.close()
         main.removeCallbacksAndMessages(null)
         if (attached) runCatching { wm.removeView(shell) }
         attached = false

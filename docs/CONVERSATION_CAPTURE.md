@@ -5,6 +5,15 @@ branch commit `9b76a39b4fbbfb98e961eeeb225091381b7983eb`. This is **not a new ve
 Android release**. Keep the existing 4.4.2 APK until the Android build/device gates
 below pass. No new permission, dependency, signing change or CI workflow is added.
 
+## Accessibility-tree follow-up (schema version 2)
+
+The current implementation extends the initial visible-only capture. Read
+[ACCESSIBILITY_TREE_CAPTURE.md](ACCESSIBILITY_TREE_CAPTURE.md) for non-visible
+nodes, semantic expansion, nested scrollers, full-window/DOM inspection and the
+updated validation record. The original implementation notes below describe the
+initial checkpoint; the follow-up document supersedes its visible-only and
+caption-only disclosure restrictions. The Android build/device gates remain open.
+
 ## What the inspection found
 
 `IoAccessibilityService.screenText()` reads one visible screen, caps output at

@@ -16,8 +16,10 @@ class ConversationCaptureTest {
         }
     }
     @Test fun unknownAndDestructiveControlsNeverClicked() {
-        for (label in listOf("Delete", "Send", "Retry", "Share", "Buy", "Next conversation", "Show all accounts", "More options"))
+        for (label in listOf("Delete", "Send", "Retry", "Share", "Buy", "Next conversation"))
             check(DisclosurePolicy.action(DisclosurePolicy.Control(label, "collapsed", expand = true, clickable = true)) == null)
+        for (label in listOf("Show all accounts", "More options", "Mystery widget"))
+            check(DisclosurePolicy.action(DisclosurePolicy.Control(label, "collapsed", clickable = true)) == null)
     }
     @Test fun toggleRequiresExplicitCollapsedState() {
         check(DisclosurePolicy.action(DisclosurePolicy.Control("Show more", clickable = true)) == null)

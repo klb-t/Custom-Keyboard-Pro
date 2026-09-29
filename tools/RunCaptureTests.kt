@@ -3,12 +3,14 @@ import com.example.core.capture.CaptureOptions
 import com.example.core.capture.CaptureFrame
 import com.example.core.capture.CapturedNode
 import com.example.core.capture.ConversationCaptureTest
+import com.example.core.capture.TreeObservationTest
 
 fun main(args: Array<String>) {
-    val instance = ConversationCaptureTest()
-    val tests = instance.javaClass.declaredMethods.filter { it.getAnnotation(org.junit.Test::class.java) != null }.sortedBy { it.name }
+    val tests = listOf(ConversationCaptureTest(), TreeObservationTest()).flatMap { instance ->
+        instance.javaClass.declaredMethods.filter { it.getAnnotation(org.junit.Test::class.java) != null }.map { instance to it }
+    }.sortedBy { it.second.name }
     var failed = 0
-    for (test in tests) {
+    for ((instance, test) in tests) {
         try { test.invoke(instance); println("PASS ${test.name}") }
         catch (e: java.lang.reflect.InvocationTargetException) { failed++; println("FAIL ${test.name}: ${e.cause}") }
     }

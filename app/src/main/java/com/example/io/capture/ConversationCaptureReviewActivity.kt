@@ -19,6 +19,7 @@ import com.example.core.capture.ConversationArchive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -30,6 +31,9 @@ class ConversationCaptureReviewActivity : Activity() {
     private var archive: ConversationArchive? = null
     private var pendingFormat: String? = null
     private var plain: String? = null
+    private var preview: TextView? = null
+    private var previewJob: Job? = null
+    private var treeMode = false
     private fun tell(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,16 +41,23 @@ class ConversationCaptureReviewActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         pendingFormat = savedInstanceState?.getString("capture-format")
         archive = ConversationCaptureUi.result
+        treeMode = savedInstanceState?.getBoolean("capture-tree") ?: (archive?.reason == "tree_inspection_no_actions")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
         val title = TextView(this).apply { text = "Conversation capture · select, copy or save\nRaw JSON preserves exposed hierarchy and viewport revisions. This is not proof of a complete conversation." }
         root.addView(title)
         val controls = LinearLayout(this)
         fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; setOnClickListener { action() } }
-        controls.addView(button("Copy text") { copy() }, LinearLayout.LayoutParams(0, -2, 1f))
+        controls.addView(button("Copy preview") { copy() }, LinearLayout.LayoutParams(0, -2, 1f))
         controls.addView(button("Save text") { save("text") }, LinearLayout.LayoutParams(0, -2, 1f))
         controls.addView(button("Save JSON") { save("json") }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(controls)
+        val views = LinearLayout(this)
+        views.addView(button("Show text") { render(false) }, LinearLayout.LayoutParams(0, -2, 1f))
+        views.addView(button("Show tree") { render(true) }, LinearLayout.LayoutParams(0, -2, 1f))
+        views.addView(button("Save tree") { save("tree") }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(views)
         val text = TextView(this).apply { setTextIsSelectable(true); this.text = "Preparing local preview…"; textSize = 15f }
+        preview = text
         root.addView(ScrollView(this).apply { addView(text) }, LinearLayout.LayoutParams(-1, 0, 1f))
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -61,9 +72,16 @@ class ConversationCaptureReviewActivity : Activity() {
             text.text = "No capture remains in memory (for example after process termination). Return to the conversation and start a new capture."
             return
         }
-        scope.launch {
-            plain = withContext(Dispatchers.Default) { a.text() }
-            text.text = plain
+        render(treeMode)
+    }
+    private fun render(tree: Boolean) {
+        val a = archive ?: return
+        treeMode = tree; plain = null
+        previewJob?.cancel()
+        preview?.text = "Preparing local preview…"
+        previewJob = scope.launch {
+            plain = withContext(Dispatchers.Default) { if (tree) a.treeText() else a.text() }
+            preview?.text = plain
         }
     }
     private fun copy() {
@@ -73,7 +91,7 @@ class ConversationCaptureReviewActivity : Activity() {
             val clip = ClipData.newPlainText("IO Matrix conversation capture", text)
             clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-            tell("Copied exposed conversation text")
+            tell("Copied the current local preview")
         } catch (_: Exception) { tell("Clipboard refused the content. Use Save text instead.") }
     }
     private fun save(format: String) {
@@ -83,7 +101,7 @@ class ConversationCaptureReviewActivity : Activity() {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType(if (format == "json") "application/json" else "text/plain")
-                .putExtra(Intent.EXTRA_TITLE, "IO-Matrix-conversation.${if (format == "json") "json" else "txt"}"), 7412)
+                .putExtra(Intent.EXTRA_TITLE, "IO-Matrix-conversation.${if (format == "json") "json" else if (format == "tree") "tree.txt" else "txt"}"), 7412)
         } catch (_: Exception) { pendingFormat = null; tell("No document picker is available") }
     }
     @Deprecated("Platform Activity result bridge supports the existing API 24 host")
@@ -98,7 +116,7 @@ class ConversationCaptureReviewActivity : Activity() {
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val content = if (format == "json") a.json() else a.text()
+                    val content = when (format) { "json" -> a.json(); "tree" -> a.treeText(); else -> a.text() }
                     val stream = contentResolver.openOutputStream(uri, "wt") ?: error("No document stream")
                     stream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
                 }
@@ -110,6 +128,7 @@ class ConversationCaptureReviewActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("capture-format", pendingFormat)
+        outState.putBoolean("capture-tree", treeMode)
     }
     override fun onDestroy() {
         scope.cancel()
