@@ -4,6 +4,22 @@ Updated: 2026-09-29 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
 Branch: `claude/keyboard-app-all-features-78fkrd`.
 
+## Product direction clarified: universal capabilities and voice assistant
+
+Read [UNIVERSAL_ASSISTANT.md](UNIVERSAL_ASSISTANT.md) before extending the roadmap.
+The user explicitly wants all special functions, special permissions and advanced
+phone capabilities in scope, plus a voice assistant that analyses arbitrary goals,
+required APIs, permissions and feasibility, composes a plan, executes it and checks
+the result. External devices are included: the concrete example is turning a Wi-Fi
+LED bulb into a music-responsive colour organ. Do not narrow this to predefined
+voice phrases, a finite command list or only currently implemented adapters.
+
+The requirement is now linked from `AGENTS.md` and `README.md`. This checkpoint is
+**documentation only**: no new planner, voice-service host, bulb adapter, permission,
+APK or test pass is claimed. Existing `Abilities`, `Wires`, Matrix transforms and
+network streams are groundwork, not proof that the full assistant exists. Preserve
+the immediate capture acceptance gates below; the new target does not erase them.
+
 ## Current task: conversation capture and accessibility-tree inspection — draft PR #3
 
 Work branch: `feat/conversation-capture-2026-09-29`, based on the active branch's

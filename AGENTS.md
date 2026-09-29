@@ -3,6 +3,18 @@
 IO Matrix is a configurable information layer; Android IME is its first host.
 Preserve the existing `Wires`, layout, settings, discovery and Matrix abstractions.
 
+## Product scope
+
+Read `docs/UNIVERSAL_ASSISTANT.md` for the explicit long-term target: all special
+functions, special permissions and advanced phone capabilities, external devices,
+and a voice/text assistant that discovers APIs and prerequisites, plans execution,
+acts and verifies the result. Do not reduce this to a fixed list of keyboard
+commands or voice phrases. The Wi-Fi LED colour-organ example is a required
+composition scenario. Keep this product target separate from implemented/tested
+capabilities; a missing adapter is not by itself proof of impossibility.
+
+## Development rules
+
 * Do not encode a choice in control flow when it can be an instance of a shared
   model. Preserve existing examples as profiles and add new examples to that same
   registry. Separate mechanism, policy, presentation, transport and provider.

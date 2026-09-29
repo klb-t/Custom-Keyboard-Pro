@@ -6,6 +6,17 @@ layouts can do, a layout you make can do too.
 It works completely on its defaults. Nothing needs to be configured, no account, no
 key, no network. Everything is adjustable if you want it to be.
 
+## Long-term product target
+
+The keyboard is the first host, not the product's boundary. The target includes all
+special functions, special permissions and advanced phone capabilities, external
+devices, and a voice/text assistant that analyses goals, finds required APIs and
+prerequisites, composes executable plans and verifies their effects. A Wi-Fi LED bulb
+made into a music-responsive colour organ is one explicit composition scenario.
+See [universal capabilities and assistant requirements](docs/UNIVERSAL_ASSISTANT.md).
+This is the development target, **not a claim that the assistant or all integrations
+are implemented in the current APK**.
+
 ## What it does
 
 **Layouts are documents.** A layout describes its keys, what each one looks like, and
