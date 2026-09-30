@@ -221,7 +221,7 @@ object PasteConversion {
         }
 
         return AiClient.complete(
-            config = AiConfig.from(settings, maxTokens = OCR_TOKENS).copy(
+            config = AiConfig.from(settings, task = com.example.core.ai.AiRequestTask.OCR).copy(
                 provider = provider.id,
                 baseUrl = ProviderProfiles.baseUrlFor(provider.id, settings),
                 apiKey = key,
@@ -278,5 +278,4 @@ object PasteConversion {
             "text in the image, reply with nothing at all."
 
     /** A photographed page of dense text runs long; cutting it in half costs more than the tokens. */
-    private const val OCR_TOKENS = 4096
 }

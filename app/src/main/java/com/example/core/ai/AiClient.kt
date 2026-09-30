@@ -34,10 +34,11 @@ data class AiConfig(
      */
     val wire: String = AiWire.OPENAI,
     /** Local servers legitimately have no key; requiring one would lock them out. */
-    val requiresKey: Boolean = true
+    val requiresKey: Boolean = true,
+    val configurationProblem: String? = null
 ) {
     val isUsable: Boolean
-        get() = (apiKey.isNotBlank() || !requiresKey) &&
+        get() = configurationProblem == null && (apiKey.isNotBlank() || !requiresKey) &&
             model.isNotBlank() &&
             effectiveBaseUrl.isNotBlank()
 
@@ -48,9 +49,10 @@ data class AiConfig(
             .trimEnd('/')
 
     companion object {
-        fun from(s: Settings, maxTokens: Int? = null): AiConfig {
+        fun from(s: Settings, maxTokens: Int? = null, task: AiRequestTask = AiRequestTask.WRITING): AiConfig {
             val spec = ProviderCatalog.byId(s.aiProvider, s)
             val params = ProviderProfiles.paramsFor(s.aiProvider, com.example.core.discovery.AiCapability.CHAT, s)
+            val resolved = runCatching { AiTaskProfiles.resolve(s, task, params, maxTokens) }
             // Read against the provider rather than off the top level, so switching
             // provider switches credential too. The loose top-level key is still
             // honoured for the provider it was entered against — see [ProviderProfiles].
@@ -61,10 +63,11 @@ data class AiConfig(
                 model = ProviderProfiles.modelFor(s.aiProvider, s)
                     .ifBlank { spec?.defaultModel.orEmpty() }
                     .ifBlank { AiProviders.defaultModel(s.aiProvider) },
-                temperature = params["temperature"]?.toFloatOrNull()?.takeIf { it.isFinite() } ?: s.aiTemperature,
-                maxTokens = maxTokens ?: params["maxTokens"]?.toIntOrNull()?.takeIf { it > 0 } ?: s.aiMaxTokens,
+                temperature = resolved.getOrNull()?.temperature ?: 0.3f,
+                maxTokens = resolved.getOrNull()?.maxTokens ?: 64,
                 wire = spec?.wire ?: legacyWire(s.aiProvider),
-                requiresKey = spec?.needsKey ?: true
+                requiresKey = spec?.needsKey ?: true,
+                configurationProblem = resolved.exceptionOrNull()?.let { "Invalid AI task profiles. Review them in Expert settings." }
             )
         }
 
@@ -122,6 +125,7 @@ object AiClient {
         fast: Boolean = false
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
+            config.configurationProblem?.let { throw AiException(it) }
             if (!config.isUsable) {
                 throw AiException("The AI provider is not configured. Add a key and a model in settings.")
             }

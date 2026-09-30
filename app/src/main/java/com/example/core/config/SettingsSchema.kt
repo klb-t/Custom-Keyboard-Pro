@@ -177,6 +177,7 @@ object SettingsSchema {
                     }
                 }
                 if (key == "toolbarRowsJson") com.example.core.layout.ToolbarRows.parse(raw).getOrThrow()
+                if (key == "aiTaskProfilesJson") com.example.core.ai.AiTaskProfiles.parse(raw)
                 raw
             }
             SettingKind.ENUM -> {
@@ -751,7 +752,12 @@ object SettingsSchema {
         "aiCompletionDebounceMs" to Meta(group = GROUP_AI, label = "Completion delay", min = 100f, max = 3000f),
         "aiContextChars" to Meta(group = GROUP_AI, label = "Context sent", min = 0f, max = 4000f),
         "aiTemperature" to Meta(group = GROUP_AI, label = "Temperature", min = 0f, max = 2f),
-        "aiMaxTokens" to Meta(group = GROUP_AI, label = "Max tokens", min = 8f, max = 2048f),
+        "aiMaxTokens" to Meta(group = GROUP_AI, label = "Max tokens", min = 8f, max = 8192f),
+        "aiTaskProfilesJson" to Meta(kind = SettingKind.JSON, group = GROUP_AI,
+            label = "AI task profiles", multiline = true,
+            help = "Separate task token/temperature overrides. " +
+                "Token priority: explicit request limit, task override, task preset, provider parameters, writing defaults. " +
+                "Application-wide; never owned by a keyboard layout or key. Higher token limits can increase cost."),
         "aiCustomTasksJson" to Meta(kind = SettingKind.JSON, group = GROUP_AI, label = "Custom AI tasks", multiline = true),
 
         // The prediction lane. Its own group rather than a corner of the AI one,

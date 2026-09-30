@@ -101,7 +101,7 @@ class SuggestionEngine(
                 _aiBusy.value = true
                 val context = textBeforeCursor.takeLast(s.aiContextChars).toString()
                 val result = AiClient.complete(
-                    config = AiConfig.from(s, maxTokens = 24),
+                    config = AiConfig.from(s, task = com.example.core.ai.AiRequestTask.INLINE),
                     systemPrompt = AiTasks.COMPLETION_SYSTEM,
                     userPrompt = context,
                     fast = true

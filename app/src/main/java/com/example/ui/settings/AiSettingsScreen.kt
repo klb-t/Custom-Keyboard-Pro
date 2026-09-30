@@ -66,9 +66,11 @@ fun AiSettingsScreen(settings: Settings, setupJourney: SetupJourney? = null) {
 
     val profiles = remember(settings.providerProfilesJson) { ProviderProfiles.all(settings) }
     val profile = profiles[settings.aiProvider] ?: ProviderProfile(settings.aiProvider)
+    val writingDefaults = AiConfig.from(settings.copy(aiTaskProfilesJson = ""))
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
         CapabilitySetupSection(settings, initialTarget = setupJourney?.target, wants = setupJourney?.wants)
+        AiTaskProfileSection(settings)
 
         SettingsSection(
             title = "AI features",
@@ -356,8 +358,9 @@ fun AiSettingsScreen(settings: Settings, setupJourney: SetupJourney? = null) {
                 )
                 SliderRow(
                     label = "Temperature",
-                    value = AiConfig.from(settings).temperature,
-                    range = 0f..1.5f,
+                    description = "Provider default. Task profiles can override it; edit those in Expert settings.",
+                    value = writingDefaults.temperature,
+                    range = 0f..2f,
                     format = { "%.2f".format(it) },
                     onChange = { v ->
                         SettingsStore.update { it.copy(aiTemperature = v) }
@@ -369,8 +372,9 @@ fun AiSettingsScreen(settings: Settings, setupJourney: SetupJourney? = null) {
                 )
                 SliderRow(
                     label = "Maximum reply length",
-                    value = AiConfig.from(settings).maxTokens.toFloat(),
-                    range = 16f..1024f,
+                    description = "Provider default. Task profiles can override it; edit those in Expert settings.",
+                    value = writingDefaults.maxTokens.toFloat(),
+                    range = 8f..8192f,
                     format = { "${it.toInt()} tokens" },
                     onChange = { v ->
                         SettingsStore.update { it.copy(aiMaxTokens = v.toInt()) }

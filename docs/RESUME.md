@@ -6,6 +6,15 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 
 ## Current work: scoped settings, keyboard authoring and native phone assistant
 
+### Task-profile follow-up (separate source checkpoint; validation pending)
+
+Replaced the goal activity's hardcoded token limit with the native AI task-profile
+resolver. Writing, planning and six existing specialized uses share bounded persisted task parameters, Expert
+controls, source display and per-field inheritance. Connection probes retain their
+explicit small limits. Invalid imported profiles fail closed before network use.
+See `AI_TASK_PROFILES.md`; six regressions cover resolution, persistence, scopes
+and invalid data. This follow-up is not yet certified by an Android gate.
+
 ### Overnight recovery, 2026-09-30 22:45 UTC
 
 Recovered the remote branch after workspace pruning. The previous local Android

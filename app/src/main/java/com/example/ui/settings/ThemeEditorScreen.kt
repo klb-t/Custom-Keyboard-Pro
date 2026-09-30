@@ -478,7 +478,7 @@ private suspend fun generateTheme(
         append(wish.trim())
     }
     return AiClient.complete(
-        config = AiConfig.from(settings, maxTokens = 900),
+        config = AiConfig.from(settings, task = com.example.core.ai.AiRequestTask.THEME),
         systemPrompt = THEME_SYSTEM.trim(),
         userPrompt = prompt
     ).mapCatching { reply ->

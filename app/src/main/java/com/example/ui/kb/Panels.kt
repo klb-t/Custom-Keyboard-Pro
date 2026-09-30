@@ -854,7 +854,7 @@ fun AiToolsPanel(theme: KeyboardTheme, settings: Settings, onClose: () -> Unit) 
                                         error = null
                                         scope.launch {
                                             val response = AiClient.complete(
-                                                config = AiConfig.from(settings, maxTokens = 800),
+                                                config = AiConfig.from(settings, task = com.example.core.ai.AiRequestTask.REWRITE),
                                                 systemPrompt = task.systemPrompt,
                                                 userPrompt = task.render(source)
                                             )

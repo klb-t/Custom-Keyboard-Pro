@@ -444,6 +444,7 @@ data class Settings(
     val aiContextChars: Int = 600,
     val aiTemperature: Float = 0.3f,
     val aiMaxTokens: Int = 64,
+    val aiTaskProfilesJson: String = "",
     val aiCustomTasksJson: String = "",
 
     // --- finishing sentences (the prediction lane) ------------------------

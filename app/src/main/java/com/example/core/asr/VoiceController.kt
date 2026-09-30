@@ -151,7 +151,7 @@ class VoiceController(
         scope.launch {
             val best = alternatives.first().text
             val result = AiClient.complete(
-                config = AiConfig.from(s, maxTokens = 200),
+                config = AiConfig.from(s, task = com.example.core.ai.AiRequestTask.VOICE_COMMAND),
                 systemPrompt = "You propose alternative readings of a speech transcript. " +
                     "Reply with a JSON array of strings and nothing else. Each entry is a " +
                     "plausible alternative for what was actually said — different word " +

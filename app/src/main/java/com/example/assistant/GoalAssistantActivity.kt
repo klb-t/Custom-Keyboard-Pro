@@ -185,7 +185,8 @@ class GoalAssistantActivity : Activity() {
         if (!ready()) return
         val input = goal.text.toString().trim()
         if (input.isEmpty()) return tell("Describe the goal first.")
-        val config = AiConfig.from(SettingsStore.current, maxTokens = 4096)
+        val config = AiConfig.from(SettingsStore.current, task = com.example.core.ai.AiRequestTask.GOAL_PLAN)
+        config.configurationProblem?.let { return tell(it) }
         if (!config.isUsable) return tell("Configure a model/provider in IO Matrix settings first. Explicit do: commands and light setup need no model.")
         AlertDialog.Builder(this).setTitle("Send this goal for planning?")
             .setMessage("Provider: ${config.provider}\nModel: ${config.model}\nEndpoint: ${runCatching { java.net.URI(config.effectiveBaseUrl).host }.getOrNull() ?: "configured endpoint"}\n\nSends the text you entered, action definitions and capability availability. No editor, clipboard, screen content or device addresses are included. A result only proposes a plan.")

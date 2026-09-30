@@ -70,7 +70,7 @@ Rules:
     suspend fun generate(
         request: String,
         settings: Settings = SettingsStore.current,
-        config: AiConfig = AiConfig.from(settings, maxTokens = 1200)
+        config: AiConfig = AiConfig.from(settings, task = com.example.core.ai.AiRequestTask.PANEL)
     ): Result<Outcome> {
         if (request.isBlank()) {
             return Result.failure(IllegalArgumentException("Describe what you want to change first."))

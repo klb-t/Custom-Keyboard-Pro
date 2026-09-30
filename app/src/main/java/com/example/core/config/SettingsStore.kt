@@ -315,6 +315,7 @@ object SettingsStore {
         put("aiContextChars", s.aiContextChars)
         put("aiTemperature", s.aiTemperature.toDouble())
         put("aiMaxTokens", s.aiMaxTokens)
+        put("aiTaskProfilesJson", s.aiTaskProfilesJson)
         put("aiCustomTasksJson", s.aiCustomTasksJson)
         put("completionEnabled", s.completionEnabled)
         put("completionProvider", s.completionProvider)
@@ -558,6 +559,7 @@ object SettingsStore {
             aiContextChars = o.optInt("aiContextChars", d.aiContextChars),
             aiTemperature = o.optDouble("aiTemperature", d.aiTemperature.toDouble()).toFloat(),
             aiMaxTokens = o.optInt("aiMaxTokens", d.aiMaxTokens),
+            aiTaskProfilesJson = o.optString("aiTaskProfilesJson", d.aiTaskProfilesJson),
             aiCustomTasksJson = o.optString("aiCustomTasksJson", d.aiCustomTasksJson),
             completionEnabled = o.optBoolean("completionEnabled", d.completionEnabled),
             completionProvider = o.optString("completionProvider", d.completionProvider),

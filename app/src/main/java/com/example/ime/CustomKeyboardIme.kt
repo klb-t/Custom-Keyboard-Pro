@@ -2067,7 +2067,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         serviceScope.launch {
             val prompt = task.render(source)
             val response = AiClient.complete(
-                config = AiConfig.from(settings, maxTokens = 800),
+                config = AiConfig.from(settings, task = com.example.core.ai.AiRequestTask.REWRITE),
                 systemPrompt = task.systemPrompt,
                 userPrompt = if (onScreen == null) prompt else
                     "For context, this is what is on the screen (do not rewrite it):\n" +
