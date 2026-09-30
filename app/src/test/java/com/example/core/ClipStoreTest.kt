@@ -1,7 +1,6 @@
 package com.example.core
 
 import android.content.Context
-import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.core.clipboard.ClipStore
 import com.example.core.data.ClipboardEntity
@@ -10,7 +9,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
+import androidx.core.content.FileProvider
+import org.junit.Before
+import org.robolectric.util.ReflectionHelpers
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -27,6 +28,15 @@ import java.io.File
 class ClipStoreTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
+
+    @Before
+    fun bindProviderPathsToThisTestDirectory() {
+        // Robolectric gives each method a new app data directory while AndroidX's
+        // authority cache can survive it. Reset only this fixture's authority;
+        // exercise the real FileProvider rather than skipping URI assertions.
+        val cache = ReflectionHelpers.getStaticField<MutableMap<String, Any>>(FileProvider::class.java, "sCache")
+        synchronized(cache) { cache.remove(context.packageName + ClipStore.AUTHORITY_SUFFIX) }
+    }
 
     private fun textEntry(content: String) = ClipboardEntity(
         type = ClipboardEntity.TYPE_TEXT, content = content
@@ -87,36 +97,16 @@ class ClipStoreTest {
         assertNull(ClipStore.single(context, fileEntry("/no/such/file.png")))
     }
 
-    /**
-     * Whether this test method can publish a file at all.
-     *
-     * FileProvider caches its path strategy statically, per authority, built the
-     * first time anything asks it for a URI. Robolectric gives each *test method* its
-     * own data directory. So the first method to publish wins, and every later one
-     * asks about a file under a root the cache has never heard of — which is not a
-     * fault in the app and cannot happen on a device, where the data directory is
-     * fixed for the life of the process.
-     *
-     * Rather than let that decide which assertions run by accident — the composite
-     * test was passing purely because it happened to go first — the methods that need
-     * a published URI say so, and are reported as skipped rather than as passed.
-     */
-    private fun publish(file: File): Uri? =
-        runCatching { ClipStore.shareUri(context, file) }.getOrNull()
-
     @Test
     fun `an entry whose bytes are there can be handed over`() {
         val file = File(ClipStore.dir(context), "kept.png").apply { writeBytes(ByteArray(16)) }
         val entry = fileEntry(file.absolutePath)
         assertNotNull(ClipStore.fileFor(entry))
 
-        val uri = publish(file)
-        assumeTrue(
-            "FileProvider's cached path strategy belongs to whichever test method " +
-                "published first; this one has a different data directory",
-            uri != null
-        )
-        assertEquals("content", uri!!.scheme)
+        val uri = ClipStore.shareUri(context, file)
+        assertEquals("content", uri.scheme)
+        val bytes = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+        org.junit.Assert.assertArrayEquals(file.readBytes(), bytes)
 
         val clip = ClipStore.single(context, entry)
         assertNotNull("single() could not build a clip for a file that exists", clip)
@@ -126,6 +116,14 @@ class ClipStoreTest {
         // provider again — so it is right even where the provider will not answer.
         assertTrue(clip.description.hasMimeType("image/png"))
         file.delete()
+    }
+
+    @Test
+    fun `provider cannot publish app files outside the clipboard directory`() {
+        val outside = File(context.filesDir, "private-fixture.txt").apply { writeText("private fixture") }
+        try {
+            assertTrue(runCatching { ClipStore.shareUri(context, outside) }.isFailure)
+        } finally { outside.delete() }
     }
 
     @Test
@@ -155,10 +153,7 @@ class ClipStoreTest {
     @Test
     fun `a composite carries a file alongside the text`() {
         val file = File(ClipStore.dir(context), "part.png").apply { writeBytes(ByteArray(16)) }
-        assumeTrue(
-            "needs a publishable URI; see publish()",
-            publish(file) != null
-        )
+        assertEquals("content", ClipStore.shareUri(context, file).scheme)
         val clip = ClipStore.compose(
             context,
             listOf(textEntry("first"), fileEntry(file.absolutePath))
