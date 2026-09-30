@@ -11,17 +11,23 @@ That has one practical consequence worth stating plainly: a layout a user writes
 do everything a built-in layout does, because they are the same kind of object. There
 is no privileged path.
 
-```
-   LayoutDef ──► KeyPlacement ──► KeySurface ──► KeyAction ──► CustomKeyboardIme
-   (data)        (geometry)       (touch)        (intent)       (effect)
-```
+`LayoutDef` supplies the authored data. `KeyPlacement` resolves geometry;
+`KeySurface` recognizes a trigger and retains its original binding. The host
+dispatches the resulting `KeyAction`. A phone command then follows canonical
+`Verbs` metadata through `Performer` to its audited platform adapter.
+
+Read root [ECOSYSTEM.md](../ECOSYSTEM.md) and
+[ECOSYSTEM_ADAPTER_BOUNDARIES.md](ECOSYSTEM_ADAPTER_BOUNDARIES.md) when extending
+these contracts across interfaces, learned knowledge or other projects.
 
 ## Packages
 
 | Package | Holds |
 |---|---|
 | `core.layout` | The layout model, its JSON codec, key geometry and hit testing, the built-in layouts, and the two authoring paths (bitmap and model-written). |
-| `core.config` | `Settings` — one immutable snapshot of every option — and the store that persists it. |
+| `core.config` | Shared persisted `Settings`, schema/levels/ownership, sparse instance overrides and resolved host-local snapshots. |
+| `core.io`, `core.phone` | Canonical verb metadata, typed phone requests, prerequisites and outcome contracts. |
+| `io`, `phone`, `assistant` | Host/platform adapters, explicit local phone sessions and reviewed goal/voice execution. |
 | `core.text` | Grapheme-safe deletion, word and line boundaries, capitalisation rules, dead-key composition. |
 | `core.data` | Room: clipboard history, the personal dictionary, the word-bigram model, text shortcuts. |
 | `core.suggest` | Merges local and model suggestions for the strip. |
@@ -34,18 +40,25 @@ is no privileged path.
 
 ## Where the decisions are
 
-**One action switch.** `CustomKeyboardIme.perform` is the only place a `KeyAction`
-becomes an effect. To know everything this keyboard can do, read that function. To add
-a capability, add a case there and a variant to `KeyAction` — and it is immediately
-bindable to any key, any swipe, any panel button, and expressible in layout JSON.
+**Canonical intents and adapters.** `CustomKeyboardIme.perform` dispatches keyboard
+actions, including field editing and modifier state. Commands beyond the field use
+`Verbs` and `Performer`; phone requests are validated and executed by `PhoneRuntime`.
+The goal assistant reuses those operations with its own reviewed, bounded host.
+Extend an existing catalogue/adapter when adding another instance of a capability;
+add a new `KeyAction` only for a genuinely new kind of keyboard intent. A declared
+operation does not prove that every host has an audited executable binding.
 
 **One editor.** Every change to the user's text goes through `EditorController`. The
 rules about what backspace removes, when a capital is implied, and what counts as a
 password field are stated once.
 
-**One settings snapshot.** The settings app and the IME read the same `StateFlow`.
+**One persisted base, resolved instance snapshots.** The settings app and the IME
+read the same `StateFlow` for shared defaults.
 They previously read two different `SharedPreferences` files, so nothing in settings
-had any effect. They now share the same runtime snapshot. One IO writer coalesces
+had any effect. Layout, panel and exact authored key/layer instances now hold sparse
+typed overrides. The resolver applies the defaults policy and records provenance;
+bounded host-local caches avoid JSON work in pointer samples. Basic/Advanced/Expert/
+Debugger change visibility, not precedence or permissions. One IO writer coalesces
 updates and persists an encrypted AtomicFile; pending/error state distinguishes
 visible changes from durable storage. The device-bound key is held by Android
 Keystore, with hardware backing where the device supports it. Settings and
@@ -77,7 +90,8 @@ Two rules, enforced in the layers that could break them rather than at call site
 ## Building
 
 There is no Gradle wrapper binary in the repository. CI provisions Gradle through
-`gradle/actions/setup-gradle` and runs `gradle` directly. Locally, use any Gradle 9.x:
+`gradle/actions/setup-gradle` and runs `gradle` directly. Use the declared Gradle
+9.7.1, JDK 17 and SDK 36.1; see [LOCAL_ANDROID_BUILD.md](LOCAL_ANDROID_BUILD.md).
 
 ```
 gradle :app:assembleDebug
@@ -89,7 +103,8 @@ produces an unsigned APK rather than failing.
 
 ## Settings are data too
 
-`Settings` is still a Kotlin data class, but nothing reads it field by field any more.
+`Settings` is a typed Kotlin snapshot consumed by runtime code. Its canonical
+schema supplies shared controls and discovery instead of duplicating their lists.
 
 `SettingsSchema` derives the complete list of settings **from the persistence codec** —
 `SettingsStore.toJson(Settings())` is the authoritative statement of what exists and
@@ -100,8 +115,9 @@ label, a slider range, which strings are really enums, which are secret.
 `SettingsStore.setByKey` / `getByKey` are the door that lets code written before a
 setting existed still change it. Three things go through that door:
 
-- **AllSettingsScreen** renders the whole schema with a search box — "nothing is
-  hidden", structurally rather than by discipline.
+- **AllSettingsScreen** projects the schema by level and actual owner, with search
+  reporting matching options on higher levels. Expert exposes every persisted user
+  option. Selected-instance controls share that schema and show effective sources.
 - **SettingControl** renders one setting from its description, so every screen has one
   implementation of each kind of control.
 - **PanelGenerator** hands a model the whole schema and asks which settings answer a
@@ -138,8 +154,9 @@ A `content://` URI on the clipboard carries a *temporary* read grant tied to tha
 Storing the URI produces a history entry that is unreadable by the time anybody wants
 it, and says nothing about it. So the bytes are copied at the moment of capture, which
 is the only moment it is possible, and handed back out through a `FileProvider` scoped
-to one directory. Rows own files, so trimming, sweeping and clearing take the bytes
-with them.
+to one directory. Rows own files. Reviewed bulk deletion moves entries into persistent
+Trash with restore, preserves pins/newer copies and keeps referenced image bytes
+until actual cleanup succeeds. See [CLIPBOARD_WORKSPACE.md](CLIPBOARD_WORKSPACE.md).
 
 Android's clipboard has one slot and no "add to", so two things copied in two apps can
 never meet there. They meet in the history instead: several entries can be emitted as

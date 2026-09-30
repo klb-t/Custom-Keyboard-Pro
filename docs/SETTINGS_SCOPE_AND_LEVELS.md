@@ -24,8 +24,8 @@ The selector writes the new level and the compatibility flag together. The legac
 flag remains in the canonical codec for old callers; its control explains this.
 When a stored document explicitly includes the new level, that level is authoritative
 and its compatibility flag is normalized. The canonical legacy setter updates both
-fields; directly constructed old in-memory snapshots still display the old Expert
-surface until normalized through the new codec.
+fields; directly constructed old in-memory snapshots display Expert and canonical
+serialization writes that effective level, preserving it on restart.
 
 ## Shared owners and actual instances
 
@@ -43,6 +43,11 @@ The initial cascading options cover local typing, punctuation, feedback, gesture
 thresholds and key/panel rendering. The complete finite allowlist is in
 `SettingsHierarchy`; adding an option requires a real contextual consumer. Toolbar
 row composition applies to layouts and panels, not individual keys.
+Compound layouts share one toolbar owned by their first visible docked panel.
+The editor and renderer use `ToolbarRows.ownerPanelId` for that identity. Other
+panels do not expose a toolbar override control; dormant imported overrides are
+retained but suppressed, with an explicit removal action. A hidden/moved main panel
+can change ownership, so applicability is checked against the current layout.
 
 The native stored instances are:
 

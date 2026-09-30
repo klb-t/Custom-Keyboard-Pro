@@ -28,6 +28,10 @@ data class ToolbarTool(val panel: PanelId, val glyph: String, val title: String)
 /** A row is a composition of sources. Examples are profiles of this same mechanism. */
 object ToolbarRows {
     const val MAX_ROWS = 4
+    /** Compound layouts share toolbar chrome owned by the first visible docked panel. */
+    fun ownerPanelId(layout: LayoutDef): String? = layout.elements.firstOrNull {
+        it.visible && it.placement == ElementPlacement.DOCKED
+    }?.id
     private val allSources = ToolbarSource.entries.toList()
     val tools = listOf(
         ToolbarTool(PanelId.EMOJI, "☺", "Emoji"), ToolbarTool(PanelId.CLIPBOARD, "▤", "Clipboard"),

@@ -108,6 +108,10 @@ object ScopedSettingsResolver {
                 val spec = SettingsSchema.spec(setting) ?: error("Unknown setting: $setting")
                 require(source.scope in spec.applicableScopes && !spec.secret) { "$setting cannot be overridden here." }
                 val validated = SettingsSchema.validatedValue(setting, raw).getOrThrow()
+                if (setting == "toolbarRowsJson" && source.scope == SettingsScope.PANEL && source.instanceId != com.example.core.layout.ToolbarRows.ownerPanelId(layout)) {
+                    suppressed[setting] = suppressed[setting].orEmpty() + source
+                    return@forEach
+                }
                 val allowed = when (base.localSettingsPolicy) {
                     SettingsOverridePolicy.CASCADE -> true
                     SettingsOverridePolicy.LAYOUT_ONLY -> source.scope == SettingsScope.LAYOUT
@@ -143,8 +147,8 @@ object ScopedSettingsResolver {
     }
 
     fun effective(base: Settings, layout: LayoutDef, address: SettingsAddress, setting: String): EffectiveSetting {
-        val spec = SettingsSchema.spec(setting) ?: error("Unknown setting: $setting")
-        require(address.scope in spec.applicableScopes) { "This setting has no ${address.scope.title} override." }
+        SettingsSchema.spec(setting) ?: error("Unknown setting: $setting")
+        require(SettingsHierarchy.appliesTo(layout, address, setting)) { "This setting has no active ${address.scope.title} override here." }
         overrides(layout, address) // check ownership before resolving
         val leaf = if (address.scope == SettingsScope.KEY) key(layout, address) else null
         val resolved = resolve(base, layout, address.panelId, address.layerName, leaf)
@@ -157,7 +161,11 @@ object ScopedSettingsResolver {
     fun withOverride(layout: LayoutDef, address: SettingsAddress, setting: String, raw: Any?): Result<LayoutDef> = runCatching {
         val spec = SettingsSchema.spec(setting) ?: error("Unknown setting: $setting")
         require(address.scope in spec.applicableScopes && !spec.secret) { "${spec.label} is shared by the application." }
-        val next = overrides(layout, address).with(address.scope, setting, raw).getOrThrow()
+        val own = overrides(layout, address) // validate exact identity before an eligibility explanation
+        require(raw == null || raw == JSONObject.NULL || SettingsHierarchy.appliesTo(layout, address, setting)) {
+            "${spec.label} belongs to the shared toolbar's main docked panel. This panel has no toolbar of its own."
+        }
+        val next = own.with(address.scope, setting, raw).getOrThrow()
         when (address.scope) {
             SettingsScope.LAYOUT -> layout.copy(settingsOverrides = next)
             SettingsScope.PANEL -> layout.copy(elements = layout.elements.map { if (it.id == address.panelId) it.copy(settingsOverrides = next) else it })

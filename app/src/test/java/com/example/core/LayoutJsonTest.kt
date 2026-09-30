@@ -211,6 +211,7 @@ class LayoutJsonTest {
     @Test
     fun `settings survive a round trip and unknown keys are ignored`() {
         val custom = Settings(
+            settingsLevel = com.example.core.config.SettingsLevel.EXPERT,
             expertMode = true,
             themeId = "terminal",
             presentation = PresentationMode.SPLIT,

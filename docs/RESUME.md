@@ -7,6 +7,10 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 ## Current work: scoped settings, keyboard authoring and native phone assistant
 
 Based on `badd2525b65fbacc5b593792251252c3f3dc577b` of the goal-assistant branch.
+Reviewable source checkpoint: `d4d8c4e63855354259e2d1fc2ea9fbee6a5ce114`,
+[draft PR #5](https://github.com/klb-t/Custom-Keyboard-Pro/pull/5), targeting the
+previous goal-assistant branch. Follow-up corrections and final validation are
+being recorded on the same branch; do not merge `main` automatically.
 Version is being prepared as **4.5.0 / code 11** with the existing package and
 signing key. Until the final gate and artifact are recorded, **4.4.2 remains the
 last verified published APK**. Keep all earlier branches/releases intact.
@@ -24,8 +28,9 @@ See [SETTINGS_SCOPE_AND_LEVELS.md](SETTINGS_SCOPE_AND_LEVELS.md).
 The keyboard slice adds toolbar-row data/profiles, source composition, context
 visibility and global/layout/panel overrides. Visual layout geometry editing,
 stable multi-touch across modifier-layer changes and shifted punctuation in the
-science layout are being finalized. Do not claim these final changes passed until
-the next full gate is recorded.
+science layout passed the frozen-source Android gate. A follow-up will expose four
+viewport policy thresholds through the native Expert registry; that later patch
+requires its own source gate.
 
 Phone tools use actual local platform inventories, explicit foreground sensor
 sessions, app/usage inspection and contextual special-access routes. Typed audited
@@ -45,26 +50,33 @@ prior approval. See [SYSTEM_VOICE_ASSISTANT.md](SYSTEM_VOICE_ASSISTANT.md).
 
 The exact repository-version Android toolchain is now available locally (Gradle
 9.7.1, JDK 17, SDK 36.1). The inherited goal/capture code compiled against the real
-SDK. An intermediate full gate passed **891 tests: 890 passed, zero failures or
-errors, one existing skip**, and built a signed APK. More edits followed that
-snapshot, so it is diagnostic evidence, not final 4.5.0 validation. Lint and the
-final frozen-source suite/build are pending. See [LOCAL_ANDROID_BUILD.md](LOCAL_ANDROID_BUILD.md).
+SDK. The frozen core gate passed **936 tests: 935 passed, zero failures or errors, one
+existing ClipStore assumption skip**; intact lint reported **zero errors and 118
+warnings**, with no disabled checks. The signed **4.5.0 / code 11** APK is
+21,507,892 bytes, SHA-256 `a49db14f018469e24e590156d50f42025fb89bd81f016a2e78d12904616a7847`.
+The original signer is unchanged. Before/after source fingerprint was
+`b24b07dadf87e4c80be103f9e3cd2c7eeaa17b10109dfe2d58d7f096bad0379b`.
+See [validation evidence](validation/2026-09-30-core-gate.json) and
+[LOCAL_ANDROID_BUILD.md](LOCAL_ANDROID_BUILD.md). Later source changes require a new
+gate and a new artifact; this evidence does not certify unbuilt follow-ups.
 GitHub Actions monthly allowance is exhausted until October; do not repeatedly
 queue builds. Source checkpoints use `[skip ci]` and local exact-version gates.
 
 The AI evaluator exports the actual production prompt/catalogue and validates
 responses through production JSON/argument rules, with a persistent cumulative
-2 USD cap. Its six harness tests and actual Robolectric production bridge passed;
-the live OpenRouter catalogue returned 464 models. **Zero live completions have
-run**: the earlier encrypted credential lost its matching private identity. A new
-public encrypted handoff form was delivered to the user; no private key or API
-credential belongs in this repository. Continue coding while awaiting the uploaded
-encrypted JSON. See [GOAL_AI_EVALUATION.md](GOAL_AI_EVALUATION.md).
+2 USD cap. Offline harness and the actual Robolectric production bridge passed; the live
+OpenRouter catalogue returned 464 models. The newly uploaded encrypted credential
+was decrypted outside Git, and paid evaluation of production-generated prompts is
+now running under the cumulative cap. Initial responses exposed incomplete manual
+setup alternatives and reasoning consuming the response budget. Baseline results
+and isolated corrections are being measured; no completed live score is claimed
+yet. No private key or API credential belongs in this repository.
+See [GOAL_AI_EVALUATION.md](GOAL_AI_EVALUATION.md).
 
-Next concrete gate: freeze toolbar/editor, phone, voice and settings owners; run
-full tests, intact Android lint and assemble at the declared versions; inspect any
-real diagnostics; publish a source checkpoint and installable signed APK. Then run
-live model evaluation if the credential has arrived. Physical phone, assistant role,
+Next concrete gate: finish the four Expert viewport policy controls and measured
+AI corrections, freeze all owners, then run intact tests/lint/assemble once on the
+combined source. Publish the final signed artifact and update the draft PR.
+Physical phone, assistant role,
 microphone/sensors, OEM shade/navigation, real cloud/Google-account and bulb checks
 remain device acceptance work.
 
@@ -102,6 +114,14 @@ catalogues, reusable light profiles, streaming graph discovery and full voice-se
 service integration remain explicit follow-up work, not silently completed features.
 
 ## Product direction clarified: universal capabilities and voice assistant
+
+The user's 2026-09-30 steering explicitly adds the whole ecosystem to design
+decisions. Root `ECOSYSTEM.md` was copied unchanged from `main` commit `8e8aa9f`
+(blob `67bc5050556be8aaa56476a944be649ec74c84ad`). It is the canonical shared
+brainstorm, not a delivery claim or an instruction to build every connection now.
+iOmatrix can independently consume/contribute learned knowledge, corrections,
+procedures and structures; no compulsory ChatADHD service, universal database or
+graph semantics are selected. Access and execution authority stay local and explicit.
 
 Read [UNIVERSAL_ASSISTANT.md](UNIVERSAL_ASSISTANT.md) before extending the roadmap.
 The user explicitly wants all special functions, special permissions and advanced

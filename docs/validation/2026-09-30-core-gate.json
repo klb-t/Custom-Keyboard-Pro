@@ -1,0 +1,65 @@
+{
+  "status": "PASS",
+  "completedUtc": "2026-09-30T13:30:48.711140+00:00",
+  "gateLog": "final3-gate.log",
+  "sourceFingerprint": "b24b07dadf87e4c80be103f9e3cd2c7eeaa17b10109dfe2d58d7f096bad0379b",
+  "sourceUnchanged": true,
+  "sourceInputs": 375,
+  "unit": {
+    "suites": 96,
+    "counts": {
+      "tests": 936,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 935
+    },
+    "skipped": [
+      {
+        "class": "com.example.core.ClipStoreTest",
+        "test": "an entry whose bytes are there can be handed over",
+        "kind": "skipped",
+        "message": "org.junit.AssumptionViolatedException: FileProvider's cached path strategy belongs to whichever test method published first; this one has a different data directory"
+      }
+    ],
+    "failures": []
+  },
+  "lint": {
+    "severityCounts": {
+      "Warning": 118
+    },
+    "checkCounts": {
+      "ApplySharedPref": 1,
+      "InlinedApi": 7,
+      "UnusedAttribute": 1,
+      "RedundantLabel": 1,
+      "GradleDependency": 2,
+      "NewerVersionAvailable": 2,
+      "SwitchIntDef": 1,
+      "DrawAllocation": 1,
+      "ObsoleteSdkInt": 4,
+      "StaticFieldLeak": 10,
+      "UnusedResources": 7,
+      "IconDipSize": 2,
+      "UseKtx": 36,
+      "ClickableViewAccessibility": 1,
+      "SetTextI18n": 42
+    },
+    "disabledChecks": []
+  },
+  "apk": {
+    "path": "app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 21507892,
+    "sha256": "a49db14f018469e24e590156d50f42025fb89bd81f016a2e78d12904616a7847",
+    "package": "com.aistudio.qwertykey.xyzabc",
+    "versionCode": 11,
+    "versionName": "4.5.0",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "signatureVerified": true,
+    "signatureScheme": "v2",
+    "signerCertificateSha256": "63a3ce6c6b4f80437594d421ec7e6e15d3c5a37821ca31f23c15732e868dddd1"
+  },
+  "physicalDeviceTested": false,
+  "githubActionsUsed": false
+}

@@ -20,6 +20,14 @@ enum class SettingsOwner(val title: String, val explanation: String) {
 }
 
 object SettingsHierarchy {
+    /** Coarse scope metadata plus structural eligibility from the actual renderer's owner. */
+    fun appliesTo(layout: com.example.core.layout.LayoutDef, address: SettingsAddress, setting: String): Boolean {
+        if (layout.id != address.layoutId) return false
+        val spec = SettingsSchema.spec(setting) ?: return false
+        if (address.scope !in spec.applicableScopes) return false
+        return setting != "toolbarRowsJson" || address.scope != SettingsScope.PANEL ||
+            address.panelId == com.example.core.layout.ToolbarRows.ownerPanelId(layout)
+    }
     /** A deliberately small standard keyboard surface; the complete surface remains Expert. */
     val basicKeys = setOf(
         "settingsLevel", "themeId", "activeLayoutId", "enabledLayoutIds", "heightPortrait", "heightLandscape",

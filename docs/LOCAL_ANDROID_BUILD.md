@@ -72,6 +72,15 @@ gradle :app:assembleDebug --no-daemon --console=plain --no-configuration-cache
 ```
 
 Equivalent full gate: `tools/local-android-build.sh`.
+The successful frozen-source gate used a runtime-only 6 GiB Gradle heap on this
+9.7 GiB host, leaving the checked-in Gradle configuration unchanged:
+
+```sh
+tools/local-android-build.sh :app:compileDebugKotlin :app:testDebugUnitTest \
+  :app:lintDebug :app:assembleDebug \
+  '-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8'
+```
+
 For a focused forced test run, use task-scoped `--rerun`; `--rerun-tasks` needlessly
 rebuilds every resource/compiler prerequisite.
 

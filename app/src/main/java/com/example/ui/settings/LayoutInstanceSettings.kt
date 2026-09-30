@@ -53,7 +53,8 @@ fun LayoutInstanceSettingsDialog(layout: LayoutDef, settings: Settings, onDismis
         }
         SettingsScope.KEYBOARD_DEFAULTS -> null
     }
-    val applicable = SettingsSchema.search(query).filter { scope in it.applicableScopes }
+    val applicable = SettingsSchema.search(query).filter { scope in it.applicableScopes &&
+        (address == null || SettingsHierarchy.appliesTo(draft, address, it.key)) }
     val visible = applicable.filter { SettingsHierarchy.level(settings).includes(it.minimumLevel) }
     val hiddenCount = applicable.size - visible.size
 
@@ -84,10 +85,18 @@ fun LayoutInstanceSettingsDialog(layout: LayoutDef, settings: Settings, onDismis
             if (hiddenCount > 0) InfoRow("$hiddenCount matching options require a higher settings level. Expert exposes every applicable option.")
             if (address == null) InfoRow("Select an explicit ${scope.title.lowercase()} instance to edit it.")
             else {
+                if (address.scope == SettingsScope.PANEL && !SettingsHierarchy.appliesTo(draft, address, "toolbarRowsJson")) {
+                    val owner = com.example.core.layout.ToolbarRows.ownerPanelId(draft)
+                    InfoRow("This panel has no toolbar of its own. Toolbar rows belong to the shared main docked panel" +
+                        (owner?.let { " · $it." } ?: ". Add a docked panel or configure the layout's shared default."))
+                    if ("toolbarRowsJson" in ScopedSettingsResolver.overrides(draft, address).keys) TextButton(onClick = {
+                        ScopedSettingsResolver.withOverride(draft, address, "toolbarRowsJson", null).onSuccess { draft = it }.onFailure { error = it.message }
+                    }) { Text("Remove unused toolbar override") }
+                }
                 TextButton(onClick = { profilesOpen = !profilesOpen; profilePreview = null }) { Text(if (profilesOpen) "Hide local profiles" else "Local profiles") }
                 if (profilesOpen) {
-                    val profiles = remember(profileRevision, address.scope) { SettingsProfiles.all().filter { profile ->
-                        profile.values.length() > 0 && profile.values.keys().asSequence().all { key -> SettingsSchema.spec(key)?.applicableScopes?.contains(address.scope) == true }
+                    val profiles = remember(profileRevision, address, draft) { SettingsProfiles.all().filter { profile ->
+                        profile.values.length() > 0 && profile.values.keys().asSequence().all { key -> SettingsHierarchy.appliesTo(draft, address, key) }
                     } }
                     InfoRow("Profiles use the same canonical options. Applying here creates local overrides in this draft only.")
                     profiles.forEach { profile -> ActionRow(profile.name, "${profile.values.length()} applicable values", onClick = { profilePreview = profile }) }

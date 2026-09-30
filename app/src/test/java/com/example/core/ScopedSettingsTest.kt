@@ -135,4 +135,24 @@ class ScopedSettingsTest {
         assertFalse(updated.layers.getValue("base").allKeys.first().visible)
         assertTrue(runCatching { LayoutAuthoring.replaceKeyInstance(original, "base", "a", key.copy(id = "another")) }.isFailure)
     }
+    @Test fun `toolbar overrides belong only to the shared main docked panel`() {
+        val layout = fixture()
+        val rows = """{"version":1,"rows":[]}"""
+        val main = SettingsAddress("one", "main")
+        val spare = SettingsAddress("one", "spare")
+        assertEquals("main", ToolbarRows.ownerPanelId(layout))
+        assertTrue(SettingsHierarchy.appliesTo(layout, main, "toolbarRowsJson"))
+        assertFalse(SettingsHierarchy.appliesTo(layout, spare, "toolbarRowsJson"))
+        assertTrue(ScopedSettingsResolver.withOverride(layout, main, "toolbarRowsJson", rows).isSuccess)
+        assertTrue(ScopedSettingsResolver.withOverride(layout, spare, "toolbarRowsJson", rows).isFailure)
+        val imported = layout.copy(elements = layout.elements.map { panel -> if (panel.id == "spare")
+            panel.copy(settingsOverrides = SettingsOverrides.EMPTY.with(SettingsScope.PANEL, "toolbarRowsJson", rows).getOrThrow()) else panel })
+        val resolved = ScopedSettingsResolver.resolve(Settings(), imported, "spare")
+        assertEquals("", resolved.snapshot.toolbarRowsJson)
+        assertEquals(listOf(SettingsSource(SettingsScope.PANEL, "spare")), resolved.suppressed["toolbarRowsJson"])
+        assertTrue(ScopedSettingsResolver.withOverride(imported, spare, "toolbarRowsJson", null).getOrThrow().elements[1].settingsOverrides.isEmpty)
+        val rearranged = layout.copy(elements = layout.elements.map { if (it.id == "main") it.copy(visible = false) else it })
+        assertEquals("spare", ToolbarRows.ownerPanelId(rearranged))
+        assertTrue(SettingsHierarchy.appliesTo(rearranged, spare, "toolbarRowsJson"))
+    }
 }

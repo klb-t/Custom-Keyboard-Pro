@@ -48,6 +48,8 @@ Completion remains a separate semantic append row. Suggestion acceptance may rep
 
 The root measures the same slots that are drawn. Additional rows reduce available key height within the bounded panel budget, and row height is reduced on short screens. Scoped settings are resolved from the original layout/panel/key instances before rendering; transformed labels/bindings do not introduce a new settings instance.
 
+The keyboard body additionally budgets its actual measured viewport. A 140 dp floating panel has only 114 dp below its grip; four 42 dp toolbars could previously consume that entire body before keys were measured. `KeyboardViewportBudget` retains at least 45% of a short body for keys (up to a 96 dp minimum on larger bodies), reducing toolbar/completion/indicator/padding chrome together. The same measured budget supplies the actual drawn heights through resize.
+
 The current shared toolbar belongs to the main docked panel (the first visible docked element); its panel override supplies those rows. Other docked pieces and loose/free/control elements do not create their own toolbar surface. Their other eligible local visual/touch settings are consumed, but a `toolbarRowsJson` override on an element without a toolbar is not drawn. Per-element toolbar chrome needs its own sizing contract before it can be advertised for those elements.
 
 ## Visual geometry
@@ -71,7 +73,8 @@ Key ids, bindings, popups, styling and scoped settings are preserved. Operations
 - `ToolbarRowsTest`: four tests for profile round trips, repeated roles, stable/dynamic visibility, legacy/zero-row behavior and invalid/bounded data.
 - `ScienceLayoutBehaviorTest`: two tests for standard quick alternates/Shift text with preserved mathematics, and automatic/manual capitalization with intentional authored capitals.
 - `KeySurfaceGestureTest`: three real Compose multi-pointer/lifecycle regressions described above.
+- `KeyboardViewportBudgetTest` and `KeyboardViewportTest`: two budget contracts and a real Compose measurement regression reproducing zero-height keys with the former fixed chrome, then retaining the key area through a 140 → 220 → 140 dp floating resize.
 
 These checks cover deterministic renderer/editor contracts. Navigation-bar/OEM window behavior, physical multi-touch, and a full interaction review on the user's device remain physical-device checks.
 
-The focused SDK 36.1 checkpoint on 2026-09-30 passed all 15 tests above with zero failures/errors, and main Kotlin compilation passed. Full-suite, lint and APK outcomes are recorded by the shared validation checkpoint separately.
+The final SDK 36.1 checkpoint on 2026-09-30 passed all six test classes (18 tests) with zero failures/errors, including the measured floating-viewport reproduction and resize regression. Main and test Kotlin compilation passed. The combined unit suite reported 936 tests, 935 passed, zero failures/errors and one existing FileProvider assumption skip. Lint and APK outcomes are recorded by the shared validation checkpoint separately.

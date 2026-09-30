@@ -36,6 +36,15 @@ class SettingsHierarchyTest {
         assertTrue(promoted.expertMode)
         assertEquals(promoted, SettingsStore.fromJson(SettingsStore.toJson(promoted)))
     }
+    @Test fun `canonical serialization keeps directly constructed legacy expert mode on restart`() {
+        val legacy = Settings(expertMode = true, keyGapDp = 7f)
+        val encoded = SettingsStore.toJson(legacy)
+        assertEquals("EXPERT", encoded.getString("settingsLevel"))
+        assertTrue(encoded.getBoolean("expertMode"))
+        val restored = SettingsStore.fromJson(encoded)
+        assertEquals(SettingsHierarchy.selectLevel(legacy, SettingsLevel.EXPERT), restored)
+        assertEquals(SettingsLevel.EXPERT, SettingsHierarchy.level(restored))
+    }
     @Test fun `level roundtrip and visibility never reset values`() {
         val base = Settings(autoCapitalize = true, keyGapDp = 7f, aiApiKey = "local-secret")
         SettingsLevel.entries.forEach { level ->

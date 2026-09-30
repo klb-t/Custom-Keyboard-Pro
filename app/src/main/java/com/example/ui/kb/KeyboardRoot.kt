@@ -115,8 +115,7 @@ private fun KeyboardRootResolved(
     val completion by host.completions.state.collectAsState()
     val panel = host.openPanelId
     val chips by host.actionChips.collectAsState()
-    val mainPanel = host.layout.elements.firstOrNull { it.visible && it.placement == ElementPlacement.DOCKED }
-    val rowSettings = resolvedPanelSettings(settings, host.layout, mainPanel?.id)
+    val rowSettings = resolvedPanelSettings(settings, host.layout, ToolbarRows.ownerPanelId(host.layout))
 
     // Whether the prediction row occupies height at all.
     //
@@ -259,13 +258,21 @@ private fun KeyboardBody(
     val host = LocalKeyboardHost.current
     val layout = host.layout
 
-    Column(Modifier.fillMaxSize()) {
-        KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, stripHeight, indicatorHeight)
+    val chips by host.actionChips.collectAsState()
+    val configuration = remember(settings.toolbarRowsJson) { ToolbarRows.configuration(settings.toolbarRowsJson) }
+    val rowCount = ToolbarRows.slots(configuration, ToolbarEnvironment(settings.keyboardToolbarVisible,
+        settings.suggestionsEnabled, panel != null, suggestions.isNotEmpty(), chips.isNotEmpty(), aiBusy)).size +
+        if (completion != null) 1 else 0
+    val bottom = settings.bottomPaddingDp.coerceIn(0f, LocalConfiguration.current.screenHeightDp * 0.085f)
+    KeyboardViewport(keyboardHeightDp, rowCount, stripHeight.value,
+        if (settings.indicatorStripVisible) indicatorHeight.value else 0f, bottom) { budget ->
+      Column(Modifier.fillMaxSize()) {
+        KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, budget.rowDp.dp, budget.indicatorDp.dp)
 
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(keyboardHeightDp.dp)
+                .height(budget.keysDp.dp)
                 .padding(horizontal = settings.sidePaddingDp.dp)
         ) {
             if (panel == null) {
@@ -288,10 +295,10 @@ private fun KeyboardBody(
             }
         }
 
-        if (settings.bottomPaddingDp > 0f) {
-            val bottom = settings.bottomPaddingDp.coerceAtMost(LocalConfiguration.current.screenHeightDp * 0.085f)
-            Box(Modifier.fillMaxWidth().height(bottom.dp).background(theme.background))
+        if (budget.bottomDp > 0f) {
+            Box(Modifier.fillMaxWidth().height(budget.bottomDp.dp).background(theme.background))
         }
+      }
     }
 }
 
@@ -1182,7 +1189,7 @@ private fun DockedElements(
     val host = LocalKeyboardHost.current
     val layout = host.layout
 
-    val rowSettings = resolvedPanelSettings(settings, layout, elements.firstOrNull()?.id)
+    val rowSettings = resolvedPanelSettings(settings, layout, ToolbarRows.ownerPanelId(layout))
 
     Column(
         Modifier

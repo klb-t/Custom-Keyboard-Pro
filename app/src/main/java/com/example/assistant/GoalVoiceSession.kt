@@ -13,7 +13,7 @@ class GoalVoiceSession(context: Context) : VoiceInteractionSession(context) {
     private var token: String? = null
     override fun onPrepareShow(args: Bundle?, showFlags: Int) {
         // The activity supplies the actual UI. No invisible overlapping session window.
-        setUiEnabled(false)
+        if (Build.VERSION.SDK_INT >= 26) setUiEnabled(false)
         setDisabledShowContext(SHOW_WITH_ASSIST or SHOW_WITH_SCREENSHOT)
         super.onPrepareShow(args, showFlags)
     }

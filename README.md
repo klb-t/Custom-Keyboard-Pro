@@ -132,6 +132,7 @@ gradle :app:testDebugUnitTest
 
 ## Documentation
 
+- [`ECOSYSTEM.md`](ECOSYSTEM.md) — shared ecosystem direction and iOmatrix's role.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it is put together and where
   the decisions live.
 - [`docs/LAYOUT_FORMAT.md`](docs/LAYOUT_FORMAT.md) — the layout JSON, in full.

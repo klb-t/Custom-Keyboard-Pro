@@ -5,6 +5,15 @@ Preserve the existing `Wires`, layout, settings, discovery and Matrix abstractio
 
 ## Product scope
 
+Read the canonical root [ECOSYSTEM.md](ECOSYSTEM.md) when making design decisions.
+iOmatrix is a standalone, learning participant that can both use and contribute
+knowledge, procedures, structures and interaction capabilities across the ecosystem.
+Keep observations, user declarations, model hypotheses and action outcomes distinct.
+Sharing a representation or profile never transfers access or execution authority.
+The document describes possible directions, not completed integrations or an order
+to implement every link. Do not impose one universal database, graph semantics,
+provider, runtime or mandatory dependency on the other projects.
+
 Read `docs/UNIVERSAL_ASSISTANT.md` for the explicit long-term target: all special
 functions, special permissions and advanced phone capabilities, external devices,
 and a voice/text assistant that discovers APIs and prerequisites, plans execution,
