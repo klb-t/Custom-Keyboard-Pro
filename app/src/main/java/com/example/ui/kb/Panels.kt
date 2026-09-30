@@ -427,7 +427,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                             clearPlan = null
                             scope.launch {
                                 val moved = host.repository.trashClipboard(plan)
-                                undoBatch = moved.takeIf { it.ids.isNotEmpty() }
+                                if (moved.ids.isNotEmpty()) undoBatch = moved
                             }
                         }.padding(10.dp))
                     }

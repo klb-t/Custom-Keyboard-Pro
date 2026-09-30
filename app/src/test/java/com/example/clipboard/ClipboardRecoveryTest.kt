@@ -58,6 +58,7 @@ class ClipboardRecoveryTest {
 
         val batch = repo.trashClipboard(plan)
         assertEquals(listOf(cleared), batch.ids)
+        assertTrue(repo.trashClipboard(plan).ids.isEmpty())
         assertEquals(1, repo.undoClipboardTrash(batch))
         assertEquals(setOf(cleared, laterPin, fresh), repo.observeClipboard().first().map { it.id }.toSet())
         assertEquals(listOf(separatelyDeleted), repo.observeClipboardTrash().first().map { it.id })

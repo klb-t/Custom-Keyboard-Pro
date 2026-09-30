@@ -8,6 +8,20 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 
 ### Integrated overnight checkpoint (validation pending)
 
+The combined source `920aab3` passed **960 unit tests: 959 passed, zero
+failures/errors, one existing ClipStore assumption skip**. Both application and
+test compilation passed. The build daemon disappeared later during lint/dex work;
+the environment reported an OOM kill and very low disk space. This is not a passed
+full gate and produced no newly verified APK. Removed only the three already
+verified/extracted toolchain download archives to recover space. Quarantined the
+single generated JDK-image transform cache named by Gradle's integrity warning.
+Retrying tests, lint and assembly in separate one-worker runs with a 4 GiB heap.
+
+The final small clipboard follow-up keeps the existing Undo receipt when a repeated
+clear moves no rows. A regression now verifies repeated clear is a no-op and the
+original receipt still restores the exact batch. That later source needs its own
+test/gate result; the 960-test result above certifies `920aab3` only.
+
 Task profiles are integrated from `654a4221725e205372f505014c045a90b47b3700`.
 The first recovered Android compile passed, then test compilation found a stale
 top-level `assertDoesNotExist` import in the earlier setup smoke test. Removed only
