@@ -7,7 +7,7 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 ## Current work: scoped settings, keyboard authoring and native phone assistant
 
 Based on `badd2525b65fbacc5b593792251252c3f3dc577b` of the goal-assistant branch.
-Reviewable source checkpoint: `d4d8c4e63855354259e2d1fc2ea9fbee6a5ce114`,
+Verified core source checkpoint: `c75e41c60ec2c1e25dd33c62d26feddcca7a4e49`,
 [draft PR #5](https://github.com/klb-t/Custom-Keyboard-Pro/pull/5), targeting the
 previous goal-assistant branch. Follow-up corrections and final validation are
 being recorded on the same branch; do not merge `main` automatically.
@@ -79,6 +79,23 @@ combined source. Publish the final signed artifact and update the draft PR.
 Physical phone, assistant role,
 microphone/sensors, OEM shade/navigation, real cloud/Google-account and bulb checks
 remain device acceptance work.
+
+## Follow-up source checkpoint (validation pending)
+
+The four viewport thresholds now have native Expert controls with layout/main-panel
+scope. Clipboard bulk Undo now uses exact transactional batch identity and preserves
+separate deletions/tombstones. The model setup journey retains embedding operation,
+provider/model and constraints through navigation and recreation; direct and ranked
+routes share the same privacy boundary, including excluding LAN/remote endpoints
+from phone-only setup. Eight onboarding regressions, five viewport/scope regressions
+and two clipboard regressions are added. These follow-ups are frozen for the next
+combined Android gate; the 936-test evidence above certifies the preceding core.
+
+The first paid AI baseline dispatched 45 calls for USD 0.914728162, with 39 nonempty
+and six empty responses. Twelve isolated comparisons bring reported total cost to
+USD 1.098135722. Nonempty is not a valid-plan score. The unchanged production
+parser/catalogue separately validates the outputs; measured prompt and metadata-driven
+request-profile changes are being integrated before final targeted evaluation.
 
 ## Previous checkpoint: first goal-assistant and reactive-light slice
 

@@ -138,6 +138,20 @@ object Knobs {
     val PREVIEW_HEIGHT = k("previewHeight", 1.25, 0.5, 3.0, SettingsSchema.GROUP_APPEARANCE, "Key preview: height × key", "")
     val POPUP_RAISE = k("popupRaise", 1.15, 0.5, 3.0, SettingsSchema.GROUP_APPEARANCE, "Long-press strip: raised by × key height", "")
 
+    // --- keyboard viewport policy ---------------------------------------------
+    val VIEWPORT_MINIMUM_KEYS_DP = k("viewportMinimumKeysDp", 96.0, 24.0, 240.0,
+        SettingsSchema.GROUP_APPEARANCE, "Viewport: minimum key-area height (dp)",
+        "Preferred lower limit for the key area. A short measured viewport caps it by the minimum key-area share.")
+    val VIEWPORT_MINIMUM_KEYS_FRACTION = k("viewportMinimumKeysFraction", 0.45, 0.2, 0.8,
+        SettingsSchema.GROUP_APPEARANCE, "Viewport: minimum key-area share",
+        "Share of the available keyboard body kept for keys before toolbar, completion, indicators and padding shrink. 0.45 means 45%.")
+    val TOOLBAR_ROW_HEIGHT_DP = k("toolbarRowHeightDp", 42.0, 24.0, 72.0,
+        SettingsSchema.GROUP_APPEARANCE, "Toolbar: preferred row height (dp)",
+        "Requested height of toolbar and completion rows. Smaller measured panels reduce it to leave room for keys.")
+    val KEYBOARD_MAX_SCREEN_FRACTION = k("keyboardMaxScreenFraction", 0.85, 0.3, 0.95,
+        SettingsSchema.GROUP_APPEARANCE, "Viewport: maximum screen share",
+        "Upper limit for the keyboard panel as a share of screen height. Actual window constraints still apply. 0.85 means 85%.")
+
     // --- typing intelligence windows -----------------------------------------
     val MAGNET_BEFORE = k("magnetBefore", 300.0, 20.0, 4000.0, TYPING, "Arrows find the typo: look back (characters)", "")
     val MAGNET_AFTER = k("magnetAfter", 120.0, 0.0, 4000.0, TYPING, "Arrows find the typo: look ahead (characters)", "")

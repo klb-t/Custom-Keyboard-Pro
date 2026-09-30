@@ -7,6 +7,21 @@ the operation selector still says writing. Selecting an operation or entering a
 model triggers a debounced refresh of public model facts. The query is filtered
 locally; no typed text or credential is sent to those public sources.
 
+Wizard recommendations carry an explicit operation/provider/model setup target to
+AI settings. An embedding recommendation opens that embedding route's account
+steps without changing the writing provider. The internal navigation target and
+policy survive Activity recreation when returning from a provider's account page;
+credentials and free-form user notes are not part of that saved target.
+
+The wizard's device, card, free-tier and training-policy filters use the same
+authority for recommendations, model results, the direct provider selector and an
+already open setup route. Changing a constraint invalidates an incompatible open
+target. Displayed compromises require the user to change the constraint before
+selection. Phone-only setup excludes LAN/self-hosted remote endpoints and disables
+public model-list requests; provider endpoint overrides are resolved before filtering.
+Free-tier filtering still uses the provider's declared tier: model-specific prices
+and account entitlement must be checked on the linked provider pages.
+
 Routes keep the model author separate from the provider that actually receives a
 request. Bundled/custom routes show whether documentation has been checked and on
 which date. Live routes identify their source and fetch date. Neither a catalogue
@@ -77,6 +92,12 @@ capabilities, old credential migration, explicit key clearing, model-capability
 filtering, current Embedding 2 request shape, profile round trips, text type
 preservation and same-origin polling. Network inference is not claimed to have been
 validated without a user credential.
+
+`SetupJourneyTest` covers target restoration, strict bounded navigation state,
+policy retention, shared route filters, rejected stale targets and LAN exclusion.
+The Compose settings regression opens the exact embedding account steps and
+removes them when the user switches to phone-only setup. These checks do not
+establish real browser/account creation or live embedding entitlement.
 
 Generic Android speech has unknown processing locality. A distinct on-device-only
 profile is offered only when Android 12+ reports an on-device recognizer; both its

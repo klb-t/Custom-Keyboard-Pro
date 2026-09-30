@@ -61,5 +61,6 @@
     "signerCertificateSha256": "63a3ce6c6b4f80437594d421ec7e6e15d3c5a37821ca31f23c15732e868dddd1"
   },
   "physicalDeviceTested": false,
-  "githubActionsUsed": false
+  "githubActionsUsed": false,
+  "sourceRevision": "c75e41c60ec2c1e25dd33c62d26feddcca7a4e49"
 }

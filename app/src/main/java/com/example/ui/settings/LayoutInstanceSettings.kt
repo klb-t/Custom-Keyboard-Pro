@@ -87,11 +87,13 @@ fun LayoutInstanceSettingsDialog(layout: LayoutDef, settings: Settings, onDismis
             else {
                 if (address.scope == SettingsScope.PANEL && !SettingsHierarchy.appliesTo(draft, address, "toolbarRowsJson")) {
                     val owner = com.example.core.layout.ToolbarRows.ownerPanelId(draft)
-                    InfoRow("This panel has no toolbar of its own. Toolbar rows belong to the shared main docked panel" +
+                    InfoRow("This panel does not own the shared toolbar or keyboard viewport. Toolbar rows and viewport thresholds belong to the main docked panel" +
                         (owner?.let { " · $it." } ?: ". Add a docked panel or configure the layout's shared default."))
-                    if ("toolbarRowsJson" in ScopedSettingsResolver.overrides(draft, address).keys) TextButton(onClick = {
-                        ScopedSettingsResolver.withOverride(draft, address, "toolbarRowsJson", null).onSuccess { draft = it }.onFailure { error = it.message }
-                    }) { Text("Remove unused toolbar override") }
+                    ScopedSettingsResolver.overrides(draft, address).keys.filter(SettingsHierarchy::requiresMainPanelOwner).forEach { unusedKey ->
+                        TextButton(onClick = {
+                            ScopedSettingsResolver.withOverride(draft, address, unusedKey, null).onSuccess { draft = it }.onFailure { error = it.message }
+                        }) { Text("Remove inactive ${SettingsSchema.spec(unusedKey)?.label ?: unusedKey} override") }
+                    }
                 }
                 TextButton(onClick = { profilesOpen = !profilesOpen; profilePreview = null }) { Text(if (profilesOpen) "Hide local profiles" else "Local profiles") }
                 if (profilesOpen) {
@@ -137,7 +139,7 @@ fun LayoutInstanceSettingsDialog(layout: LayoutDef, settings: Settings, onDismis
                         val suppressed = resolved.suppressed[spec.key].orEmpty()
                         val controlSnapshot = if (own == null) resolved.snapshot else SettingsSchema.withValue(resolved.snapshot, spec.key, own.raw())
                         InfoRow("${spec.label} · effective: ${effectiveJson.opt(spec.key)} · source: ${source.label}" +
-                            if (suppressed.isNotEmpty()) " · ignored by policy: ${suppressed.joinToString { it.label }}" else "")
+                            if (suppressed.isNotEmpty()) " · inactive overrides: ${suppressed.joinToString { it.label }}" else "")
                         SettingControl(spec, controlSnapshot, helpOverride = (spec.help.orEmpty() + if (own != null) " This control edits the stored local override; the effective result is shown above." else " Changing this creates a local override."), onWrite = { raw ->
                             ScopedSettingsResolver.withOverride(draft, address, spec.key, raw).map { draft = it; error = null }
                         })

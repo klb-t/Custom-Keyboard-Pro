@@ -20,12 +20,19 @@ enum class SettingsOwner(val title: String, val explanation: String) {
 }
 
 object SettingsHierarchy {
+    /** These settings control the shared toolbar/viewport, which has one actual panel owner. */
+    private val mainPanelKeys = setOf(
+        "toolbarRowsJson", Knobs.PREFIX + "viewportMinimumKeysDp", Knobs.PREFIX + "viewportMinimumKeysFraction",
+        Knobs.PREFIX + "toolbarRowHeightDp", Knobs.PREFIX + "keyboardMaxScreenFraction"
+    )
+    fun requiresMainPanelOwner(key: String): Boolean = key in mainPanelKeys
+
     /** Coarse scope metadata plus structural eligibility from the actual renderer's owner. */
     fun appliesTo(layout: com.example.core.layout.LayoutDef, address: SettingsAddress, setting: String): Boolean {
         if (layout.id != address.layoutId) return false
         val spec = SettingsSchema.spec(setting) ?: return false
         if (address.scope !in spec.applicableScopes) return false
-        return setting != "toolbarRowsJson" || address.scope != SettingsScope.PANEL ||
+        return !requiresMainPanelOwner(setting) || address.scope != SettingsScope.PANEL ||
             address.panelId == com.example.core.layout.ToolbarRows.ownerPanelId(layout)
     }
     /** A deliberately small standard keyboard surface; the complete surface remains Expert. */
@@ -52,7 +59,7 @@ object SettingsHierarchy {
     )
     fun owner(key: String): SettingsOwner = when (key) {
         in instanceStorage -> SettingsOwner.INSTANCE_STORAGE
-        in keyboardDefaults, in cascadingKeys, "toolbarRowsJson", "localSettingsPolicy" -> SettingsOwner.KEYBOARD_DEFAULTS
+        in keyboardDefaults, in cascadingKeys, in mainPanelKeys, "localSettingsPolicy" -> SettingsOwner.KEYBOARD_DEFAULTS
         else -> SettingsOwner.APPLICATION
     }
 
@@ -66,7 +73,7 @@ object SettingsHierarchy {
         "keyLabelOpacity", "indicatorsEnabled", "indicatorOnColor", "indicatorOffColor"
     )
     fun applicableScopes(key: String): Set<SettingsScope> = when {
-        key == "toolbarRowsJson" -> java.util.Collections.unmodifiableSet(setOf(SettingsScope.KEYBOARD_DEFAULTS, SettingsScope.LAYOUT, SettingsScope.PANEL))
+        requiresMainPanelOwner(key) -> java.util.Collections.unmodifiableSet(setOf(SettingsScope.KEYBOARD_DEFAULTS, SettingsScope.LAYOUT, SettingsScope.PANEL))
         key in cascadingKeys -> java.util.Collections.unmodifiableSet(SettingsScope.entries.toSet())
         else -> java.util.Collections.unmodifiableSet(setOf(SettingsScope.KEYBOARD_DEFAULTS))
     }

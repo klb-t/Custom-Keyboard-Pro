@@ -95,14 +95,14 @@ data class CapabilityProfile(
 /**
  * Every provider the user has set up, keyed by provider id.
  *
- * Stored as one JSON field rather than a table, for the same reason the rest of this
- * app's configuration is: it round-trips through export and import with everything
- * else, and a provider that did not exist when this build shipped needs no schema.
+ * Stored as one JSON field rather than a table so device persistence can retain
+ * providers added as data without introducing a database schema for every provider.
  *
  * The keys live here alongside everything else on the device. That is worth being
  * plain about rather than implying more: this is app-private storage, which keeps them
  * from other apps, and it is not a hardware-backed keystore. Anyone who can read the
- * device's app data can read them, and an exported settings file contains them.
+ * device's app data can read them. Portable settings exports, reusable profiles and
+ * device sync omit credentials and provider accounts; persistence is not export.
  */
 object ProviderProfiles {
 

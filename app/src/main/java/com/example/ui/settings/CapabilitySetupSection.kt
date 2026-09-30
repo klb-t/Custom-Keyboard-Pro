@@ -9,7 +9,8 @@ import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.discovery.*
 import com.example.core.setup.CapabilitySetup
-import com.example.core.setup.SetupRoute
+import com.example.core.setup.SetupTarget
+import com.example.core.setup.SetupWants
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.json.JSONObject
@@ -17,15 +18,19 @@ import org.json.JSONArray
 
 /** Shared by first-run and regular settings: start with the intended operation/model. */
 @Composable
-fun CapabilitySetupSection(settings: Settings) {
+fun CapabilitySetupSection(settings: Settings, initialTarget: SetupTarget? = null, wants: SetupWants? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val providers = remember(settings.customProvidersJson, settings.fetchedProvidersJson) { ProviderCatalog.all(settings).filter(ProviderCatalog::runtimeSupported) }
-    var capability by rememberSaveable { mutableStateOf(AiCapability.CHAT) }
+    val knownProviders = remember(settings.customProvidersJson, settings.fetchedProvidersJson,
+        settings.providerProfilesJson, settings.aiBaseUrl, settings.aiProvider) {
+        ProviderCatalog.all(settings).filter(ProviderCatalog::runtimeSupported).map { ProviderProfiles.resolved(it, settings) }
+    }
+    val providers = remember(knownProviders, wants) { CapabilitySetup.allowedProviders(knownProviders, wants) }
+    var capability by rememberSaveable(initialTarget) { mutableStateOf(initialTarget?.capability ?: AiCapability.CHAT) }
     var query by rememberSaveable { mutableStateOf("") }
     var operationChosen by rememberSaveable { mutableStateOf(false) }
-    var selectedProvider by rememberSaveable { mutableStateOf("") }
-    var selectedModel by rememberSaveable { mutableStateOf("") }
+    var selectedProvider by rememberSaveable(initialTarget) { mutableStateOf(initialTarget?.providerId.orEmpty()) }
+    var selectedModel by rememberSaveable(initialTarget) { mutableStateOf(initialTarget?.model.orEmpty()) }
     var facts by remember { mutableStateOf<List<ModelFact>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -36,8 +41,9 @@ fun CapabilitySetupSection(settings: Settings) {
             .getOrDefault(emptyList())
     }
     val discoveryRequested = query.isNotBlank() || operationChosen
-    LaunchedEffect(discoveryRequested) {
-        if (discoveryRequested && !publicChecked) {
+    val publicDiscoveryAllowed = wants?.mustStayOnDevice != true
+    LaunchedEffect(discoveryRequested, publicDiscoveryAllowed) {
+        if (discoveryRequested && publicDiscoveryAllowed && !publicChecked) {
             delay(600)
             if (!busy) {
                 busy = true
@@ -58,7 +64,14 @@ fun CapabilitySetupSection(settings: Settings) {
         }.sortedBy { if (it.capability == capability) 0 else 1 }
     }
     var resultLimit by remember(query, capability) { mutableStateOf(5) }
-    val provider = providers.firstOrNull { it.id == selectedProvider && it.can(capability) }
+    val selectedRoute = CapabilitySetup.resolveTarget(SetupTarget(capability, selectedProvider, selectedModel), knownProviders, wants)
+    val provider = selectedRoute?.provider
+    LaunchedEffect(providers, selectedProvider, capability) {
+        if (selectedProvider.isNotBlank() && provider == null) {
+            selectedProvider = ""; selectedModel = ""
+            status = "The selected route is unavailable or does not meet the current setup constraints. Choose another route or change a constraint explicitly."
+        }
+    }
     val spec = provider?.capability(capability)
     val profile = provider?.let { ProviderProfiles.of(it.id, settings) }
     val configured = profile?.capabilities?.get(capability)
@@ -82,7 +95,8 @@ fun CapabilitySetupSection(settings: Settings) {
             selected = provider ?: available.first(), optionLabel = { it.label }, onSelect = {
                 selectedProvider = it.id; selectedModel = it.capability(capability)?.defaultModel.orEmpty(); status = ""
             })
-        ActionRow(if (busy) "Refreshing…" else "Refresh public model listings",
+        if (!publicDiscoveryAllowed) InfoRow("Public model requests are disabled for on-device-only setup. Only matching on-device catalogue routes are offered.")
+        if (publicDiscoveryAllowed) ActionRow(if (busy) "Refreshing…" else "Refresh public model listings",
             "Contacts ${sources.filter { it.enabled && !it.needsKey }.joinToString { it.label }}. No key or typed content is sent.",
             onClick = {
                 if (!busy) {
@@ -143,6 +157,8 @@ fun CapabilitySetupSection(settings: Settings) {
                                     val declared = (spec.models + spec.defaultModel).filter { it.isNotBlank() }
                                         .map { ModelInfo(it, provider.id) }
                                     val relevant = ModelDiscovery.selectForCapability(live, declared, capability, spec.modelListIsScoped)
+                                    // This legacy cache feeds the writing picker; keep non-chat models out.
+                                    if (capability == AiCapability.CHAT) ModelDiscovery.cache(provider.id, relevant)
                                     facts = facts.filterNot { it.routeProvider == provider.id && it.capability == capability } + relevant.map {
                                         ModelFact(it.id, it.label, routeProvider = provider.id, capability = capability,
                                             source = provider.label, fetchedAt = System.currentTimeMillis())
@@ -194,7 +210,8 @@ fun CapabilitySetupSection(settings: Settings) {
                 }
             )
             ActionRow("Save this route", "Only ${AiCapability.label(capability).lowercase()} changes. Background sending stays at its current setting.", onClick = {
-                val route = SetupRoute(provider, capability, selectedModel.ifBlank { spec.defaultModel }, "User selected")
+                val route = CapabilitySetup.resolveTarget(SetupTarget(capability, provider.id, selectedModel.ifBlank { spec.defaultModel }), knownProviders, wants)
+                    ?: return@ActionRow
                 SettingsStore.update { CapabilitySetup.select(it, route, params) }
                 status = "Saved ${route.model} for ${AiCapability.label(capability).lowercase()}."
             })

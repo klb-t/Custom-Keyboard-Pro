@@ -84,6 +84,12 @@ interface ClipboardDao {
     @Query("UPDATE clipboard_items SET deletedAt = :now, modifiedAt = :now, deleteBatch = :batch WHERE id IN (:ids) AND deletedAt = 0 AND (pinned = 0 OR :allowPinned)")
     suspend fun trash(ids: List<Long>, now: Long, batch: String, allowPinned: Boolean): Int
 
+    @Query("SELECT * FROM clipboard_items WHERE deleteBatch = :batch AND deletedAt > 0 ORDER BY id")
+    suspend fun deletedBatch(batch: String): List<ClipboardEntity>
+
+    @Query("UPDATE clipboard_items SET deletedAt = 0, deleteBatch = NULL, modifiedAt = :now, timestamp = :now WHERE id IN (:ids) AND deleteBatch = :batch AND deletedAt > 0")
+    suspend fun restoreBatch(ids: List<Long>, batch: String, now: Long): Int
+
     @Query("UPDATE clipboard_items SET deletedAt = 0, deleteBatch = NULL, modifiedAt = :now, timestamp = :now WHERE id = :id AND deletedAt > 0")
     suspend fun restore(id: Long, now: Long): Int
 

@@ -12,6 +12,15 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class ScopedSettingsTest {
+    private data class ViewportCase(val id: String, val global: Double, val layout: Double, val panel: Double) {
+        val key: String get() = Knobs.PREFIX + id
+    }
+    private val viewportCases = listOf(
+        ViewportCase("viewportMinimumKeysDp", 72.0, 120.0, 144.0),
+        ViewportCase("viewportMinimumKeysFraction", .4, .5, .6),
+        ViewportCase("toolbarRowHeightDp", 36.0, 44.0, 48.0),
+        ViewportCase("keyboardMaxScreenFraction", .7, .8, .9)
+    )
     private fun fixture(id: String = "one"): LayoutDef = LayoutDef(id, id,
         linkedMapOf("base" to LayerDef("base", listOf(RowDef(listOf(KeyDef("a"), KeyDef("b"))))),
             "other" to LayerDef("other", listOf(RowDef(listOf(KeyDef("a")))))),
@@ -154,5 +163,76 @@ class ScopedSettingsTest {
         val rearranged = layout.copy(elements = layout.elements.map { if (it.id == "main") it.copy(visible = false) else it })
         assertEquals("spare", ToolbarRows.ownerPanelId(rearranged))
         assertTrue(SettingsHierarchy.appliesTo(rearranged, spare, "toolbarRowsJson"))
+    }
+    @Test fun `viewport thresholds are validated Expert defaults with layout and main panel scopes`() {
+        val layout = fixture()
+        viewportCases.forEach { item ->
+            val spec = SettingsSchema.spec(item.key)!!
+            val knob = Knobs.byKey(item.key)!!
+            assertEquals(SettingsOwner.KEYBOARD_DEFAULTS, spec.owner)
+            assertEquals(SettingsLevel.EXPERT, spec.minimumLevel)
+            assertEquals(setOf(SettingsScope.KEYBOARD_DEFAULTS, SettingsScope.LAYOUT, SettingsScope.PANEL), spec.applicableScopes)
+            assertTrue(SettingsHierarchy.appliesTo(layout, SettingsAddress("one"), item.key))
+            assertTrue(SettingsHierarchy.appliesTo(layout, SettingsAddress("one", "main"), item.key))
+            assertFalse(SettingsHierarchy.appliesTo(layout, SettingsAddress("one", "spare"), item.key))
+            assertFalse(SettingsHierarchy.appliesTo(layout, SettingsAddress("one", "main", "base", "a"), item.key))
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one"), item.key, knob.min).isSuccess)
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one"), item.key, knob.max).isSuccess)
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one"), item.key, knob.min - 1.0).isFailure)
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one"), item.key, knob.max + 1.0).isFailure)
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one"), item.key, Double.NaN).isFailure)
+            assertTrue(ScopedSettingsResolver.withOverride(layout, SettingsAddress("one", "main", "base", "a"), item.key, item.panel).isFailure)
+        }
+    }
+    @Test fun `viewport thresholds cascade through the canonical codec and honor ignore policies`() {
+        viewportCases.forEach { item ->
+            val knob = Knobs.byKey(item.key)!!
+            val global = Settings(knobs = mapOf(item.id to item.global))
+            assertEquals(item.global, SettingsStore.fromJson(SettingsStore.toJson(global)).knob(knob), 0.0)
+            var layout = ScopedSettingsResolver.withOverride(fixture(), SettingsAddress("one"), item.key, item.layout).getOrThrow()
+            val address = SettingsAddress("one", "main")
+            layout = ScopedSettingsResolver.withOverride(layout, address, item.key, item.panel).getOrThrow()
+            layout = LayoutJson.parse(LayoutJson.writeString(layout))
+            val active = ScopedSettingsResolver.effective(global, layout, address, item.key)
+            assertEquals(item.panel, (active.value as Number).toDouble(), 0.0)
+            assertEquals(SettingsSource(SettingsScope.PANEL, "main"), active.source)
+            val layoutOnly = ScopedSettingsResolver.effective(global.copy(localSettingsPolicy = SettingsOverridePolicy.LAYOUT_ONLY), layout, address, item.key)
+            assertEquals(item.layout, (layoutOnly.value as Number).toDouble(), 0.0)
+            assertEquals(SettingsScope.LAYOUT, layoutOnly.source.scope)
+            assertEquals(listOf(SettingsSource(SettingsScope.PANEL, "main")), layoutOnly.suppressedSources)
+            val defaultsOnly = ScopedSettingsResolver.effective(global.copy(localSettingsPolicy = SettingsOverridePolicy.DEFAULTS_ONLY), layout, address, item.key)
+            assertEquals(item.global, (defaultsOnly.value as Number).toDouble(), 0.0)
+            assertEquals(SettingsScope.KEYBOARD_DEFAULTS, defaultsOnly.source.scope)
+            assertEquals(2, defaultsOnly.suppressedSources.size)
+            val inherited = ScopedSettingsResolver.withOverride(layout, address, item.key, null).getOrThrow()
+            assertEquals(item.layout, ScopedSettingsResolver.resolve(global, inherited, "main").snapshot.knob(knob), 0.0)
+            assertTrue(layout.elements.first().settingsOverrides.keys.contains(item.key))
+        }
+    }
+    @Test fun `dormant imported viewport values are retained until removal or a real owner change`() {
+        viewportCases.forEach { item ->
+            val knob = Knobs.byKey(item.key)!!
+            val global = Settings(knobs = mapOf(item.id to item.global))
+            val json = LayoutJson.write(fixture())
+            json.getJSONArray("elements").getJSONObject(1).put("settingsOverrides",
+                JSONObject().put(item.key, item.panel).put("autoCapitalize", true))
+            val imported = LayoutJson.parse(json)
+            val address = SettingsAddress("one", "spare")
+            val inactive = ScopedSettingsResolver.resolve(global, imported, "spare")
+            assertEquals(item.global, inactive.snapshot.knob(knob), 0.0)
+            assertEquals(listOf(SettingsSource(SettingsScope.PANEL, "spare")), inactive.suppressed[item.key])
+            assertTrue(inactive.snapshot.autoCapitalize)
+            assertTrue(imported.elements[1].settingsOverrides.keys.contains(item.key))
+            assertTrue(ScopedSettingsResolver.withOverride(imported, address, item.key, item.layout).isFailure)
+            val cleared = ScopedSettingsResolver.withOverride(imported, address, item.key, null).getOrThrow()
+            assertFalse(cleared.elements[1].settingsOverrides.keys.contains(item.key))
+            assertEquals(true, cleared.elements[1].settingsOverrides["autoCapitalize"]!!.raw())
+            val newOwner = imported.copy(elements = imported.elements.map { if (it.id == "main") it.copy(visible = false) else it })
+            val active = ScopedSettingsResolver.resolve(global, newOwner, "spare")
+            assertEquals(item.panel, active.snapshot.knob(knob), 0.0)
+            assertEquals(SettingsSource(SettingsScope.PANEL, "spare"), active.provenance[item.key])
+            assertTrue(active.suppressed[item.key].isNullOrEmpty())
+            assertTrue(ScopedSettingsResolver.withOverride(newOwner, address, item.key, item.layout).isSuccess)
+        }
     }
 }

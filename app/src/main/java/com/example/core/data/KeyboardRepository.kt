@@ -27,17 +27,28 @@ class KeyboardRepository(context: Context, private val db: KeyboardDatabase = Ke
     fun observeClipboardTrash(): Flow<List<ClipboardEntity>> = clipboard.observeTrash()
 
     data class ClipboardClearPlan(val ids: List<Long>, val pinnedCount: Int)
+    data class ClipboardTrashBatch(val id: String, val ids: List<Long>)
 
     suspend fun prepareClipboardClear(): ClipboardClearPlan = db.withTransaction {
         ClipboardClearPlan(clipboard.allUnpinned().map { it.id }, clipboard.pinnedCount())
     }
 
-    /** Only the reviewed snapshot is affected; newly copied/pinned entries survive. */
-    suspend fun trashClipboard(plan: ClipboardClearPlan): Int = db.withTransaction {
+    /** Only the reviewed snapshot is affected; the receipt names rows actually moved. */
+    suspend fun trashClipboard(plan: ClipboardClearPlan): ClipboardTrashBatch = db.withTransaction {
         val batch = java.util.UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
-        val count = plan.ids.distinct().chunked(400).sumOf { clipboard.trash(it, now, batch, false) }
+        plan.ids.distinct().chunked(400).forEach { clipboard.trash(it, now, batch, false) }
         clipboard.recordDeletedBatch(batch)
+        ClipboardTrashBatch(batch, clipboard.deletedBatch(batch).map { it.id })
+    }
+
+    /** Undo this operation only; a later restore/re-delete belongs to another batch. */
+    suspend fun undoClipboardTrash(batch: ClipboardTrashBatch): Int = db.withTransaction {
+        val ids = batch.ids.toSet()
+        val moved = clipboard.deletedBatch(batch.id).filter { it.id in ids }
+        val now = System.currentTimeMillis()
+        val count = moved.map { it.id }.chunked(400).sumOf { clipboard.restoreBatch(it, batch.id, now) }
+        moved.forEach { clipboard.clearDeletion(it.syncId) }
         count
     }
 

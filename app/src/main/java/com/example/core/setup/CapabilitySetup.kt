@@ -4,6 +4,8 @@ import com.example.core.config.AsrEngines
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
 import com.example.core.discovery.*
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** A concrete model via a concrete provider; a model's author is not its routing provider. */
 data class SetupRoute(
@@ -14,7 +16,75 @@ data class SetupRoute(
     val fact: ModelFact? = null
 )
 
+/** Navigation carries a setup target independently of the app's writing route. */
+data class SetupTarget(val capability: String, val providerId: String, val model: String)
+
+data class SetupJourney(val target: SetupTarget, val wants: SetupWants) {
+    /** Local navigation state only: provider/model identities and policy, never credentials. */
+    fun toJson(): String = JSONObject().apply {
+        put("capability", target.capability)
+        put("providerId", target.providerId)
+        put("model", target.model)
+        put("capabilities", JSONArray(wants.capabilities.sorted()))
+        put("mustStayOnDevice", wants.mustStayOnDevice)
+        put("noCard", wants.noCard)
+        put("freeOnly", wants.freeOnly)
+        put("avoidTraining", wants.avoidTraining)
+        put("preferOneAccount", wants.preferOneAccount)
+    }.toString()
+
+    companion object {
+        fun fromJson(raw: String?): SetupJourney? = runCatching {
+            require(raw != null && raw.length <= 16_000)
+            val o = JSONObject(raw)
+            require(listOf("capability", "providerId", "model").all { o.get(it) is String })
+            require(listOf("mustStayOnDevice", "noCard", "freeOnly", "avoidTraining", "preferOneAccount").all {
+                o.get(it) is Boolean
+            })
+            val capability = o.getString("capability")
+            val providerId = o.getString("providerId")
+            val model = o.getString("model")
+            require(capability in AiCapability.ALL && providerId.isNotBlank() && providerId.length <= 512 && model.length <= 4000)
+            val list = o.getJSONArray("capabilities")
+            require(list.length() <= AiCapability.ALL.size)
+            require((0 until list.length()).all { list.get(it) is String })
+            val capabilities = (0 until list.length()).map { list.getString(it) }.toSet()
+            require(capabilities.all { it in AiCapability.ALL })
+            SetupJourney(SetupTarget(capability, providerId, model), SetupWants(
+                capabilities = capabilities,
+                mustStayOnDevice = o.getBoolean("mustStayOnDevice"),
+                noCard = o.getBoolean("noCard"),
+                freeOnly = o.getBoolean("freeOnly"),
+                avoidTraining = o.getBoolean("avoidTraining"),
+                preferOneAccount = o.getBoolean("preferOneAccount")
+            ))
+        }.getOrNull()
+    }
+}
+
 object CapabilitySetup {
+    fun allowedProviders(providers: List<ProviderSpec>, wants: SetupWants?): List<ProviderSpec> =
+        if (wants == null) providers else providers.filter { SetupAdvisor.allowsPolicy(it, wants) }
+
+    /** Resolve again when policy, profiles or catalogue change; a stale target grants no access. */
+    fun resolveTarget(target: SetupTarget, providers: List<ProviderSpec>, wants: SetupWants? = null): SetupRoute? {
+        if (target.capability !in AiCapability.ALL) return null
+        val provider = allowedProviders(providers, wants).firstOrNull {
+            it.id == target.providerId && it.can(target.capability)
+        } ?: return null
+        return SetupRoute(provider, target.capability, target.model, "User selected")
+    }
+
+    fun recommendationJourney(provider: ProviderSpec, wants: SetupWants): SetupJourney? {
+        if (!SetupAdvisor.allowsPolicy(provider, wants) || !wants.capabilities.all { provider.can(it) }) return null
+        val capabilities = AiCapability.ALL.filter { it in wants.capabilities && provider.can(it) }
+            .ifEmpty { provider.abilities }
+        val capability = capabilities.firstOrNull { it != AiCapability.CHAT }
+            ?: capabilities.firstOrNull() ?: return null
+        return SetupJourney(SetupTarget(capability, provider.id, provider.capability(capability)?.defaultModel.orEmpty()),
+            wants.copy(capabilities = wants.capabilities.toSet(), notes = ""))
+    }
+
     fun routes(
         providers: List<ProviderSpec>, capability: String, query: String = "",
         facts: List<ModelFact> = emptyList()

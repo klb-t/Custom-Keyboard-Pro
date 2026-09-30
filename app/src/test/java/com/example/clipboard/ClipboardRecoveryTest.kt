@@ -38,12 +38,45 @@ class ClipboardRecoveryTest {
         assertEquals(1, plan.pinnedCount)
         repo.setClipPinned(laterPin, true)
         val fresh = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "new after review"))
-        assertEquals(1, repo.trashClipboard(plan))
+        assertEquals(listOf(old), repo.trashClipboard(plan).ids)
         assertEquals(setOf(pin, laterPin, fresh), repo.observeClipboard().first().map { it.id }.toSet())
         assertEquals(listOf(old), repo.observeClipboardTrash().first().map { it.id })
         assertTrue(repo.restoreClip(old))
         assertEquals(4, dao.count())
         assertFalse(repo.restoreClip(old))
+    }
+
+    @Test fun `bulk undo preserves a separate deletion made after clear review`() = runBlocking {
+        val dao = db.clipboardDao()
+        val separatelyDeleted = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "manual deletion"))
+        val cleared = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "bulk deletion"))
+        val laterPin = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "newly pinned"))
+        val plan = repo.prepareClipboardClear()
+        repo.deleteClip(separatelyDeleted)
+        repo.setClipPinned(laterPin, true)
+        val fresh = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "copied after review"))
+
+        val batch = repo.trashClipboard(plan)
+        assertEquals(listOf(cleared), batch.ids)
+        assertEquals(1, repo.undoClipboardTrash(batch))
+        assertEquals(setOf(cleared, laterPin, fresh), repo.observeClipboard().first().map { it.id }.toSet())
+        assertEquals(listOf(separatelyDeleted), repo.observeClipboardTrash().first().map { it.id })
+        assertEquals(listOf(dao.byId(separatelyDeleted)!!.syncId), dao.syncDeletions().map { it.syncId })
+        assertEquals(0, repo.undoClipboardTrash(batch))
+    }
+
+    @Test fun `bulk undo cannot restore an item restored and separately deleted again`() = runBlocking {
+        val dao = db.clipboardDao()
+        val independentlyDeleted = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "changed deletion"))
+        val cleared = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "unchanged bulk deletion"))
+        val batch = repo.trashClipboard(repo.prepareClipboardClear())
+        assertTrue(repo.restoreClip(independentlyDeleted))
+        repo.deleteClip(independentlyDeleted)
+
+        assertEquals(1, repo.undoClipboardTrash(batch))
+        assertEquals(listOf(cleared), repo.observeClipboard().first().map { it.id })
+        assertEquals(listOf(independentlyDeleted), repo.observeClipboardTrash().first().map { it.id })
+        assertEquals(listOf(dao.byId(independentlyDeleted)!!.syncId), dao.syncDeletions().map { it.syncId })
     }
 
     @Test fun `image bytes survive deleting reopening and restoring history`() = runBlocking {

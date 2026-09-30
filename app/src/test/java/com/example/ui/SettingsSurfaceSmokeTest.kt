@@ -9,8 +9,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -25,6 +28,9 @@ import com.example.core.config.SettingsStore
 import com.example.core.config.SettingsHierarchy
 import com.example.core.config.SettingsLevel
 import com.example.core.discovery.ProviderCatalog
+import com.example.core.discovery.AiCapability
+import com.example.core.setup.SetupTarget
+import com.example.core.setup.SetupWants
 import com.example.ui.settings.AllSettingsScreen
 import com.example.ui.settings.CapabilitySetupSection
 import com.example.ui.settings.MediaHubScreen
@@ -113,5 +119,32 @@ class SettingsSurfaceSmokeTest {
         compose.onNodeWithText("API key").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertFalse(SettingsStore.current.aiEnabled) }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/provider_no_account.png")
+    }
+
+    @Test fun `embedding target opens account steps and closes stale hosted route when device rule changes`() {
+        var wants by mutableStateOf(SetupWants(capabilities = setOf(AiCapability.EMBED)))
+        val initialProvider = SettingsStore.current.aiProvider
+        compose.setContent {
+            val settings by SettingsStore.state.collectAsState()
+            MyApplicationTheme(darkTheme = false, dynamicColor = false) {
+                Surface(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        CapabilitySetupSection(settings,
+                            initialTarget = SetupTarget(AiCapability.EMBED, "gemini", "gemini-embedding-2"), wants = wants)
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Selected: gemini-embedding-2 · Google Gemini").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Set up Google Gemini").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("API key").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { wants = wants.copy(mustStayOnDevice = true) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Set up Google Gemini").assertDoesNotExist()
+        compose.onNodeWithText("API key").assertDoesNotExist()
+        compose.runOnIdle {
+            assertTrue(initialProvider == SettingsStore.current.aiProvider)
+            assertFalse(SettingsStore.current.aiEnabled)
+        }
     }
 }

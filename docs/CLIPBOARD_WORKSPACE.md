@@ -3,7 +3,10 @@
 All bulk Clear commands route to one inline confirmation, including bindings/macros.
 The reviewed snapshot excludes pins; a later copy or pin is never swept into it.
 Manual deletes move to persistent Trash, retaining owned image bytes. Undo works in
-the current panel and Restore works after reopening/restarting. Default retention
+the current panel and restores only rows actually moved by that bulk deletion
+batch. Separate deletions made during review, or after an item was restored and
+deleted again, remain in Trash; their sync deletion markers remain intact. Batch
+Undo is atomic. Restore works after reopening/restarting. Default retention
 is 24 hours (expert range 1–168); expiration is swept when the keyboard starts.
 Automatic history capacity/age policies remain separate and are still configurable.
 Room migration 3→4 preserves content and initializes stable IDs for merging; 4→5

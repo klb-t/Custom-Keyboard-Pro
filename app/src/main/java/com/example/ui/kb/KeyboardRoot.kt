@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.config.Settings
+import com.example.core.config.Knobs
+import com.example.core.config.knobFloat
 import com.example.core.config.ScopedSettingsCache
 import com.example.core.layout.ToolbarRows
 import com.example.core.layout.ToolbarEnvironment
@@ -134,12 +136,14 @@ private fun KeyboardRootResolved(
     )).size + if (completionShowing) 1 else 0
     // Count the very same slots that are drawn. On short landscape screens reduce
     // row height before letting chrome push the key surface into the system bars.
-    val maxPanelHeight = screenHeightDp.coerceAtLeast(1) * 0.85f
+    val maxPanelHeight = screenHeightDp.coerceAtLeast(1) * rowSettings.knobFloat(Knobs.KEYBOARD_MAX_SCREEN_FRACTION)
     val bottomPadding = settings.bottomPaddingDp.coerceIn(0f, maxPanelHeight * 0.1f)
     val indicators = if (settings.indicatorStripVisible) indicatorHeight.value else 0f
-    val minimumKeys = minOf(96f, maxPanelHeight * 0.45f)
-    val stripHeight = if (rowCount == 0) 42.dp else
-        ((maxPanelHeight - minimumKeys - bottomPadding - indicators) / rowCount).coerceIn(1f, 42f).dp
+    val minimumKeys = minOf(rowSettings.knobFloat(Knobs.VIEWPORT_MINIMUM_KEYS_DP),
+        maxPanelHeight * rowSettings.knobFloat(Knobs.VIEWPORT_MINIMUM_KEYS_FRACTION))
+    val preferredRowHeight = rowSettings.knobFloat(Knobs.TOOLBAR_ROW_HEIGHT_DP)
+    val stripHeight = if (rowCount == 0) preferredRowHeight.dp else
+        ((maxPanelHeight - minimumKeys - bottomPadding - indicators) / rowCount).coerceIn(1f, preferredRowHeight).dp
     val chromeHeight = stripHeight.value * rowCount + indicators + bottomPadding
     val keyboardHeightDp = (screenHeightDp * settings.heightFor(landscape))
         .coerceIn(minOf(minimumKeys, (maxPanelHeight - chromeHeight).coerceAtLeast(1f)),
@@ -263,9 +267,12 @@ private fun KeyboardBody(
     val rowCount = ToolbarRows.slots(configuration, ToolbarEnvironment(settings.keyboardToolbarVisible,
         settings.suggestionsEnabled, panel != null, suggestions.isNotEmpty(), chips.isNotEmpty(), aiBusy)).size +
         if (completion != null) 1 else 0
-    val bottom = settings.bottomPaddingDp.coerceIn(0f, LocalConfiguration.current.screenHeightDp * 0.085f)
+    val bottom = settings.bottomPaddingDp.coerceIn(0f,
+        LocalConfiguration.current.screenHeightDp * settings.knobFloat(Knobs.KEYBOARD_MAX_SCREEN_FRACTION) * 0.1f)
     KeyboardViewport(keyboardHeightDp, rowCount, stripHeight.value,
-        if (settings.indicatorStripVisible) indicatorHeight.value else 0f, bottom) { budget ->
+        if (settings.indicatorStripVisible) indicatorHeight.value else 0f, bottom,
+        minimumKeysDp = settings.knobFloat(Knobs.VIEWPORT_MINIMUM_KEYS_DP),
+        minimumKeysFraction = settings.knobFloat(Knobs.VIEWPORT_MINIMUM_KEYS_FRACTION)) { budget ->
       Column(Modifier.fillMaxSize()) {
         KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, budget.rowDp.dp, budget.indicatorDp.dp)
 

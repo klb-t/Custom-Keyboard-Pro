@@ -46,6 +46,7 @@ import com.example.core.discovery.AiCapability
 import com.example.core.data.WordLists
 import com.example.core.discovery.ProviderCatalog
 import com.example.core.panels.PanelGenerator
+import com.example.core.setup.SetupJourney
 import com.example.ui.settings.CapabilitiesScreen
 import com.example.ui.settings.MediaHubScreen
 import com.example.ui.settings.VaultScreen
@@ -101,20 +102,27 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_SETUP = "setup"
         /** A panel the user asked for: "panel:<id>". */
         const val ROUTE_PANEL_PREFIX = "panel:"
+        private const val STATE_ROUTE = "settings.route"
+        private const val STATE_QUERY = "settings.query"
+        private const val STATE_REQUEST = "settings.request"
+        private const val STATE_SETUP_JOURNEY = "settings.setupJourney"
     }
 
     private var micPermissionGranted by mutableStateOf(false)
     private var route by mutableStateOf(ROUTE_HOME)
     private var settingsQuery by mutableStateOf("")
     private var settingsRequest by mutableStateOf("")
+    private var setupJourney by mutableStateOf<SetupJourney?>(null)
 
     private fun navigate(next: String) {
+        setupJourney = null
         settingsQuery = ""
         settingsRequest = ""
         route = next
     }
 
     private fun receiveDestination(incoming: Intent?) {
+        setupJourney = null
         if (incoming?.action == "android.service.quicksettings.action.QS_TILE_PREFERENCES") {
             @Suppress("DEPRECATION")
             val component = incoming.getParcelableExtra<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME)
@@ -152,6 +160,15 @@ class MainActivity : ComponentActivity() {
         WordLists.init(this)
         registerDynamicOptions()
         receiveDestination(intent)
+        savedInstanceState?.let { state ->
+            state.getString(STATE_ROUTE)?.takeIf { it.length <= 1024 }?.let { restored ->
+                route = restored
+                settingsQuery = state.getString(STATE_QUERY).orEmpty()
+                settingsRequest = state.getString(STATE_REQUEST).orEmpty()
+                setupJourney = if (restored == ROUTE_AI)
+                    SetupJourney.fromJson(state.getString(STATE_SETUP_JOURNEY)) else null
+            }
+        }
         enableEdgeToEdge()
         AppLogger.d("Settings", "onCreate stores ready")
 
@@ -198,7 +215,7 @@ class MainActivity : ComponentActivity() {
                             ROUTE_TYPING -> if (SettingsHierarchy.level(settings) == SettingsLevel.BASIC)
                                 BasicKeyboardSettingsScreen(settings, domain = "typing") else TypingSettingsScreen(settings)
                             ROUTE_LAYOUTS -> LayoutStudioScreen(settings)
-                            ROUTE_AI -> AiSettingsScreen(settings)
+                            ROUTE_AI -> AiSettingsScreen(settings, setupJourney)
                             ROUTE_VOICE, ROUTE_PERMISSIONS -> VoiceSettingsScreen(
                                 settings = settings,
                                 micGranted = micPermissionGranted,
@@ -226,7 +243,11 @@ class MainActivity : ComponentActivity() {
                             ROUTE_SETUP -> SetupWizardScreen(
                                 settings = settings,
                                 onDone = { navigate(ROUTE_HOME) },
-                                onNavigate = ::navigate
+                                onNavigate = ::navigate,
+                                onSetupTarget = { journey ->
+                                    navigate(ROUTE_AI)
+                                    setupJourney = journey
+                                }
                             )
                             else -> {
                                 // A generated panel's route carries its id, so routes do
@@ -261,6 +282,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_ROUTE, route)
+        outState.putString(STATE_QUERY, settingsQuery)
+        outState.putString(STATE_REQUEST, settingsRequest)
+        setupJourney?.let { outState.putString(STATE_SETUP_JOURNEY, it.toJson()) }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onNewIntent(intent: Intent) {

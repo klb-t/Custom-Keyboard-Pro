@@ -108,7 +108,7 @@ object ScopedSettingsResolver {
                 val spec = SettingsSchema.spec(setting) ?: error("Unknown setting: $setting")
                 require(source.scope in spec.applicableScopes && !spec.secret) { "$setting cannot be overridden here." }
                 val validated = SettingsSchema.validatedValue(setting, raw).getOrThrow()
-                if (setting == "toolbarRowsJson" && source.scope == SettingsScope.PANEL && source.instanceId != com.example.core.layout.ToolbarRows.ownerPanelId(layout)) {
+                if (SettingsHierarchy.requiresMainPanelOwner(setting) && source.scope == SettingsScope.PANEL && source.instanceId != com.example.core.layout.ToolbarRows.ownerPanelId(layout)) {
                     suppressed[setting] = suppressed[setting].orEmpty() + source
                     return@forEach
                 }
@@ -163,7 +163,7 @@ object ScopedSettingsResolver {
         require(address.scope in spec.applicableScopes && !spec.secret) { "${spec.label} is shared by the application." }
         val own = overrides(layout, address) // validate exact identity before an eligibility explanation
         require(raw == null || raw == JSONObject.NULL || SettingsHierarchy.appliesTo(layout, address, setting)) {
-            "${spec.label} belongs to the shared toolbar's main docked panel. This panel has no toolbar of its own."
+            "${spec.label} belongs to the shared main docked panel's toolbar and viewport. This panel does not own them."
         }
         val next = own.with(address.scope, setting, raw).getOrThrow()
         when (address.scope) {

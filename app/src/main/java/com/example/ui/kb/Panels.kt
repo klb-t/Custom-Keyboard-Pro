@@ -344,7 +344,7 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var showTrash by remember { mutableStateOf(false) }
     var clearPlan by remember { mutableStateOf<com.example.core.data.KeyboardRepository.ClipboardClearPlan?>(null) }
-    var undoIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var undoBatch by remember { mutableStateOf<com.example.core.data.KeyboardRepository.ClipboardTrashBatch?>(null) }
     val clipFlow = remember(query, showTrash) {
         if (showTrash) host.repository.observeClipboardTrash()
         else if (query.isBlank()) host.repository.observeClipboard()
@@ -425,16 +425,19 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                         PanelText("Cancel", theme.stripText, 13.sp, modifier = Modifier.clickable { clearPlan = null }.padding(10.dp))
                         if (plan.ids.isNotEmpty()) PanelText("Move to Trash", theme.stripText, 13.sp, modifier = Modifier.clickable {
                             clearPlan = null
-                            scope.launch { host.repository.trashClipboard(plan); undoIds = plan.ids }
+                            scope.launch {
+                                val moved = host.repository.trashClipboard(plan)
+                                undoBatch = moved.takeIf { it.ids.isNotEmpty() }
+                            }
                         }.padding(10.dp))
                     }
                 }
             }
-            if (undoIds.isNotEmpty()) PanelText("Moved to Trash · Undo", theme.stripText, 13.sp,
+            undoBatch?.let { batch -> PanelText("Moved to Trash · Undo", theme.stripText, 13.sp,
                 modifier = Modifier.clickable {
-                    val ids = undoIds; undoIds = emptyList()
-                    scope.launch { ids.forEach { host.repository.restoreClip(it) } }
-                }.padding(8.dp))
+                    undoBatch = null
+                    scope.launch { host.repository.undoClipboardTrash(batch) }
+                }.padding(8.dp)) }
             if (showTrash) PanelText("Deleted items can be restored for ${com.example.core.config.SettingsStore.current.clipboardTrashHours} hours. Tap Restore to return one to history.", theme.keyHintText, 11.sp, modifier = Modifier.padding(8.dp))
             SearchField(query, theme) { query = it }
 

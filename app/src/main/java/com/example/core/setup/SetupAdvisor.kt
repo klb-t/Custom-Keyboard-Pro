@@ -59,6 +59,13 @@ data class Recommendation(
  */
 object SetupAdvisor {
 
+    /** The same hard filters govern recommendations, direct routes and an open setup target. */
+    fun allowsPolicy(provider: ProviderSpec, wants: SetupWants): Boolean =
+        (!wants.mustStayOnDevice || staysOnDevice(provider)) &&
+            (!wants.noCard || !provider.needsCard) &&
+            (!wants.freeOnly || provider.freeTier) &&
+            (!wants.avoidTraining || provider.privacy in setOf(Privacy.NO_TRAINING, Privacy.ON_DEVICE))
+
     fun recommend(
         providers: List<ProviderSpec>,
         wants: SetupWants,
@@ -67,10 +74,7 @@ object SetupAdvisor {
         .asSequence()
         .filter { it.id != "openai_compatible" }
         .filter { serves(it, wants.capabilities) }
-        .filter { !wants.mustStayOnDevice || staysOnDevice(it) }
-        .filter { !wants.noCard || !it.needsCard }
-        .filter { !wants.freeOnly || it.freeTier }
-        .filter { !wants.avoidTraining || it.privacy in setOf(Privacy.NO_TRAINING, Privacy.ON_DEVICE) }
+        .filter { allowsPolicy(it, wants) }
         .map { score(it, wants) }
         .filter { it.score > Int.MIN_VALUE }
         .sortedWith(compareByDescending<Recommendation> { it.score }.thenBy { it.provider.label })

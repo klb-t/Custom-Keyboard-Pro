@@ -34,6 +34,7 @@ import com.example.core.setup.SetupAdvisor
 import com.example.core.setup.SetupWants
 import com.example.core.setup.CapabilitySetup
 import com.example.core.setup.SetupRoute
+import com.example.core.setup.SetupJourney
 import kotlinx.coroutines.launch
 
 /**
@@ -49,7 +50,8 @@ import kotlinx.coroutines.launch
  * throughout: the defaults are complete, and nothing is required.
  */
 @Composable
-fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (String) -> Unit) {
+fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (String) -> Unit,
+    onSetupTarget: (SetupJourney) -> Unit) {
     val scope = rememberCoroutineScope()
 
     var wants by remember { mutableStateOf(SetupWants()) }
@@ -94,7 +96,7 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
             )
         }
 
-        CapabilitySetupSection(settings)
+        CapabilitySetupSection(settings, wants = effectiveWants)
 
         if (probing) {
             SettingsSection("Looking around") { InfoRow("Checking whether anything is running here…") }
@@ -214,7 +216,7 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
                 InfoRow("Try switching something off above.")
             } else {
                 shown.forEach { recommendation ->
-                    RecommendationRow(recommendation, effectiveWants.capabilities, onNavigate)
+                    RecommendationRow(recommendation, effectiveWants, onSetupTarget)
                     Divider()
                 }
             }
@@ -266,8 +268,9 @@ fun SetupWizardScreen(settings: Settings, onDone: () -> Unit, onNavigate: (Strin
 }
 
 @Composable
-private fun RecommendationRow(recommendation: Recommendation, capabilities: Set<String>, onNavigate: (String) -> Unit) {
+private fun RecommendationRow(recommendation: Recommendation, wants: SetupWants, onSetupTarget: (SetupJourney) -> Unit) {
     val provider = recommendation.provider
+    val journey = CapabilitySetup.recommendationJourney(provider, wants)
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(provider.label, style = MaterialTheme.typography.titleSmall)
         if (provider.note.isNotBlank()) {
@@ -296,6 +299,8 @@ private fun RecommendationRow(recommendation: Recommendation, capabilities: Set<
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = {
+                val targetJourney = journey ?: return@OutlinedButton
+                val capabilities = wants.capabilities.filter { provider.can(it) }
                 SettingsStore.update { current ->
                     capabilities.fold(current) { updated, capability ->
                         CapabilitySetup.select(updated, SetupRoute(provider, capability,
@@ -304,12 +309,14 @@ private fun RecommendationRow(recommendation: Recommendation, capabilities: Set<
                 }
                 // Not marked done: a key still has to be pasted, and pretending
                 // otherwise leaves the user on a home screen that quietly does nothing.
-                onNavigate(com.example.MainActivity.ROUTE_AI)
+                onSetupTarget(targetJourney)
             },
+            enabled = journey != null,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                if (provider.needsKey) "Choose this, then paste a key"
+                if (journey == null) "Change constraints above to choose this"
+                else if (provider.needsKey) "Choose this, then paste a key"
                 else "Choose this"
             )
         }

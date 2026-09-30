@@ -6,11 +6,14 @@ data class KeyboardViewportBudget(val keysDp: Float, val rowDp: Float, val indic
     companion object {
         /** Budget the actual body below a floating grip, not the device screen. */
         fun fit(availableDp: Float, preferredKeysDp: Float, rowCount: Int, preferredRowDp: Float,
-            preferredIndicatorDp: Float, preferredBottomDp: Float): KeyboardViewportBudget {
-            require(listOf(availableDp, preferredKeysDp, preferredRowDp, preferredIndicatorDp, preferredBottomDp).all { it.isFinite() })
+            preferredIndicatorDp: Float, preferredBottomDp: Float, minimumKeysDp: Float = 96f,
+            minimumKeysFraction: Float = 0.45f): KeyboardViewportBudget {
+            require(listOf(availableDp, preferredKeysDp, preferredRowDp, preferredIndicatorDp, preferredBottomDp,
+                minimumKeysDp, minimumKeysFraction).all { it.isFinite() })
+            require(minimumKeysDp >= 0f && minimumKeysFraction in 0f..1f)
             require(rowCount in 0..ToolbarRows.MAX_ROWS + 1)
             val available = availableDp.coerceAtLeast(0f)
-            val minimumKeys = minOf(96f, available * 0.45f)
+            val minimumKeys = minOf(minimumKeysDp, available * minimumKeysFraction)
             val row = preferredRowDp.coerceAtLeast(0f)
             val indicator = preferredIndicatorDp.coerceAtLeast(0f)
             val bottom = preferredBottomDp.coerceAtLeast(0f)

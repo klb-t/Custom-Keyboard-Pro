@@ -42,10 +42,13 @@ commands are shared. They cannot be injected through layout override JSON.
 The initial cascading options cover local typing, punctuation, feedback, gesture
 thresholds and key/panel rendering. The complete finite allowlist is in
 `SettingsHierarchy`; adding an option requires a real contextual consumer. Toolbar
-row composition applies to layouts and panels, not individual keys.
-Compound layouts share one toolbar owned by their first visible docked panel.
+row composition and four viewport thresholds apply to layouts and panels, not individual keys.
+The viewport thresholds are Expert controls: minimum key area in dp and as a
+fraction, toolbar row height, and maximum keyboard screen fraction. They use the
+same canonical Knobs codec, validation and profiles as other Expert values.
+Compound layouts share one toolbar and keyboard viewport owned by their first visible docked panel.
 The editor and renderer use `ToolbarRows.ownerPanelId` for that identity. Other
-panels do not expose a toolbar override control; dormant imported overrides are
+panels do not expose toolbar or viewport override controls; dormant imported overrides are
 retained but suppressed, with an explicit removal action. A hidden/moved main panel
 can change ownership, so applicability is checked against the current layout.
 

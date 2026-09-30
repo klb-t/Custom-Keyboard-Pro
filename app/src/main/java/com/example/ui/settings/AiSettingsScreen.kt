@@ -34,6 +34,7 @@ import com.example.core.discovery.ProviderProfiles
 import com.example.core.setup.ProviderProbe
 import com.example.core.setup.CapabilitySetup
 import com.example.core.setup.SetupRoute
+import com.example.core.setup.SetupJourney
 import com.example.core.discovery.AiCapability
 import kotlinx.coroutines.launch
 
@@ -45,7 +46,7 @@ import kotlinx.coroutines.launch
  * starts switched off, and the screen says plainly what turning it on means.
  */
 @Composable
-fun AiSettingsScreen(settings: Settings) {
+fun AiSettingsScreen(settings: Settings, setupJourney: SetupJourney? = null) {
     val scope = rememberCoroutineScope()
     var testResult by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -67,7 +68,7 @@ fun AiSettingsScreen(settings: Settings) {
     val profile = profiles[settings.aiProvider] ?: ProviderProfile(settings.aiProvider)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
-        CapabilitySetupSection(settings)
+        CapabilitySetupSection(settings, initialTarget = setupJourney?.target, wants = setupJourney?.wants)
 
         SettingsSection(
             title = "AI features",
@@ -138,8 +139,8 @@ fun AiSettingsScreen(settings: Settings) {
             TextRow(
                 label = "API key for ${spec?.label ?: settings.aiProvider}",
                 description = "Kept against this provider, so switching provider switches " +
-                    "key with it and nothing has to be retyped. On this device only; an " +
-                    "exported settings file carries it.",
+                    "key with it and nothing has to be retyped. Stored in this device’s " +
+                    "app-private settings. Portable exports and sync omit credentials.",
                 value = ProviderProfiles.keyFor(settings.aiProvider, settings),
                 secret = true,
                 onChange = { v -> ProviderProfiles.update(settings.aiProvider) { it.copy(apiKey = v) } }

@@ -15,11 +15,14 @@ internal fun KeyboardViewport(
     preferredIndicatorDp: Float,
     preferredBottomDp: Float,
     modifier: Modifier = Modifier,
+    minimumKeysDp: Float = 96f,
+    minimumKeysFraction: Float = 0.45f,
     content: @Composable (KeyboardViewportBudget) -> Unit
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         val preferredTotal = preferredKeysDp + rowCount * preferredRowDp + preferredIndicatorDp + preferredBottomDp
         val available = maxHeight.value.takeIf { it.isFinite() } ?: preferredTotal
-        content(KeyboardViewportBudget.fit(available, preferredKeysDp, rowCount, preferredRowDp, preferredIndicatorDp, preferredBottomDp))
+        content(KeyboardViewportBudget.fit(available, preferredKeysDp, rowCount, preferredRowDp, preferredIndicatorDp,
+            preferredBottomDp, minimumKeysDp, minimumKeysFraction))
     }
 }
