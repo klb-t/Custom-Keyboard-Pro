@@ -91,10 +91,11 @@ class KeyboardRepository(context: Context, private val db: KeyboardDatabase = Ke
 
     suspend fun newestClip(): ClipboardEntity? = clipboard.newest()
 
-    suspend fun deleteClip(id: Long) = db.withTransaction {
+    suspend fun deleteClip(id: Long): ClipboardTrashBatch = db.withTransaction {
         val batch = java.util.UUID.randomUUID().toString()
         clipboard.trash(listOf(id), System.currentTimeMillis(), batch, true)
         clipboard.recordDeletedBatch(batch)
+        ClipboardTrashBatch(batch, clipboard.deletedBatch(batch).map { it.id })
     }
     suspend fun setClipPinned(id: Long, pinned: Boolean) = clipboard.setPinned(id, pinned, System.currentTimeMillis())
     suspend fun updateClip(id: Long, content: String) = clipboard.updateContent(id, content, System.currentTimeMillis())

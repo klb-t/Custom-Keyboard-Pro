@@ -6,6 +6,20 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 
 ## Current work: scoped settings, keyboard authoring and native phone assistant
 
+### Overnight recovery, 2026-09-30 22:45 UTC
+
+Recovered the remote branch after workspace pruning. The previous local Android
+toolchain and unpublished AI changes are absent; their old running-session reports
+are not current validation. Reinstalling the exact documented build dependencies.
+
+Fixed the stale `undoIds` reference that prevented the follow-up source compiling.
+Single-item deletion now returns the same transactional `ClipboardTrashBatch`
+receipt as bulk clear, and the UI uses the existing batch-aware Undo consumer.
+This also prevents an old Undo from restoring an entry independently re-deleted
+later. Added a regression for pinned entries, stale receipts, no-op repeated
+deletion and sync deletion markers. `git diff --check` passes; Android tests and
+the combined build are pending. No new verified APK is claimed.
+
 Based on `badd2525b65fbacc5b593792251252c3f3dc577b` of the goal-assistant branch.
 Verified core source checkpoint: `c75e41c60ec2c1e25dd33c62d26feddcca7a4e49`,
 [draft PR #5](https://github.com/klb-t/Custom-Keyboard-Pro/pull/5), targeting the

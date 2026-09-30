@@ -534,7 +534,10 @@ fun ClipboardPanel(theme: KeyboardTheme, onClose: () -> Unit) {
                                 if (item.isText) IconAction("✎", theme) { editing = item }
                                 IconAction("🗑", theme) {
                                     selected = selected - item.id
-                                    scope.launch { host.repository.deleteClip(item.id); undoIds = listOf(item.id) }
+                                    scope.launch {
+                                        val moved = host.repository.deleteClip(item.id)
+                                        if (moved.ids.isNotEmpty()) undoBatch = moved
+                                    }
                                 }
                             }
                         }

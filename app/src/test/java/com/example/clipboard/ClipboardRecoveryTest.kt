@@ -79,6 +79,23 @@ class ClipboardRecoveryTest {
         assertEquals(listOf(dao.byId(independentlyDeleted)!!.syncId), dao.syncDeletions().map { it.syncId })
     }
 
+    @Test fun `single deletion undo is bound to its operation including pinned entries`() = runBlocking {
+        val dao = db.clipboardDao()
+        val id = dao.insert(ClipboardEntity(type = ClipboardEntity.TYPE_TEXT, content = "pinned", pinned = true))
+        val original = repo.deleteClip(id)
+        assertEquals(listOf(id), original.ids)
+        assertEquals(1, repo.undoClipboardTrash(original))
+        assertTrue(dao.byId(id)!!.pinned)
+        val newer = repo.deleteClip(id)
+        assertNotEquals(original.id, newer.id)
+        assertEquals(0, repo.undoClipboardTrash(original))
+        assertEquals(listOf(dao.byId(id)!!.syncId), dao.syncDeletions().map { it.syncId })
+        assertTrue(repo.deleteClip(id).ids.isEmpty())
+        assertEquals(1, repo.undoClipboardTrash(newer))
+        assertTrue(dao.syncDeletions().isEmpty())
+        assertTrue(repo.deleteClip(Long.MAX_VALUE).ids.isEmpty())
+    }
+
     @Test fun `image bytes survive deleting reopening and restoring history`() = runBlocking {
         val file = File(ClipStore.dir(context), "recover.png").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val id = db.clipboardDao().insert(ClipboardEntity(type = ClipboardEntity.TYPE_FILE, content = "Screenshot",
