@@ -20,6 +20,12 @@ later. Added a regression for pinned entries, stale receipts, no-op repeated
 deletion and sync deletion markers. `git diff --check` passes; Android tests and
 the combined build are pending. No new verified APK is claimed.
 
+Restored the lost strict JSON preflight for assistant plans: duplicate decoded
+field names, including escaped aliases, are rejected before `JSONObject` can
+silently replace a value. Existing size/depth bounds remain. Added duplicate-field
+and non-JSON syntax regressions; separate objects may reuse the same names. The
+full Android gate is running against this source; no result is yet claimed.
+
 Based on `badd2525b65fbacc5b593792251252c3f3dc577b` of the goal-assistant branch.
 Verified core source checkpoint: `c75e41c60ec2c1e25dd33c62d26feddcca7a4e49`,
 [draft PR #5](https://github.com/klb-t/Custom-Keyboard-Pro/pull/5), targeting the

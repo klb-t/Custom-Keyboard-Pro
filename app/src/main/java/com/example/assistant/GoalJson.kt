@@ -24,6 +24,7 @@ object GoalJson {
     }
     fun read(raw: String, actualGoal: String): List<GoalPlan> {
         PlanJsonBudget.check(raw)
+        com.example.core.json.JsonFields.check(raw)
         val root = JSONObject(raw)
         exact(root, setOf("version", "alternatives"))
         val version = root.get("version")

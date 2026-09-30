@@ -47,6 +47,22 @@ class GoalJsonTest {
         fails(raw); fails(" ".repeat(65536) + "{}")
     }
     @Test fun noAlternativeIsNotAnExecutablePlan() { fails("""{"version":1,"alternatives":[]}""") }
+    @Test fun duplicateFieldsCannotChangePlanMeaning() {
+        val raw = GoalJson.write(listOf(plan()))
+        fails(raw.replace("\"version\": 1", "\"version\": 2, \"version\": 1"))
+        fails(raw.replace("\"action\": \"open\"", "\"action\": \"missing.other\", \"action\": \"open\""))
+        fails(raw.replace("\"target\":", "\"target\": \"other\", \"target\":"))
+        // Escaping a name must not bypass uniqueness after decoding.
+        fails(raw.replace("\"version\": 1", "\"ver\\u0073ion\": 2, \"version\": 1"))
+    }
+    @Test fun repeatedNamesInDifferentObjectsAreValidButNonJsonSyntaxIsNot() {
+        val two = plan().copy(steps = plan().steps + plan().steps.single().copy(id = "s2"))
+        check(GoalJson.read(GoalJson.write(listOf(two)), "Goal").single().steps.size == 2)
+        val raw = GoalJson.write(listOf(plan()))
+        fails(raw.replace("\"version\"", "'version'"))
+        fails(raw.replace("\"version\"", "/* comment */\"version\""))
+        fails(raw + "{}")
+    }
     @Test fun exportContainsNoGoalOrRuntimeAuthorizationFields() {
         val raw = GoalJson.write(listOf(plan()))
         check(!raw.contains("Original local goal") && !raw.contains("approved") && !raw.contains("evidenceHash"))
