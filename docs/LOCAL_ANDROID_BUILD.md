@@ -28,6 +28,19 @@ checkout merely from the existence of an earlier build directory.
 
 ## Official bootstrap sources
 
+For a wiped workspace, run the reproducible installer (Python 3.11+ and curl):
+
+```sh
+python3 tools/bootstrap-android.py --accept-licenses
+```
+
+It verifies the pinned checksums before extracting official archives, restores
+executable modes, installs only the declared SDK packages and preserves normal TLS
+verification. `--root` selects another toolchain directory; use that same path as
+`IO_TOOLCHAIN_ROOT` when building. The license flag applies to this development
+installation. The installer does not build the app or certify a test result.
+It can be rerun after an interrupted download. Previous project APKs are untouched.
+
 * JDK: `https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz`
   and the adjacent `.sha256.txt` file.
 * Gradle: `https://services.gradle.org/distributions/gradle-9.7.1-bin.zip`

@@ -6,7 +6,19 @@ Active work branch: `feat/phone-workspace-2026-09-30`.
 
 ## Current work: scoped settings, keyboard authoring and native phone assistant
 
-### Task-profile follow-up (separate source checkpoint; validation pending)
+### Integrated overnight checkpoint (validation pending)
+
+Task profiles are integrated from `654a4221725e205372f505014c045a90b47b3700`.
+The first recovered Android compile passed, then test compilation found a stale
+top-level `assertDoesNotExist` import in the earlier setup smoke test. Removed only
+the invalid import: the member assertions and test remain intact. A new combined
+compile/test/lint/assemble gate is running with two workers. The earlier attempt
+did not execute the tests and is not a passing gate. Offline evaluator guards
+passed 7/7 without paid calls.
+
+The exact JDK/Gradle/SDK installation was restored with the recorded checksums.
+`tools/bootstrap-android.py` now makes recovery reproducible; syntax, CLI and all
+three cached checksum checks passed. It does not replace application validation.
 
 Replaced the goal activity's hardcoded token limit with the native AI task-profile
 resolver. Writing, planning and six existing specialized uses share bounded persisted task parameters, Expert

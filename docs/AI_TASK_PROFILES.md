@@ -24,7 +24,7 @@ limits are not inferred from this local range.
 
 | Rule | Basis | Verification |
 |---|---|---|
-| Reuse the native client and one canonical settings value | User mechanism/policy/profile direction; existing two request uses | Production callers resolve through `AiConfig.from` |
+| Reuse the native client and one canonical settings value | User mechanism/policy/profile direction; existing request consumers | Production callers resolve through `AiConfig.from` |
 | Keep task parameters out of layout and key policy | User global/element ownership distinction | Settings schema ownership and scope regression |
 | A probe keeps its explicit small limit | Existing connection-test behavior | Caller/task/provider precedence regression |
 | Reject ambiguous or invalid profiles before sending | Derived need to preserve reviewed request meaning | Strict JSON, bounds, unknown fields, duplicate names and fail-closed tests |
