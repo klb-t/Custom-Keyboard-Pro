@@ -1,5 +1,10 @@
 # Goal assistant and reactive-light implementation checkpoint
 
+This document records the initial 2026-09-29 slice. The current 2026-09-30 host,
+phone bindings, system voice service and validation state are recorded in
+[RESUME.md](RESUME.md), [PHONE_TOOLS.md](PHONE_TOOLS.md) and
+[SYSTEM_VOICE_ASSISTANT.md](SYSTEM_VOICE_ASSISTANT.md).
+
 2026-09-29. Source implementation on `feat/goal-assistant-2026-09-29`, stacked on
 capture PR #3 at `b3db2c8`. **Not a new verified Android release. Keep APK 4.4.2.**
 The open-ended product contract remains [UNIVERSAL_ASSISTANT.md](UNIVERSAL_ASSISTANT.md).

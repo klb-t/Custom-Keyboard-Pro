@@ -5,13 +5,9 @@ import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -56,6 +52,9 @@ interface PerformerHost {
     /** Puts the keyboard away, for actions that are about the app rather than the field. */
     fun dismissKeyboard()
 
+    /** Same-invocation platform receipt; existing hosts can continue displaying notices. */
+    fun phoneReceipt(receipt: com.example.core.phone.PhoneReceipt) = Unit
+
     /**
      * Text to read aloud from [source] (selection, field, before, sentence, word,
      * clipboard, auto), and where it starts in the field when it came from there.
@@ -96,6 +95,12 @@ class Performer(private val host: PerformerHost) {
     }
 
     private fun perform(spec: VerbSpec, command: Command) {
+        if (com.example.core.phone.PhoneCatalogue.verbs.any { it.id == spec.id }) {
+            val receipt = com.example.phone.PhoneRuntime.execute(context, command)
+            host.notice(receipt.detail)
+            host.phoneReceipt(receipt)
+            return
+        }
         val service = IoAccessibilityService.instance
         if (spec.needsAccessibility && service == null) {
             if (!fallback(spec, command)) askForAccess(spec)
@@ -192,13 +197,21 @@ class Performer(private val host: PerformerHost) {
             "brightness" -> brightness(command.arg("level"))
             "set" -> setSetting(command.arg("key"), command.arg("value"))
             "toggle_setting" -> toggleSetting(command.arg("key"))
-            "torch" -> torch(command.arg("state") ?: "toggle")
+            "torch" -> {
+                val receipt = com.example.phone.PhoneRuntime.torch(context, command)
+                host.notice(receipt.detail)
+                host.phoneReceipt(receipt)
+            }
             "vibrate" -> vibrate((command.int("ms") ?: 40).toLong())
 
             "open" -> open(command.arg("target").orEmpty())
             "search" -> search(command.arg("query")?.takeIf { it.isNotBlank() } ?: host.nearbyText())
             "share" -> share(command.arg("text")?.takeIf { it.isNotBlank() } ?: host.nearbyText())
-            "system_settings" -> systemSettings(command.arg("page").orEmpty())
+            "system_settings" -> {
+                val receipt = com.example.phone.PhoneRuntime.openRoute(context, command, command.arg("page").orEmpty())
+                host.notice(receipt.detail)
+                host.phoneReceipt(receipt)
+            }
             "convert" -> ConvertRunner.run(context, command, host)
             "provenance" -> ConvertRunner.explain(context, host)
             "recenter" -> if (com.example.engine.StreamRunner.states().isEmpty()) {
@@ -486,24 +499,6 @@ class Performer(private val host: PerformerHost) {
         host.notice("${spec.label}: ${if (!now) "on" else "off"}")
     }
 
-    private fun torch(state: String) {
-        val camera = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val id = camera.cameraIdList.firstOrNull {
-            camera.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-        }
-        if (id == null) {
-            host.notice("This phone has no flash to use as a torch")
-            return
-        }
-        Torch.watch(camera)
-        val on = when (state.lowercase()) {
-            "on" -> true
-            "off" -> false
-            else -> !Torch.isOn(id)
-        }
-        camera.setTorchMode(id, on)
-    }
-
     private fun vibrate(ms: Long) {
         val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= 31) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
@@ -561,35 +556,6 @@ class Performer(private val host: PerformerHost) {
         startSafely(Intent.createChooser(send, null))
     }
 
-    private fun systemSettings(page: String) {
-        val action = when (page.lowercase().trim()) {
-            "wifi" -> Settings.ACTION_WIFI_SETTINGS
-            "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
-            "display" -> Settings.ACTION_DISPLAY_SETTINGS
-            "sound" -> Settings.ACTION_SOUND_SETTINGS
-            "battery" -> Settings.ACTION_BATTERY_SAVER_SETTINGS
-            "accessibility" -> Settings.ACTION_ACCESSIBILITY_SETTINGS
-            "keyboard", "input" -> Settings.ACTION_INPUT_METHOD_SETTINGS
-            "apps" -> Settings.ACTION_APPLICATION_SETTINGS
-            "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
-            "network", "wireless" -> Settings.ACTION_WIRELESS_SETTINGS
-            "notifications" -> "android.settings.NOTIFICATION_SETTINGS"
-            "date", "time" -> Settings.ACTION_DATE_SETTINGS
-            "language", "locale" -> Settings.ACTION_LOCALE_SETTINGS
-            "storage" -> Settings.ACTION_INTERNAL_STORAGE_SETTINGS
-            "developer" -> Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS
-            "nfc" -> Settings.ACTION_NFC_SETTINGS
-            "data", "mobile" -> Settings.ACTION_DATA_ROAMING_SETTINGS
-            "security" -> Settings.ACTION_SECURITY_SETTINGS
-            "privacy" -> Settings.ACTION_PRIVACY_SETTINGS
-            "" -> Settings.ACTION_SETTINGS
-            // Any other settings screen, by the action name Android gives it — so a
-            // screen nobody listed here is still one line away.
-            else -> if ('.' in page) page.trim() else Settings.ACTION_SETTINGS
-        }
-        if (!startSafely(Intent(action), quiet = true)) startSafely(Intent(Settings.ACTION_SETTINGS))
-    }
-
     private fun startSafely(intent: Intent, quiet: Boolean = false): Boolean = try {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
@@ -599,24 +565,6 @@ class Performer(private val host: PerformerHost) {
     } catch (e: SecurityException) {
         if (!quiet) host.notice("The system would not open that")
         false
-    }
-
-    /** The torch's state as the system reports it, since another app can flip it too. */
-    private object Torch {
-        private val on = mutableMapOf<String, Boolean>()
-        private var watching = false
-
-        fun isOn(id: String): Boolean = on[id] == true
-
-        fun watch(camera: CameraManager) {
-            if (watching) return
-            watching = true
-            camera.registerTorchCallback(object : CameraManager.TorchCallback() {
-                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
-                    on[cameraId] = enabled
-                }
-            }, Handler(Looper.getMainLooper()))
-        }
     }
 
     companion object {

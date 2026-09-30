@@ -21,6 +21,11 @@ import com.example.core.layout.PresentationMode
 data class Settings(
 
     // --- presentation -----------------------------------------------------
+    val settingsLevel: SettingsLevel = SettingsLevel.BASIC,
+    val localSettingsPolicy: SettingsOverridePolicy = SettingsOverridePolicy.CASCADE,
+    /** Empty uses the compatible suggestions/tools/contextual row profile. */
+    val toolbarRowsJson: String = "",
+    /** Legacy compatibility flag; the level selector keeps it synchronized. */
     val expertMode: Boolean = false,
     val vaultSessionSeconds: Int = 60,
     val mediaMimePatterns: String = "*/*",

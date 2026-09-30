@@ -22,6 +22,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.config.SettingsHierarchy
+import com.example.core.config.SettingsLevel
 import com.example.core.discovery.ProviderCatalog
 import com.example.ui.settings.AllSettingsScreen
 import com.example.ui.settings.CapabilitySetupSection
@@ -75,6 +77,7 @@ class SettingsSurfaceSmokeTest {
     }
 
     @Test fun `pocket query renders independent controls and changes the selected policy`() {
+        SettingsStore.update { SettingsHierarchy.selectLevel(it, SettingsLevel.EXPERT) }.getOrThrow()
         compose.setContent {
             val settings by SettingsStore.state.collectAsState()
             MyApplicationTheme(darkTheme = false, dynamicColor = false) {

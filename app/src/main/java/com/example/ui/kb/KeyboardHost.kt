@@ -44,6 +44,9 @@ interface KeyboardHost {
     /** Runs an action as if a key bound to it had been pressed. */
     fun perform(action: KeyAction)
 
+    /** Retains the exact authored origin so local settings cannot bleed into another panel/key. */
+    fun performFromKey(layoutId: String, panelId: String?, layerName: String, key: KeyDef, action: KeyAction) = perform(action)
+
     /**
      * Puts a clip the UI built onto the system clipboard.
      *

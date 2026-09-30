@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.config.Settings
+import com.example.core.config.ScopedSettingsCache
+import com.example.core.layout.ToolbarRows
+import com.example.core.layout.ToolbarEnvironment
 import com.example.core.config.SettingsStore
 import com.example.core.layout.ElementDef
 import com.example.core.layout.ElementGeometry
@@ -81,6 +84,17 @@ fun KeyboardRoot(
     onSizeChanged: (heightPx: Int, wholeScreen: Boolean) -> Unit
 ) {
     val host = LocalKeyboardHost.current
+    val cache = remember { ScopedSettingsCache() }
+    val resolved = remember(settings, host.layout) { cache.resolve(settings, host.layout).snapshot }
+    KeyboardRootResolved(resolved, onSizeChanged)
+}
+
+@Composable
+private fun KeyboardRootResolved(
+    settings: Settings,
+    onSizeChanged: (heightPx: Int, wholeScreen: Boolean) -> Unit
+) {
+    val host = LocalKeyboardHost.current
     val storageError by SettingsStore.persistenceError.collectAsState()
     LaunchedEffect(storageError) {
         storageError?.let { host.notices.post("Settings storage: $it", "Settings") { host.openApp("all") } }
@@ -93,16 +107,16 @@ fun KeyboardRoot(
     val screenHeightDp = configuration.screenHeightDp
     val screenWidthDp = configuration.screenWidthDp
 
-    val stripHeight = 42.dp
     val indicatorHeight = 20.dp
 
-    val keyboardHeightDp = (screenHeightDp * settings.heightFor(landscape))
-        .coerceIn(minOf(120f, screenHeightDp.coerceAtLeast(1) * 0.85f), screenHeightDp.coerceAtLeast(1) * 0.85f)
 
     val suggestions by host.suggestions.suggestions.collectAsState()
     val aiBusy by host.suggestions.aiBusy.collectAsState()
     val completion by host.completions.state.collectAsState()
     val panel = host.openPanelId
+    val chips by host.actionChips.collectAsState()
+    val mainPanel = host.layout.elements.firstOrNull { it.visible && it.placement == ElementPlacement.DOCKED }
+    val rowSettings = resolvedPanelSettings(settings, host.layout, mainPanel?.id)
 
     // Whether the prediction row occupies height at all.
     //
@@ -114,11 +128,24 @@ fun KeyboardRoot(
     val completionShowing = settings.completionEnabled && panel == null &&
         (settings.completionReserveRow || !completion.isEmpty || completion.running)
 
-    val totalHeightDp = keyboardHeightDp +
-        (if (settings.keyboardToolbarVisible || settings.suggestionsEnabled || panel != null) stripHeight.value else 0f) +
-        (if (completionShowing) stripHeight.value else 0f) +
-        (if (settings.indicatorStripVisible) indicatorHeight.value else 0f) +
-        settings.bottomPaddingDp
+    val rowConfiguration = remember(rowSettings.toolbarRowsJson) { ToolbarRows.configuration(rowSettings.toolbarRowsJson) }
+    val rowCount = ToolbarRows.slots(rowConfiguration, ToolbarEnvironment(
+        rowSettings.keyboardToolbarVisible, rowSettings.suggestionsEnabled, panel != null,
+        suggestions.isNotEmpty(), chips.isNotEmpty(), aiBusy
+    )).size + if (completionShowing) 1 else 0
+    // Count the very same slots that are drawn. On short landscape screens reduce
+    // row height before letting chrome push the key surface into the system bars.
+    val maxPanelHeight = screenHeightDp.coerceAtLeast(1) * 0.85f
+    val bottomPadding = settings.bottomPaddingDp.coerceIn(0f, maxPanelHeight * 0.1f)
+    val indicators = if (settings.indicatorStripVisible) indicatorHeight.value else 0f
+    val minimumKeys = minOf(96f, maxPanelHeight * 0.45f)
+    val stripHeight = if (rowCount == 0) 42.dp else
+        ((maxPanelHeight - minimumKeys - bottomPadding - indicators) / rowCount).coerceIn(1f, 42f).dp
+    val chromeHeight = stripHeight.value * rowCount + indicators + bottomPadding
+    val keyboardHeightDp = (screenHeightDp * settings.heightFor(landscape))
+        .coerceIn(minOf(minimumKeys, (maxPanelHeight - chromeHeight).coerceAtLeast(1f)),
+            (maxPanelHeight - chromeHeight).coerceAtLeast(1f))
+    val totalHeightDp = keyboardHeightDp + chromeHeight
 
     val floating = settings.presentation == PresentationMode.FLOATING
     // Free keys need the whole screen to be placed on, exactly as a floating panel
@@ -211,6 +238,12 @@ fun KeyboardRoot(
 }
 
 @Composable
+private fun resolvedPanelSettings(defaults: Settings, layout: LayoutDef, panelId: String?): Settings {
+    val cache = remember { ScopedSettingsCache() }
+    return remember(defaults, layout, panelId) { cache.resolve(defaults, layout, panelId).snapshot }
+}
+
+@Composable
 private fun KeyboardBody(
     settings: Settings,
     theme: KeyboardTheme,
@@ -256,7 +289,8 @@ private fun KeyboardBody(
         }
 
         if (settings.bottomPaddingDp > 0f) {
-            Box(Modifier.fillMaxWidth().height(settings.bottomPaddingDp.dp).background(theme.background))
+            val bottom = settings.bottomPaddingDp.coerceAtMost(LocalConfiguration.current.screenHeightDp * 0.085f)
+            Box(Modifier.fillMaxWidth().height(bottom.dp).background(theme.background))
         }
     }
 }
@@ -292,25 +326,29 @@ private fun KeyboardRows(
 
     val notice by host.notices.current.collectAsState()
     val chips by host.actionChips.collectAsState()
-    if (settings.keyboardToolbarVisible || settings.suggestionsEnabled || panel != null) {
-        Box(Modifier.touchTarget("row:toolbar")) {
-            val shown = notice
-            // News takes the strip for a few seconds rather than adding a row: the
-            // keys must not move because something happened.
-            if (shown != null) {
-                NoticeBar(shown, theme, stripHeight) { host.notices.dismiss() }
-            } else {
-                SuggestionStrip(
-                    suggestions = if (panel == null) suggestions else emptyList(),
-                    settings = settings,
-                    theme = theme,
-                    aiBusy = aiBusy,
-                    onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
-                    onReject = { host.suggestions.block(it.text) },
-                    onToolbar = { host.openPanel(it) },
-                    height = stripHeight,
-                    actions = if (panel == null) chips else emptyList()
-                )
+    val configuration = remember(settings.toolbarRowsJson) { ToolbarRows.configuration(settings.toolbarRowsJson) }
+    val slots = ToolbarRows.slots(configuration, ToolbarEnvironment(
+        settings.keyboardToolbarVisible, settings.suggestionsEnabled, panel != null,
+        suggestions.isNotEmpty(), chips.isNotEmpty(), aiBusy
+    ))
+    slots.forEachIndexed { index, slot ->
+        androidx.compose.runtime.key(slot.row.id) {
+            Box(Modifier.touchTarget("row:toolbar:${slot.row.id}").fillMaxWidth().height(stripHeight).background(theme.stripBackground)) {
+                val shown = if (index == 0) notice else null
+                if (shown != null) {
+                    NoticeBar(shown, theme, stripHeight) { host.notices.dismiss() }
+                } else if (slot.showContent) {
+                    SuggestionStrip(
+                        suggestions = if (panel == null) suggestions else emptyList(),
+                        settings = settings, theme = theme, aiBusy = aiBusy,
+                        onAccept = { suggestion -> acceptSuggestion(host, suggestion) },
+                        onReject = { host.suggestions.block(it.text) },
+                        onToolbar = { host.openPanel(it) }, height = stripHeight,
+                        actions = if (panel == null) chips else emptyList(),
+                        sources = slot.row.sources, legacyAdaptive = slot.legacy,
+                        showConfiguration = index == 0
+                    )
+                }
             }
         }
     }
@@ -401,7 +439,8 @@ private fun KeyArea(
      * there regardless of what the main panel is doing.
      */
     layerOverride: String? = null,
-    surfaceId: String = "main"
+    surfaceId: String = "main",
+    panelId: String? = null
 ) {
     val host = LocalKeyboardHost.current
     val state = host.state
@@ -438,21 +477,49 @@ private fun KeyArea(
         return
     }
 
+    val authoredLayout = host.layout
+    val authoredLayerName = if (layout.id == authoredLayout.id) rawLayer.name else state.renderLayer(authoredLayout)
+    val cache = remember { ScopedSettingsCache() }
+    val automaticShift = state.modifier(ModifierKind.SHIFT).let { it.active && it.auto && !it.locked && !it.held }
+    val keyPolicies = remember(settings, authoredLayout, panelId, authoredLayerName, effectiveLayer, automaticShift) {
+        effectiveLayer.allKeys.mapNotNull { shown ->
+            val authored = authoredLayout.layers[authoredLayerName]?.allKeys?.singleOrNull { it.id == shown.id }
+            val base = authoredLayout.base.allKeys.singleOrNull { it.id == shown.id }
+            if (authored == null) null else {
+                val shownPolicy = cache.resolve(settings, authoredLayout, panelId, authoredLayerName, authored).snapshot
+                val basePolicy = if (automaticShift && base != null) {
+                    runCatching { cache.resolve(settings, authoredLayout, panelId, authoredLayout.base.name, base).snapshot }.getOrNull()
+                } else null
+                val useBase = automaticShift && basePolicy != null
+                shown.id to ((if (useBase) basePolicy!! else shownPolicy) to (if (useBase) authoredLayout.base.name else authoredLayerName))
+            }
+        }.toMap()
+    }
+    val leafSettings = keyPolicies.mapValues { it.value.first }
+    val presentedLayer = remember(effectiveLayer, authoredLayout, leafSettings, automaticShift) {
+        fun present(key: com.example.core.layout.KeyDef): com.example.core.layout.KeyDef =
+            com.example.core.layout.AutomaticShift.present(authoredLayout.base.allKeys.singleOrNull { it.id == key.id }, key,
+                automaticShift, leafSettings[key.id]?.autoCapitalize ?: settings.autoCapitalize)
+        effectiveLayer.copy(rows = effectiveLayer.rows.map { row -> row.copy(keys = row.keys.map(::present)) },
+            freeKeys = effectiveLayer.freeKeys.map(::present))
+    }
+
     KeySurface(
-        layout = layout.copy(layers = layout.layers + (effectiveLayer.name to effectiveLayer)),
-        layerName = effectiveLayer.name,
+        layout = layout.copy(layers = layout.layers + (presentedLayer.name to presentedLayer)),
+        layerName = presentedLayer.name,
         state = state,
         settings = settings,
         theme = theme,
         background = background,
         onAction = { key, action ->
-            host.feedback(key)
-            host.perform(action)
+            host.performFromKey(authoredLayout.id, panelId, keyPolicies[key.id]?.second ?: authoredLayerName, key, action)
         },
         onKeyDown = { key -> host.feedback(key) },
         onSurfaceSwipe = { direction -> host.performSurfaceGesture(direction) },
         learner = host.touchLearner,
         surfaceId = surfaceId,
+        gestureIdentity = layout,
+        keySettings = leafSettings,
         onCursorNudge = { steps ->
             repeat(kotlin.math.abs(steps)) {
                 host.perform(
@@ -896,11 +963,12 @@ private fun ElementComposition(
         }
 
         loose.forEach { element ->
+            val elementSettings = resolvedPanelSettings(settings, layout, element.id)
             val poseKey = ElementGeometry.key(layout.id, element.id)
             LooseElement(
                 element = element,
                 layout = layout,
-                settings = settings,
+                settings = elementSettings,
                 theme = theme,
                 storedPose = poses[poseKey],
                 areaW = areaW,
@@ -1073,7 +1141,8 @@ private fun LooseElement(
                         settings = settings,
                         theme = theme,
                         layerOverride = element.layer,
-                        surfaceId = element.id
+                        surfaceId = element.id,
+                        panelId = element.id
                     )
                 }
             }
@@ -1113,6 +1182,8 @@ private fun DockedElements(
     val host = LocalKeyboardHost.current
     val layout = host.layout
 
+    val rowSettings = resolvedPanelSettings(settings, layout, elements.firstOrNull()?.id)
+
     Column(
         Modifier
             .fillMaxSize()
@@ -1123,7 +1194,7 @@ private fun DockedElements(
             )
             .alpha(settings.keyboardOpacity.coerceIn(0.05f, 1f))
     ) {
-        KeyboardRows(settings, theme, suggestions, aiBusy, completion, panel, stripHeight, indicatorHeight)
+        KeyboardRows(rowSettings, theme, suggestions, aiBusy, completion, panel, stripHeight, indicatorHeight)
 
         Box(
             Modifier
@@ -1139,15 +1210,17 @@ private fun DockedElements(
             } else {
                 Column(Modifier.fillMaxSize()) {
                     elements.forEach { element ->
+                        val elementSettings = resolvedPanelSettings(settings, layout, element.id)
                         Box(Modifier.fillMaxWidth().weight(1f)) {
                             KeyArea(
                                 layout = layout,
-                                settings = settings,
+                                settings = elementSettings,
                                 theme = theme,
                                 // The first docked element is the main panel and follows
                                 // layer switching; any further ones show what they say.
                                 layerOverride = if (element === elements.first()) null else element.layer,
-                                surfaceId = element.id
+                                surfaceId = element.id,
+                        panelId = element.id
                             )
                         }
                     }

@@ -26,7 +26,7 @@ object PanelGenerator {
 You build settings panels for an Android keyboard app.
 
 You will be given the COMPLETE list of settings the app has. Each line is:
-  key: type | (one of [...] when it is a fixed choice) | (range a..b) | now=<current value> | "human label"
+  key: type | owner=... | level=... | scopes=[...] | (one of [...] when it is a fixed choice) | (range a..b) | now=<current value> | "human label"
 
 The user will describe something they want to be able to change.
 
@@ -54,6 +54,11 @@ Rules:
   and explain in "note" what the app would have to grow for this to be possible. Do
   not pad the panel with loosely related settings.
 - "label" and "help" are for humans: no key names, no types, no JSON in them.
+- This generated panel is a VIEW of shared application settings/keyboard defaults.
+  It does not own a layout, panel, or key instance. Never describe a shared control
+  as applying only to one instance. If the request needs local properties, include
+  a note directing the user to Layouts > the selected layout > Local settings &
+  inheritance; only scopes explicitly listed for that key may be overridden there.
 """
 
     data class Outcome(

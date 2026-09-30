@@ -32,7 +32,7 @@ object SettingsSearch {
         return SettingsSchema.all.map { spec ->
             val key = normalise(spec.key)
             val title = normalise(spec.label)
-            val text = normalise("${spec.key} ${spec.label} ${spec.group} ${spec.help.orEmpty()}")
+            val text = normalise("${spec.key} ${spec.label} ${spec.group} ${spec.help.orEmpty()} ${spec.owner.title} ${spec.minimumLevel.title} ${spec.applicableScopes.joinToString { it.title }}")
             val score = (if (key == query) 100 else 0) +
                 hints.sumOf { if (it == key) 20 else if (it in text) 5 else 0 } +
                 tokens.sumOf { if (it in key || it in title) 3 else if (it in text) 1 else 0 }

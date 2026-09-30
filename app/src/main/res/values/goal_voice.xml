@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API 24–30 retain the ASSIST activity without replacing their legacy recognizer. -->
+    <bool name="goal_voice_service_enabled">false</bool>
+</resources>

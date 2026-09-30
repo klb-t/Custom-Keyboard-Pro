@@ -2,6 +2,8 @@ package com.example.core.layout
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.example.core.config.SettingsOverrides
+import com.example.core.config.SettingsScope
 
 /**
  * JSON codec for [LayoutDef].
@@ -308,7 +310,8 @@ object LayoutJson {
             shape = enumOf(o.optString("shape", "rounded"), KeyShape.ROUNDED),
             bounds = parseRect(o.opt("bounds")),
             touchWeight = o.optDouble("touch", 1.0).toFloat(),
-            visible = o.optBoolean("visible", true)
+            visible = o.optBoolean("visible", true),
+            settingsOverrides = readSettingsOverrides(o, SettingsScope.KEY)
         )
     }
 
@@ -336,6 +339,7 @@ object LayoutJson {
             .put("touch", key.touchWeight.toDouble())
         if (key.repeatable) o.put("repeat", true)
         if (!key.visible) o.put("visible", false)
+        if (!key.settingsOverrides.isEmpty) o.put("settingsOverrides", key.settingsOverrides.toJson())
         key.bounds?.let {
             o.put("bounds", JSONArray().put(it.left.toDouble()).put(it.top.toDouble())
                 .put(it.right.toDouble()).put(it.bottom.toDouble()))
@@ -431,7 +435,8 @@ object LayoutJson {
             description = root.optStringOrNull("description"),
             elements = readElements(root),
             rowCountHint = root.optInt("rowCountHint", layers.values.maxOfOrNull { it.rows.size } ?: 4),
-            builtIn = root.optBoolean("builtIn", false)
+            builtIn = root.optBoolean("builtIn", false),
+            settingsOverrides = readSettingsOverrides(root, SettingsScope.LAYOUT)
         )
     }
 
@@ -502,6 +507,7 @@ object LayoutJson {
             })
             .put("layers", layers)
             .also { out ->
+                if (!layout.settingsOverrides.isEmpty) out.put("settingsOverrides", layout.settingsOverrides.toJson())
                 if (layout.elements.isNotEmpty()) {
                     out.put("elements", JSONArray().apply {
                         layout.elements.forEach { element ->
@@ -520,6 +526,7 @@ object LayoutJson {
                                 if (element.overlapsPanel) put("overlapsPanel", true)
                                 element.control?.let { put("control", it.toJson()) }
                                 put("visible", element.visible)
+                                if (!element.settingsOverrides.isEmpty) put("settingsOverrides", element.settingsOverrides.toJson())
                             })
                         }
                     })
@@ -649,8 +656,18 @@ private fun readElements(root: JSONObject): List<ElementDef> {
             draggable = o.optBoolean("draggable", true),
             overlapsPanel = o.optBoolean("overlapsPanel", false),
             control = o.optJSONObject("control")?.let { ControlDef.fromJson(it) },
-            visible = o.optBoolean("visible", true)
+            visible = o.optBoolean("visible", true),
+            settingsOverrides = readSettingsOverrides(o, SettingsScope.PANEL)
         )
     }
     return out
+}
+
+/** Scoped payloads are strict; silently ignoring an unsafe override would misreport its owner. */
+private fun readSettingsOverrides(owner: JSONObject, scope: SettingsScope): SettingsOverrides {
+    if (!owner.has("settingsOverrides")) return SettingsOverrides.EMPTY
+    val json = owner.optJSONObject("settingsOverrides") ?: throw LayoutJson.ParseException("settingsOverrides must be an object")
+    return runCatching { SettingsOverrides.fromJson(scope, json) }.getOrElse {
+        throw LayoutJson.ParseException(it.message ?: "Invalid settings override")
+    }
 }

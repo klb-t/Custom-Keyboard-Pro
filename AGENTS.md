@@ -51,7 +51,8 @@ Build using the versions declared in the repository:
 gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The active implementation is on `claude/keyboard-app-all-features-78fkrd`.
+The active implementation is on `feat/phone-workspace-2026-09-30`, stacked on
+`feat/goal-assistant-2026-09-29`. Preserve the earlier working APK and branches.
 Inspect the remote before pushing to avoid overwriting concurrent work.
 
 ## Resuming interrupted work

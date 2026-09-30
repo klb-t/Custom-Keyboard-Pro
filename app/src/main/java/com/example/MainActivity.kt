@@ -35,6 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.core.config.SettingsStore
+import com.example.core.config.SettingsHierarchy
+import com.example.core.config.SettingsLevel
+import com.example.ui.settings.BasicKeyboardSettingsScreen
+import com.example.ui.settings.RuntimeDebuggerScreen
 import com.example.core.layout.LayoutRepository
 import com.example.core.config.SettingsSchema
 import com.example.core.discovery.ModelDiscovery
@@ -89,6 +93,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_DICTIONARY = "dictionary"
         const val ROUTE_ABOUT = "about"
         const val ROUTE_DIAGNOSTICS = "diagnostics"
+        const val ROUTE_DEBUGGER = "debugger"
         const val ROUTE_PERMISSIONS = "permissions"
         const val ROUTE_ALL_SETTINGS = "all"
         const val ROUTE_REQUEST_PANEL = "request"
@@ -188,8 +193,10 @@ class MainActivity : ComponentActivity() {
                         }
                         Box(Modifier.weight(1f)) {
                         when (route) {
-                            ROUTE_APPEARANCE -> AppearanceScreen(settings)
-                            ROUTE_TYPING -> TypingSettingsScreen(settings)
+                            ROUTE_APPEARANCE -> if (SettingsHierarchy.level(settings) == SettingsLevel.BASIC)
+                                BasicKeyboardSettingsScreen(settings, domain = "appearance") else AppearanceScreen(settings)
+                            ROUTE_TYPING -> if (SettingsHierarchy.level(settings) == SettingsLevel.BASIC)
+                                BasicKeyboardSettingsScreen(settings, domain = "typing") else TypingSettingsScreen(settings)
                             ROUTE_LAYOUTS -> LayoutStudioScreen(settings)
                             ROUTE_AI -> AiSettingsScreen(settings)
                             ROUTE_VOICE, ROUTE_PERMISSIONS -> VoiceSettingsScreen(
@@ -209,7 +216,8 @@ class MainActivity : ComponentActivity() {
                             ROUTE_DICTIONARY -> DictionaryScreen()
                             ROUTE_ABOUT -> AboutScreen()
                             ROUTE_DIAGNOSTICS -> DiagnosticsScreen()
-                            ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings, initialQuery = settingsQuery)
+                            ROUTE_DEBUGGER -> RuntimeDebuggerScreen(settings, SettingsHierarchy.level(settings) == SettingsLevel.DEBUGGER)
+                            ROUTE_ALL_SETTINGS -> AllSettingsScreen(settings, initialQuery = settingsQuery, onNavigate = ::navigate)
                             ROUTE_REQUEST_PANEL -> RequestPanelScreen(settings, initialRequest = settingsRequest)
                             ROUTE_MEDIA -> MediaHubScreen()
                             ROUTE_VAULT -> VaultScreen()

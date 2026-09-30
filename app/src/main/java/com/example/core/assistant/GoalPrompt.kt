@@ -30,6 +30,8 @@ CANONICAL ACTION PROJECTION:
             append(" | arguments=").append(a.arguments.joinToString { "${it.name}: ${it.rule}; required=${it.required}" })
             append(" | needs=").append(a.needs).append(" | assistantHostImplemented=").append(a.runnable)
             append(" | effects=").append(a.effects).append(" | verify=").append(a.verification)
+            if (a.constraints.isNotEmpty()) append(" | constraints=").append(a.constraints.joinToString())
+            if (a.argumentNeeds.isNotEmpty()) append(" | conditionalNeeds=").append(a.argumentNeeds.joinToString())
             if (a.api.isNotBlank()) append(" | API=").append(a.api)
         }
         append("\n\nCURRENT PREREQUISITE EVIDENCE (not authorization):")
@@ -38,6 +40,8 @@ CANONICAL ACTION PROJECTION:
         }
         append("\nThe internal link iomatrix://colour-organ opens an explicit audio/light setup and preview session; it does not start capture by itself.")
         append("\nThe internal link iomatrix://capture opens conversation-capture consent, not a completed export.")
+        append("\nphone_tools, sensor_monitor, special_access, app_settings and system_settings open review/setup only. They cannot complete sensor capture, grants, force-stop, developer-mode or wireless-debugging changes. Include explicit remaining gaps instead of claiming the goal is achieved.")
+        append("\nphone_info/sensors/app_info produce local observations for the user. Their results are never automatically sent back to you. Do not invent package names, sensor identifiers, device addresses or physical verification.")
     }
 }
 

@@ -72,6 +72,19 @@ expert view directly; the toolbar remains available when suggestions are off.
   validated JSON, per-option reset, ten partial settings profiles and local intent
   search that works without an AI account. Profile imports preview changes and
   preserve unrelated settings; credentials are excluded from portable exports.
+* **Levels and ownership:** Basic, Advanced, Expert and Debugger are independent
+  of where a setting belongs. Keyboard defaults cascade through layout, panel and
+  authored key overrides; the defaults policy can suppress local overrides. The
+  selected-instance editor shows the effective value and source, with inheritance
+  reset and instance profiles. Debugger inspects explicitly published live variables.
+* **Toolbar and authoring:** toolbar rows compose suggestions, tools and contextual
+  actions, with reusable row profiles. The layout editor supports visual key
+  selection, drag/reorder, free geometry, alignment, spacing and draft undo.
+* **Phone tools and assistant:** local device/app/sensor inspection, bounded
+  foreground sensor sessions and contextual permission routes use audited typed
+  operations. API 31+ includes a system voice-session host with on-device push-to-talk.
+  The goal assistant proposes reviewed steps and reports actual outcome states;
+  missing privileged routes and adapters remain visible work.
 * **Quick settings:** hold either tile for its options. Keyboard launch collapses the
   shade; optional shortcut sessions keep the keyboard active across focus changes.
   Touch, volume, media and delivered navigation keys have separate lock policies.
@@ -109,7 +122,8 @@ limits](docs/VAULT_AND_AUTOFILL.md) before relying on it as your only credential
 ## Building
 
 No Gradle wrapper binary is committed. CI provisions Gradle through
-`gradle/actions/setup-gradle`; locally any Gradle 9.x works:
+`gradle/actions/setup-gradle`. Use the declared Gradle 9.7.1, JDK 17 and Android
+SDK 36.1 locally; see [local setup](docs/LOCAL_ANDROID_BUILD.md).
 
 ```
 gradle :app:assembleDebug
@@ -121,6 +135,10 @@ gradle :app:testDebugUnitTest
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it is put together and where
   the decisions live.
 - [`docs/LAYOUT_FORMAT.md`](docs/LAYOUT_FORMAT.md) — the layout JSON, in full.
+- [`docs/RESUME.md`](docs/RESUME.md) — current branch, actual validation and next gates.
+- [`docs/SETTINGS_SCOPE_AND_LEVELS.md`](docs/SETTINGS_SCOPE_AND_LEVELS.md) — owners, cascade and levels.
+- [`docs/PHONE_TOOLS.md`](docs/PHONE_TOOLS.md) — local phone adapters and their limits.
+- [`docs/SYSTEM_VOICE_ASSISTANT.md`](docs/SYSTEM_VOICE_ASSISTANT.md) — system entry and speech lifecycle.
 
 ## Not included
 

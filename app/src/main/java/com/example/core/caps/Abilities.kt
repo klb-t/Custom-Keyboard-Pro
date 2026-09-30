@@ -93,8 +93,40 @@ object Abilities {
     const val POCKET_LOCK = "pocket_lock"
     const val READ_ALOUD = "read_aloud"
     const val WRITE_SYSTEM_SETTINGS = "write_system_settings"
+    const val PHONE_DIAGNOSTICS = "phone_diagnostics"
+    const val SENSOR_INVENTORY = "sensor_inventory"
+    const val APP_USAGE = "app_usage"
+    const val FLASHLIGHT = "flashlight"
 
     val ALL: List<Ability> = listOf(
+        Ability(
+            id = PHONE_DIAGNOSTICS,
+            label = "Phone diagnostics and app management",
+            gives = "Read device/memory snapshots and visible app metadata, launch apps and open their system management pages. Process visibility is restricted by Android.",
+            without = "Ordinary apps cannot force-stop other apps, change secure developer flags or claim a complete process list. A privileged bridge is a separate integration.",
+            needs = Need.Nothing
+        ),
+        Ability(
+            id = SENSOR_INVENTORY,
+            label = "Sensor inventory and foreground monitor",
+            gives = "Inspect all reported sensors and explicitly monitor audited sensor profiles in a bounded foreground session. Individual sensors can still require their own grant.",
+            without = "Unknown, physiological and unsupported reporting profiles remain inspect-only; unavailable or refused sensors are reported without breaking typing.",
+            needs = Need.Nothing
+        ),
+        Ability(
+            id = APP_USAGE,
+            label = "Local app usage history",
+            gives = "Read the last 24 hours of locally returned app usage after a selected user grant. This history is not live process state.",
+            without = "Visible launcher app metadata and the system app details screens still work; no usage history is read.",
+            needs = Need.SpecialAccess(AndroidSettings.ACTION_USAGE_ACCESS_SETTINGS, "Settings › Apps › Special access › Usage access")
+        ),
+        Ability(
+            id = FLASHLIGHT,
+            label = "Flashlight",
+            gives = "Request the camera flashlight without capturing an image; the runtime also checks for an available flash and handles a busy camera.",
+            without = "Explain missing camera permission or flashlight hardware. Grant only when the flashlight is selected; camera images are not recorded.",
+            needs = Need.Permission(android.Manifest.permission.CAMERA)
+        ),
         Ability(
             id = DICTATION,
             label = "Dictation",
@@ -255,6 +287,7 @@ object Abilities {
                 android.os.Build.VERSION.SDK_INT < 23 || AndroidSettings.canDrawOverlays(context)
             AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS ->
                 android.os.Build.VERSION.SDK_INT < 23 || AndroidSettings.System.canWrite(context)
+            AndroidSettings.ACTION_USAGE_ACCESS_SETTINGS -> com.example.phone.PhoneInventory.usageGranted(context)
             else -> false
         }
         is Need.AnyOf -> need.options.any { granted(context, it) }

@@ -30,7 +30,10 @@ data class SettingSpec(
     val options: List<String> = emptyList(),
     val secret: Boolean = false,
     val multiline: Boolean = false,
-    val expert: Boolean = false
+    val expert: Boolean = false,
+    val owner: SettingsOwner = SettingsOwner.APPLICATION,
+    val minimumLevel: SettingsLevel = SettingsLevel.ADVANCED,
+    val applicableScopes: Set<SettingsScope> = setOf(SettingsScope.KEYBOARD_DEFAULTS)
 ) {
     /** Options that are only known at runtime, e.g. the list of installed layouts. */
     val liveOptions: List<String>
@@ -88,7 +91,8 @@ object SettingsSchema {
         val tokens = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (tokens.isEmpty()) return all
         return all.filter { spec ->
-            val text = listOf(spec.key, spec.label, spec.group, spec.help.orEmpty()).joinToString(" ").lowercase()
+            val text = listOf(spec.key, spec.label, spec.group, spec.help.orEmpty(), spec.owner.title,
+                spec.minimumLevel.title, spec.applicableScopes.joinToString { it.title }).joinToString(" ").lowercase()
             tokens.all { it in text }
         }
     }
@@ -108,8 +112,18 @@ object SettingsSchema {
     fun withValue(settings: Settings, key: String, value: Any?): Settings =
         validatedValue(key, value).fold(
             onSuccess = { normalised ->
-                runCatching { SettingsStore.fromJson(SettingsStore.toJson(settings).put(key, normalised)) }
-                    .getOrDefault(settings)
+                when (key) {
+                    "settingsLevel" -> SettingsHierarchy.selectLevel(settings, SettingsLevel.valueOf(normalised.toString()))
+                    "expertMode" -> {
+                        val current = SettingsHierarchy.level(settings)
+                        val selected = if (normalised == true) {
+                            if (current == SettingsLevel.DEBUGGER) current else SettingsLevel.EXPERT
+                        } else if (current.includes(SettingsLevel.EXPERT)) SettingsLevel.ADVANCED else current
+                        SettingsHierarchy.selectLevel(settings, selected)
+                    }
+                    else -> runCatching { SettingsStore.fromJson(SettingsStore.toJson(settings).put(key, normalised)) }
+                        .getOrDefault(settings)
+                }
             },
             onFailure = { settings }
         )
@@ -162,6 +176,7 @@ object SettingsSchema {
                         "${spec.label}: enter a complete JSON object or array"
                     }
                 }
+                if (key == "toolbarRowsJson") com.example.core.layout.ToolbarRows.parse(raw).getOrThrow()
                 raw
             }
             SettingKind.ENUM -> {
@@ -229,7 +244,10 @@ object SettingsSchema {
                 options = meta?.options ?: emptyList(),
                 secret = meta?.secret ?: key.contains("apiKey", ignoreCase = true),
                 multiline = meta?.multiline ?: false,
-                expert = meta?.expert ?: false
+                expert = meta?.expert ?: false,
+                owner = SettingsHierarchy.owner(key),
+                minimumLevel = SettingsHierarchy.minimumLevel(key, meta?.expert ?: false),
+                applicableScopes = SettingsHierarchy.applicableScopes(key)
             )
         }.sortedWith(compareBy({ GROUP_ORDER.indexOf(it.group).let { i -> if (i < 0) 99 else i } }, { it.label }))
     }
@@ -321,6 +339,12 @@ object SettingsSchema {
     )
 
     private val METADATA: Map<String, Meta> = mapOf(
+        "settingsLevel" to Meta(kind = SettingKind.ENUM, group = GROUP_APPEARANCE, label = "Settings level",
+            options = SettingsLevel.entries.map { it.name }, help = "Changes which controls are shown. It never changes saved values or grants access."),
+        "localSettingsPolicy" to Meta(kind = SettingKind.ENUM, group = GROUP_APPEARANCE, label = "Local setting priority",
+            options = SettingsOverridePolicy.entries.map { it.name }, help = "Cascade: key > panel > layout > keyboard defaults. Layout only ignores panel/key overrides. Defaults only ignores all local overrides without deleting them."),
+        "toolbarRowsJson" to Meta(kind = SettingKind.JSON, group = GROUP_APPEARANCE, label = "Toolbar rows",
+            help = "Empty uses the compatibility row profile. Rows and sources are data. Override for a selected layout or panel in Layouts."),
         "vaultSessionSeconds" to Meta(group = GROUP_PRIVACY, label = "Vault unlock session (seconds)", min = 15f, max = 60f, help = "Automatically relock after this interval. The hardware key authentication ceiling remains 60 seconds."),
         "mediaMimePatterns" to Meta(group = GROUP_MEDIA, label = "Media types", help = "Comma-separated MIME patterns, e.g. image/*, video/*. */* shows every type."),
         "mediaShowHidden" to Meta(group = GROUP_MEDIA, label = "Show hidden media"),
@@ -331,8 +355,8 @@ object SettingsSchema {
         "keyboardToolbarVisible" to Meta(group = GROUP_APPEARANCE, label = "Keep toolbar visible", help = "Show actions and configuration even when suggestions are off."),
         "ioActionProfilesJson" to Meta(kind = SettingKind.JSON, group = GROUP_ENGINE, label = "Action profiles", help = "Overrides and new actions: id, label, command, settingsQuery and optional hidden.", multiline = true, expert = true),
         "expertMode" to Meta(
-            group = GROUP_APPEARANCE, label = "Show every setting",
-            help = "Off hides the settings most people never touch. Nothing is removed either way."
+            group = GROUP_APPEARANCE, label = "Legacy expert flag",
+            help = "Compatibility with older callers. Use Settings level to choose Basic, Advanced, Expert or Debugger. The selector synchronizes this flag."
         ),
         "themeId" to Meta(
             kind = SettingKind.ENUM, group = GROUP_APPEARANCE, label = "Theme",
@@ -889,6 +913,9 @@ object SettingsSchema {
         val json = SettingsStore.toJson(settings)
         return all.joinToString("\n") { spec ->
             val bits = mutableListOf("${spec.key}: ${spec.kind.name.lowercase()}")
+            bits += "owner=${spec.owner.name}"
+            bits += "level=${spec.minimumLevel.name}"
+            bits += "scopes=[${spec.applicableScopes.joinToString { it.name }}]"
             spec.liveOptions.takeIf { it.isNotEmpty() }?.let { bits += "one of [${it.joinToString(", ")}]" }
             if (spec.min != null || spec.max != null) bits += "range ${spec.min ?: "-"}..${spec.max ?: "-"}"
             if (includeValues && SettingsProfiles.isPortable(spec)) bits += "now=${json.opt(spec.key)}"

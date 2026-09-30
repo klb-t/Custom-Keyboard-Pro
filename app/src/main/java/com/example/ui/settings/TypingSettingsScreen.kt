@@ -17,6 +17,7 @@ import com.example.core.hitmap.TouchLearner
 fun TypingSettingsScreen(settings: Settings) {
     val context = LocalContext.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+        SharedSettingsScopeNotice(settings, mixedApplicationOptions = true)
 
         SettingsSection("Text conventions") {
             SwitchRow(

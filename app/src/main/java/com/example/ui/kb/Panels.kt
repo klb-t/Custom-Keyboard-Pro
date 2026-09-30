@@ -42,6 +42,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.example.core.layout.ToolbarSource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.ai.AiClient
@@ -86,114 +89,80 @@ fun SuggestionStrip(
     onReject: (Suggestion) -> Unit,
     onToolbar: (PanelId) -> Unit,
     height: androidx.compose.ui.unit.Dp,
-    /** Shortcuts on offer; see [com.example.core.predict.ActionStats]. */
-    actions: List<com.example.core.predict.ActionChip> = emptyList()
+    actions: List<com.example.core.predict.ActionChip> = emptyList(),
+    sources: List<ToolbarSource> = ToolbarSource.entries.toList(),
+    legacyAdaptive: Boolean = true,
+    showConfiguration: Boolean = true
 ) {
     val host = LocalKeyboardHost.current
+    val words = if (settings.suggestionsEnabled) suggestions else emptyList()
     val prominent = actions.filter { it.prominent }
     val quiet = actions.filterNot { it.prominent }
+    val offerTools = (settings.keyboardToolbarVisible || host.openPanelId != null) &&
+        (!legacyAdaptive || (words.isEmpty() && prominent.isEmpty()))
 
     @Composable
     fun Chip(chip: com.example.core.predict.ActionChip) {
         Box(
-            Modifier
-                .fillMaxHeight()
-                .padding(vertical = 6.dp, horizontal = 3.dp)
+            Modifier.fillMaxHeight().padding(vertical = 6.dp, horizontal = 3.dp)
                 .background(theme.keyBackground, RoundedCornerShape(6.dp))
-                .clickable { host.perform(chip.action) }
-                .padding(horizontal = 10.dp),
+                .clickable { host.perform(chip.action) }.padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             PanelText("⌘ " + chip.label, color = theme.stripText, fontSize = 13.sp, maxLines = 1)
         }
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(height)
-            .background(theme.stripBackground),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (suggestions.isEmpty() && prominent.isEmpty()) {
-            ToolbarButton("☺", "Emoji", theme) { onToolbar(PanelId.EMOJI) }
-            ToolbarButton("▤", "Clipboard", theme) { onToolbar(PanelId.CLIPBOARD) }
-            ToolbarButton("🎤", "Voice", theme) { onToolbar(PanelId.VOICE) }
-            ToolbarButton("✦", "AI tools", theme) { onToolbar(PanelId.AI_TOOLS) }
-            ToolbarButton("⇄", "Cursor", theme) { onToolbar(PanelId.CURSOR) }
-            ToolbarButton("⌨", "Layouts", theme) { onToolbar(PanelId.LAYOUT_PICKER) }
-            ToolbarButton("⌖", "Actions beyond the field", theme) { onToolbar(PanelId.IO) }
-            // The space the toolbar leaves is where quiet shortcuts wait.
-            LazyRow(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(quiet) { chip -> Chip(chip) }
-            }
-            if (aiBusy) {
-                PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 12.dp))
-            }
-        } else {
-            LazyRow(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Asked-for and selection shortcuts first; the words next; the rest
-                // after them, where they cost nothing to anyone typing.
-                items(prominent) { chip -> Chip(chip) }
-                itemsIndexed(suggestions.take(settings.suggestionCount.coerceAtLeast(1) * 2)) { index, suggestion ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (index > 0) {
-                            Box(
-                                Modifier.width(1.dp).height(height * 0.4f)
-                                    .background(theme.stripText.copy(alpha = 0.2f))
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .combinedClickable(
-                                    onClick = { onAccept(suggestion) },
-                                    onLongClick = { onReject(suggestion) }
-                                )
-                                .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (suggestion.source == SuggestionSource.AI) {
-                                    PanelText("✦ ", color = theme.stripAiText, fontSize = 13.sp)
-                                }
-                                if (suggestion.source == SuggestionSource.SHORTCUT) {
-                                    PanelText("⌁ ", color = theme.stripAiText, fontSize = 13.sp)
-                                }
-                                if (suggestion.source == SuggestionSource.CLIPBOARD) {
-                                    PanelText("▤ ", color = theme.stripAiText, fontSize = 13.sp)
-                                }
-                                PanelText(
-                                    text = suggestion.display,
-                                    color = if (suggestion.source == SuggestionSource.AI) theme.stripAiText
-                                    else theme.stripText,
-                                    fontSize = 15.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+    Row(Modifier.fillMaxWidth().height(height).background(theme.stripBackground), verticalAlignment = Alignment.CenterVertically) {
+        LazyRow(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            sources.forEach { source ->
+                when (source) {
+                    ToolbarSource.TOOLS -> if (offerTools) {
+                        items(com.example.core.layout.ToolbarRows.tools, key = { "tool:${it.panel.name}" }) { tool ->
+                            ToolbarButton(tool.glyph, tool.title, theme) { onToolbar(tool.panel) }
                         }
                     }
+                    ToolbarSource.CONTEXTUAL -> {
+                        items(prominent) { Chip(it) }
+                        items(quiet) { Chip(it) }
+                    }
+                    ToolbarSource.SUGGESTIONS -> {
+                        itemsIndexed(words.take(settings.suggestionCount.coerceAtLeast(1) * 2)) { index, suggestion ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (index > 0) Box(Modifier.width(1.dp).height(height * 0.4f).background(theme.stripText.copy(alpha = 0.2f)))
+                                Box(
+                                    Modifier.fillMaxHeight().combinedClickable(
+                                        onClick = { onAccept(suggestion) }, onLongClick = { onReject(suggestion) }
+                                    ).padding(horizontal = 14.dp), contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        val glyph = when (suggestion.source) {
+                                            SuggestionSource.AI -> "✦ "
+                                            SuggestionSource.SHORTCUT -> "⌁ "
+                                            SuggestionSource.CLIPBOARD -> "▤ "
+                                            else -> ""
+                                        }
+                                        if (glyph.isNotEmpty()) PanelText(glyph, theme.stripAiText, 13.sp)
+                                        PanelText(suggestion.display,
+                                            if (suggestion.source == SuggestionSource.AI) theme.stripAiText else theme.stripText,
+                                            15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                        }
+                        if (aiBusy && settings.suggestionsEnabled) item { PanelText("…", theme.stripAiText, modifier = Modifier.padding(horizontal = 8.dp)) }
+                    }
                 }
-                items(quiet) { chip -> Chip(chip) }
             }
-            if (aiBusy) PanelText("…", color = theme.stripAiText, modifier = Modifier.padding(end = 8.dp))
-            ToolbarButton("▾", "More", theme) { onToolbar(PanelId.CLIPBOARD) }
         }
-        KeyboardConfigurationButton(settings, theme)
+        if (showConfiguration) KeyboardConfigurationButton(settings, theme)
     }
 }
 
 @Composable
 private fun ToolbarButton(glyph: String, label: String, theme: KeyboardTheme, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxHeight().clickable(onClick = onClick).padding(horizontal = 12.dp),
+        modifier = Modifier.fillMaxHeight().semantics { contentDescription = label }.clickable(onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         PanelText(glyph, color = theme.stripText, fontSize = 17.sp)

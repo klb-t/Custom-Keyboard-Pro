@@ -45,7 +45,8 @@ fun SettingControl(
     spec: SettingSpec,
     settings: Settings,
     labelOverride: String? = null,
-    helpOverride: String? = null
+    helpOverride: String? = null,
+    onWrite: ((Any?) -> Result<Unit>)? = null
 ) {
     val label = labelOverride ?: spec.label
     val help = helpOverride ?: spec.help
@@ -53,12 +54,13 @@ fun SettingControl(
     var writeError by remember(spec.key) { mutableStateOf<String?>(null) }
     fun write(raw: Any?) {
         SettingsSchema.validatedValue(spec.key, raw).mapCatching {
-            SettingsStore.setByKey(spec.key, it).getOrThrow()
+            (onWrite?.invoke(it) ?: SettingsStore.setByKey(spec.key, it)).getOrThrow()
         }.fold(onSuccess = { writeError = null }, onFailure = { writeError = it.message })
     }
 
     Column {
-    when (spec.kind) {
+    if (spec.key == "toolbarRowsJson") ToolbarRowsEditor(value?.toString().orEmpty(), onChange = { write(it) })
+    else when (spec.kind) {
         SettingKind.BOOL -> SwitchRow(
             label = label,
             description = help,

@@ -143,21 +143,24 @@ private fun ActionPicker(
 fun KeyListDialog(
     layout: LayoutDef,
     onEdit: (KeyDef) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onEditInstance: ((String, KeyDef) -> Unit)? = null
 ) {
     val keys = remember(layout) {
-        layout.layers.values.flatMap { it.allKeys }.distinctBy { it.id }
+        layout.layers.flatMap { (name, layer) -> layer.allKeys.map { name to it } }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${layout.name} · ${keys.size} keys") },
         text = {
             LazyColumn(Modifier.fillMaxWidth().height(420.dp)) {
-                items(keys, key = { it.id }) { key ->
+                items(keys.size) { index ->
+                    val (layerName, key) = keys[index]
+                    val unique = layout.layers.getValue(layerName).allKeys.count { it.id == key.id } == 1
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onEdit(key) }
+                            .clickable(enabled = unique) { onEditInstance?.invoke(layerName, key) ?: onEdit(key) }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -169,6 +172,8 @@ fun KeyListDialog(
                             Text(
                                 buildString {
                                     append(describe(key.tapAction).first.label)
+                                    append(" · layer $layerName · ${key.id}")
+                                    if (!unique) append(" · ambiguous ID: repair layout first")
                                     key.bounds?.let {
                                         append(
                                             " · at %.0f%%, %.0f%%".format(
@@ -208,12 +213,14 @@ fun KeyEditorDialog(
     var popup by remember(key.id) { mutableStateOf(key.popup.joinToString(" ")) }
     var tap by remember(key.id) { mutableStateOf(key.actionFor(KeyTrigger.Tap)) }
     var longPress by remember(key.id) { mutableStateOf(key.actionFor(KeyTrigger.LongPress)) }
+    var visible by remember(key.id) { mutableStateOf(key.visible) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Key “${key.effectiveLabel.ifEmpty { key.id }}”") },
         text = {
             Column(Modifier.fillMaxWidth().height(440.dp).verticalScroll(rememberScrollState())) {
+                InfoRow("This edits one selected key instance. Its identity, other layers and local settings are preserved.")
                 TextRow(
                     label = "Label",
                     description = "Drawn on the key. Leave empty to show whatever it types.",
@@ -243,6 +250,10 @@ fun KeyEditorDialog(
                     selected = style,
                     optionLabel = { it },
                     onSelect = { style = it }
+                )
+                SwitchRow(
+                    label = "Visible key face", description = "An invisible key still receives touches, as the layout model specifies.",
+                    checked = visible, onChange = { visible = it }
                 )
                 SwitchRow(
                     label = "Repeats while held",
@@ -289,7 +300,7 @@ fun KeyEditorDialog(
                         repeatable = repeatable,
                         popup = popup.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
                         bindings = rebuilt,
-                        visible = true
+                        visible = visible
                     )
                 )
             }) { Text("Save") }

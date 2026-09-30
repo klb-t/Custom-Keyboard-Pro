@@ -96,7 +96,14 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    override val state = KeyboardState { SettingsStore.current }
+    private val scopedSettingsCache = com.example.core.config.ScopedSettingsCache()
+    private var keySettings: Settings? = null
+    private var runtimeLease: com.example.core.debug.RuntimeVariableRegistry.Lease? = null
+
+    /** A key-scoped snapshot lives only for that synchronous dispatch; other sources inherit layout defaults. */
+    private fun keyboardSettings(): Settings = keySettings ?: scopedSettingsCache.resolve(SettingsStore.current, layout).snapshot
+
+    override val state = KeyboardState { keyboardSettings() }
 
     override val touchLearner: TouchLearner by lazy { TouchLearner(this) }
 
@@ -104,7 +111,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         EditorController(
             connection = { currentInputConnection },
             editorInfo = { currentInputEditorInfo },
-            settings = { SettingsStore.current }
+            settings = { keyboardSettings() }
         )
     }
 
@@ -123,7 +130,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     private val feedbackController: FeedbackController by lazy {
-        FeedbackController(this) { SettingsStore.current }
+        FeedbackController(this) { keyboardSettings() }
     }
 
     private var composeView: ComposeView? = null
@@ -165,6 +172,43 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     override val availableLayouts: List<LayoutDef>
         get() = LayoutRepository.all()
 
+    private fun bindRuntimeVariables() {
+        runtimeLease?.close()
+        val variables = mutableListOf<com.example.core.debug.RuntimeVariable>()
+        fun read(id: String, label: String, description: String, getter: () -> String) {
+            variables += com.example.core.debug.RuntimeVariable(id, label, description, getter)
+        }
+        read("layout.id", "Active layout", "Authored layout currently resolved by the keyboard.") { layout.id }
+        read("editor.sensitive", "Private editor", "Privacy boundary; cannot be disabled through the debugger.") { editor.isSensitive.toString() }
+        read("editor.has_selection", "Selection present", "Boolean only; selected text is never published.") { editor.hasSelection.toString() }
+        read("window.visible", "Keyboard visible", "Android input-view visibility; not a persisted preference.") { isInputViewShown.toString() }
+        read("shortcut.active", "Shortcut session", "Current fieldless keyboard session; read-only.") { shortcutSession.active.toString() }
+        read("workspace.shift_px", "Cursor avoidance shift", "Applied translation; writing it would fight the geometry controller.") { avoidance.shiftPx.toString() }
+        read("workspace.fade", "Cursor avoidance opacity", "Current visibility multiplier from the geometry controller.") { avoidance.fade.toString() }
+        read("settings.capitalisation", "Effective layout capitalisation", "Resolved layout value; individual keys may override it for their own dispatch.") { keyboardSettings().autoCapitalize.toString() }
+        read("settings.capitalisation_source", "Capitalisation source", "Cascade provenance for the active layout.") {
+            scopedSettingsCache.resolve(SettingsStore.current, layout).provenance["autoCapitalize"]?.label ?: "Keyboard defaults"
+        }
+        variables += com.example.core.debug.RuntimeVariable("layer", "Active layer", "Temporary layer selection; not a saved layout edit.",
+            { state.layer }, com.example.core.debug.VariableRule.Choice(layout.layers.keys.toSet()), { next ->
+                require(next in layout.layers)
+                state.resetLayer(next)
+            })
+        ModifierKind.entries.forEach { kind ->
+            val id = kind.name.lowercase()
+            variables += com.example.core.debug.RuntimeVariable("modifier.$id", "$kind active", "Manual volatile modifier; changing it does not grant any app access.",
+                { state.isActive(kind).toString() }, com.example.core.debug.VariableRule.BooleanValue, { value ->
+                    state.setModifier(kind, active = value.toBooleanStrict(), automatic = false)
+                })
+            read("modifier.${id}_locked", "$kind locked", "Current lock state; use the modifier key to establish its normal lock interaction.") { state.isLocked(kind).toString() }
+        }
+        listOf(IndicatorKeys.AI_BUSY, IndicatorKeys.ASR_ACTIVE, IndicatorKeys.ASR_LISTENING,
+            IndicatorKeys.NETWORK, IndicatorKeys.INCOGNITO, IndicatorKeys.COMPOSING, IndicatorKeys.RECORDING_MACRO).forEach { id ->
+            read("flag.$id", id.replace('_', ' '), "Published runtime flag; no contents or private source data.") { state.flag(id).toString() }
+        }
+        runtimeLease = com.example.core.debug.RuntimeVariables.registry.bind("keyboard", variables)
+    }
+
     // -----------------------------------------------------------------------
     // Lifecycle
     // -----------------------------------------------------------------------
@@ -183,6 +227,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             AppLogger.d(tag, "> LayoutRepository.init ok (${LayoutRepository.all().size} layouts)")
             val activeLayout = layout
             AppLogger.d(tag, "> active layout resolved: id=${activeLayout.id}")
+            bindRuntimeVariables()
             touchLearner.load(activeLayout.id)
             AppLogger.d(tag, "> touchLearner.load ok")
 
@@ -237,6 +282,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onDestroy() {
+        runtimeLease?.close()
+        runtimeLease = null
         shortcutSession.stop()
         shortcutRestoreJob?.cancel()
         if (liveKeyboard === this) liveKeyboard = null
@@ -419,6 +466,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
+        runtimeLease?.invalidateContext()
         super.onStartInput(info, restarting)
         restoreShortcutSession(info?.packageName)
     }
@@ -479,6 +527,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        runtimeLease?.invalidateContext()
         saveProperNouns()
         saveActionStats()
         com.example.engine.EngineRuntime.keyboardHidden()
@@ -886,11 +935,13 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
     }
 
     override fun selectLayout(id: String) {
+        runtimeLease?.invalidateContext()
         layoutIdState.value = id
         SettingsStore.update { it.copy(activeLayoutId = id) }
         state.resetLayer(LayoutDef.BASE_LAYER)
         touchLearner.load(id)
         rememberLayoutForApp(id)
+        bindRuntimeVariables()
     }
 
     /**
@@ -1436,8 +1487,32 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         AppLogger.d("Clipboard", "handed over ${clip.itemCount} item(s)")
     }
 
+    override fun performFromKey(layoutId: String, panelId: String?, layerName: String, key: KeyDef, action: KeyAction) {
+        val current = layout
+        if (current.id != layoutId) {
+            notices.post("Layout changed. Press the key again.")
+            return
+        }
+        // A derived key (e.g. an optional navigation row) inherits the panel/layout,
+        // while authored keys use the stored instance rather than a display clone.
+        val authored = current.layers[layerName]?.allKeys?.singleOrNull { it.id == key.id }
+        val parent = panelId?.let { id -> current.elements.singleOrNull { it.id == id } }
+        val matchesPanel = parent == null || com.example.core.config.ScopedSettingsResolver.panelShowsLayer(current, parent, layerName)
+        val scoped = runCatching {
+            scopedSettingsCache.resolve(SettingsStore.current, current, parent?.id,
+                if (matchesPanel) layerName else parent?.layer,
+                if (matchesPanel) authored else null).snapshot
+        }.getOrElse { notices.post("Key settings could not be resolved. Review this layout."); return }
+        val previous = keySettings
+        keySettings = scoped
+        try {
+            feedbackController.onKeyPress(key)
+            perform(action)
+        } finally { keySettings = previous }
+    }
+
     override fun perform(action: KeyAction) {
-        val settings = SettingsStore.current
+        val settings = keyboardSettings()
         // Anything but an arrow ends a run of arrow presses: the magnet only ever
         // finishes a trip the user is visibly in the middle of.
         if (action !is KeyAction.MoveCursor) arrowRun = null
@@ -1634,7 +1709,8 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
             }
         }
 
-        val shifted = state.isActive(ModifierKind.SHIFT)
+        val shifted = state.isActive(ModifierKind.SHIFT) &&
+            (!state.modifier(ModifierKind.SHIFT).auto || settings.autoCapitalize)
         val text = if (shifted && raw.length <= 2 && raw != raw.uppercase()) raw.uppercase() else raw
         editor.commitText(text, shiftActive = shifted)
         afterCharacter(text, settings)
@@ -1677,7 +1753,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
      * boolean is now one word in one rule the user can edit.
      */
     private fun applyCapitalisation(moment: CapitalMoment, sensitive: Boolean) {
-        val settings = SettingsStore.current
+        val settings = keyboardSettings()
         if (!settings.autoCapitalize || sensitive) return
 
         val rules = Capitalisation.fromJson(settings.capitalisationRulesJson)
@@ -1773,7 +1849,7 @@ class CustomKeyboardIme : ComposeInputMethodService(), KeyboardHost {
         if (form == null) {
             // The situation has to have held where the word *started*, not where it ended.
             val beforeWord = before.dropLast(committed.length + word.length)
-            val rules = Capitalisation.fromJson(SettingsStore.current.capitalisationRulesJson)
+            val rules = Capitalisation.fromJson(keyboardSettings().capitalisationRulesJson)
             val here = Capitalisation.action(
                 rules,
                 Capitalisation.situations(beforeWord, atStartOfField = beforeWord.isEmpty()),

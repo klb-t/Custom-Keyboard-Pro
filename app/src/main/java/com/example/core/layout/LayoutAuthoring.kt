@@ -161,4 +161,15 @@ object LayoutAuthoring {
             }
         )
     }
+
+    /** Contextual editing identifies a layer too; equal IDs elsewhere are separate instances. */
+    fun replaceKeyInstance(layout: LayoutDef, layerName: String, keyId: String, replacement: KeyDef): LayoutDef {
+        val layer = layout.layers[layerName] ?: error("Unknown layer: $layerName")
+        require(layer.allKeys.count { it.id == keyId } == 1) { "Unknown or ambiguous key: $layerName/$keyId" }
+        require(replacement.id == keyId) { "The key ID identifies this edit target." }
+        fun replace(key: KeyDef): KeyDef = if (key.id == keyId) replacement else key
+        val updated = layer.copy(rows = layer.rows.map { row -> row.copy(keys = row.keys.map(::replace)) },
+            freeKeys = layer.freeKeys.map(::replace))
+        return layout.copy(layers = layout.layers + (layerName to updated))
+    }
 }

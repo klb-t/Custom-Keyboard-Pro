@@ -121,7 +121,10 @@ object SettingsStore {
      * profile. An unrecognised name or an unusable value is a no-op rather than an
      * error, because the callers are open-ended by design.
      */
-    fun setByKey(key: String, value: Any?) = update { SettingsSchema.withValue(it, key, value) }
+    fun setByKey(key: String, value: Any?) = update {
+        if (key == "settingsLevel") SettingsHierarchy.selectLevel(it, enumOf(value.toString(), it.settingsLevel))
+        else SettingsSchema.withValue(it, key, value)
+    }
 
     fun getByKey(key: String, settings: Settings = current): Any? =
         SettingsSchema.valueOf(settings, key)
@@ -165,6 +168,9 @@ object SettingsStore {
         put("mediaSort", s.mediaSort)
         put("mediaEntryLimit", s.mediaEntryLimit)
         put("mediaProviderTimeoutMs", s.mediaProviderTimeoutMs)
+        put("settingsLevel", s.settingsLevel.name)
+        put("localSettingsPolicy", s.localSettingsPolicy.name)
+        put("toolbarRowsJson", s.toolbarRowsJson)
         put("expertMode", s.expertMode)
         put("vaultSessionSeconds", s.vaultSessionSeconds)
         put("keyboardToolbarVisible", s.keyboardToolbarVisible)
@@ -391,6 +397,7 @@ object SettingsStore {
 
     internal fun fromJson(o: JSONObject): Settings {
         val d = Settings()
+        val level = SettingsHierarchy.decodeLevel(o)
         return Settings(
             mediaMimePatterns = o.optString("mediaMimePatterns", d.mediaMimePatterns),
             mediaShowHidden = o.optBoolean("mediaShowHidden", d.mediaShowHidden),
@@ -398,7 +405,10 @@ object SettingsStore {
             mediaSort = o.optString("mediaSort", d.mediaSort),
             mediaEntryLimit = o.optInt("mediaEntryLimit", d.mediaEntryLimit),
             mediaProviderTimeoutMs = o.optInt("mediaProviderTimeoutMs", d.mediaProviderTimeoutMs),
-            expertMode = o.optBoolean("expertMode", d.expertMode),
+            settingsLevel = level,
+            localSettingsPolicy = enumOf(o.optString("localSettingsPolicy", d.localSettingsPolicy.name), d.localSettingsPolicy),
+            toolbarRowsJson = o.optString("toolbarRowsJson", d.toolbarRowsJson),
+            expertMode = if (o.has("settingsLevel")) level.includes(SettingsLevel.EXPERT) else o.optBoolean("expertMode", d.expertMode),
             vaultSessionSeconds = o.optInt("vaultSessionSeconds", d.vaultSessionSeconds).coerceIn(15, 60),
             keyboardToolbarVisible = o.optBoolean("keyboardToolbarVisible", d.keyboardToolbarVisible),
             ioActionProfilesJson = o.optString("ioActionProfilesJson", d.ioActionProfilesJson),

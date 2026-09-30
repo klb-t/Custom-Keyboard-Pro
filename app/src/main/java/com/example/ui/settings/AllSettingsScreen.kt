@@ -27,26 +27,34 @@ import com.example.core.config.SettingsProfile
 import com.example.core.config.SettingsProfiles
 import com.example.core.config.SettingsSchema
 import com.example.core.config.SettingsStore
+import com.example.core.config.SettingsHierarchy
+import com.example.core.config.SettingsLevel
+import com.example.core.config.SettingsOwner
 
 /** Every persisted control, including new knobs, remains accessible without a UI registry. */
 @Composable
-fun AllSettingsScreen(settings: Settings, initialQuery: String = "") {
+fun AllSettingsScreen(settings: Settings, initialQuery: String = "", onNavigate: ((String) -> Unit)? = null) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val navigate = onNavigate ?: { route: String -> SettingsNavigation.open(context, route) }
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
     var onlyChanged by rememberSaveable { mutableStateOf(false) }
     var showProfiles by rememberSaveable { mutableStateOf(false) }
-    var resetDialog by remember { mutableStateOf(false) }
+    var resetKeys by remember { mutableStateOf<List<String>?>(null) }
+    var ownerName by rememberSaveable { mutableStateOf("ALL") }
     var error by remember { mutableStateOf<String?>(null) }
     val json = remember(settings) { SettingsStore.toJson(settings) }
-    val matches = remember(query, onlyChanged, settings) {
-        SettingsSchema.search(query).filter { !onlyChanged || !SettingsProfiles.equivalent(json.opt(it.key), it.default) }
+    val owner = SettingsOwner.entries.firstOrNull { it.name == ownerName }
+    val matches = remember(query, onlyChanged, settings, ownerName) {
+        SettingsHierarchy.visible(settings, query, owner).filter { !onlyChanged || !SettingsProfiles.equivalent(json.opt(it.key), it.default) }
     }
+    val hidden = SettingsHierarchy.hidden(settings, query, owner).filter { !onlyChanged || !SettingsProfiles.equivalent(json.opt(it.key), it.default) }
 
     LazyColumn {
         item("search") {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search every setting") },
                     placeholder = { Text("pocket, opacity, repeat…") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("${matches.size} of ${SettingsSchema.all.size} settings · all expert options are included",
+                Text("${matches.size} visible settings · ${SettingsHierarchy.level(settings).title} · ${hidden.size} at higher levels",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                 Row {
                     TextButton(onClick = { onlyChanged = !onlyChanged }) { Text(if (onlyChanged) "Show all" else "Only modified") }
@@ -54,6 +62,15 @@ fun AllSettingsScreen(settings: Settings, initialQuery: String = "") {
                     if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") }
                 }
             }
+            SettingsLevelSelector(settings, navigate)
+            ChoiceRow("Owner", description = "Browsing and resets apply to this selected owner. Layout/panel/key overrides are edited in Layouts.",
+                options = listOf("ALL") + SettingsOwner.entries.map { it.name }, selected = ownerName,
+                optionLabel = { name -> SettingsOwner.entries.firstOrNull { it.name == name }?.title ?: "All owners" }, onSelect = { ownerName = it })
+            ActionRow("Selected layout, panel or key", "Edit local properties and inheritance of an explicit instance", onClick = { navigate("layouts") })
+            if (query.isNotBlank() && hidden.isNotEmpty()) ActionRow("Show ${hidden.size} additional matches in Expert",
+                "${hidden.take(3).joinToString { it.label }}. Existing values remain intact.", onClick = {
+                    SettingsStore.update { SettingsHierarchy.selectLevel(it, SettingsLevel.EXPERT) }
+                })
         }
         if (showProfiles) item("profiles") { SettingsProfilesPanel(settings, matches.map { it.key }) }
         if (matches.isEmpty()) item("empty") { InfoRow("No matching settings. Try a shorter name, such as lock, cursor or voice.") }
@@ -65,23 +82,26 @@ fun AllSettingsScreen(settings: Settings, initialQuery: String = "") {
             }
         }
         item("reset") {
-            ActionRow("Reset everything to defaults", "Layouts, dictionary and clipboard are kept", onClick = { resetDialog = true })
+            ActionRow("Reset visible selection", "Reset exactly these ${matches.size} shared settings. Local layout/panel/key overrides, dictionary and clipboard are kept.",
+                onClick = { resetKeys = matches.map { it.key }.filterNot { it == "settingsLevel" || it == "expertMode" } })
             error?.let { InfoRow(it) }
         }
     }
-    if (resetDialog) AlertDialog(
-        onDismissRequest = { resetDialog = false }, title = { Text("Reset all settings?") },
-        text = { Text("This removes all settings changes and provider credentials. Saved profiles, layouts, dictionary and clipboard remain.") },
+    resetKeys?.let { keys -> AlertDialog(
+        onDismissRequest = { resetKeys = null }, title = { Text("Reset ${keys.size} shared settings?") },
+        text = { Text("The reviewed selection is fixed: ${keys.take(8).joinToString()}${if (keys.size > 8) ", …" else ""}. Included credentials are cleared. Local overrides, profiles, layouts, dictionary and clipboard remain.") },
         confirmButton = { TextButton(onClick = {
-            runCatching { SettingsStore.resetToDefaults().getOrThrow() }.onFailure { error = it.message }
-            resetDialog = false
+            SettingsStore.update { SettingsHierarchy.reset(it, keys).getOrThrow() }.onFailure { error = it.message }
+            resetKeys = null
         }) { Text("Reset") } },
-        dismissButton = { TextButton(onClick = { resetDialog = false }) { Text("Cancel") } }
-    )
+        dismissButton = { TextButton(onClick = { resetKeys = null }) { Text("Cancel") } }
+    ) }
 }
 
 @Composable
 private fun ExpertSetting(spec: SettingSpec, settings: Settings) {
+    InfoRow("${spec.owner.title} · " + if (spec.applicableScopes.size > 1) "shared default; local overrides: ${spec.applicableScopes.filter { it != com.example.core.config.SettingsScope.KEYBOARD_DEFAULTS }.joinToString { it.title }}"
+        else spec.owner.explanation)
     SettingControl(spec, settings)
     var error by remember(spec.key) { mutableStateOf<String?>(null) }
     val modified = !SettingsProfiles.equivalent(SettingsSchema.valueOf(settings, spec.key), spec.default)

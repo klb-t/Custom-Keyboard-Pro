@@ -110,7 +110,8 @@ class KeyboardState(
         kind: ModifierKind,
         active: Boolean,
         locked: Boolean = false,
-        oneShot: Boolean = false
+        oneShot: Boolean = false,
+        automatic: Boolean = !locked
     ) {
         modifiers[kind] = ModifierState(
             active = active || locked,
@@ -118,7 +119,7 @@ class KeyboardState(
             // A locked modifier is not a one-shot; saying both would have the next
             // character clear a lock the user asked for.
             oneShot = oneShot && !locked,
-            auto = !locked
+            auto = automatic && !locked
         )
         syncLockFlags()
     }

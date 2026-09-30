@@ -13,8 +13,8 @@ android {
     applicationId = "com.aistudio.qwertykey.xyzabc"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10
-    versionName = "4.4.2"
+    versionCode = 11
+    versionName = "4.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

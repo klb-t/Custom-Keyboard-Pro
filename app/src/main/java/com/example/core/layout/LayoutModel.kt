@@ -357,7 +357,8 @@ data class KeyDef(
      */
     val touchWeight: Float = 1f,
     /** Visible at all? An invisible key still takes touches: useful for bitmap skins. */
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val settingsOverrides: com.example.core.config.SettingsOverrides = com.example.core.config.SettingsOverrides.EMPTY
 ) {
     fun actionFor(trigger: KeyTrigger): KeyAction? =
         bindings.firstOrNull { it.trigger == trigger }?.action
@@ -476,7 +477,8 @@ data class ElementDef(
      */
     val control: ControlDef? = null,
     /** Drawn only when the field being typed into is of a matching kind, if set. */
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val settingsOverrides: com.example.core.config.SettingsOverrides = com.example.core.config.SettingsOverrides.EMPTY
 )
 
 data class LayoutDef(
@@ -496,7 +498,8 @@ data class LayoutDef(
     val description: String? = null,
     /** Suggested aspect: rows tall. Used to pick a default height. */
     val rowCountHint: Int = 4,
-    val builtIn: Boolean = false
+    val builtIn: Boolean = false,
+    val settingsOverrides: com.example.core.config.SettingsOverrides = com.example.core.config.SettingsOverrides.EMPTY
 ) {
     fun layer(name: String): LayerDef? = layers[name]
     val base: LayerDef get() = layers[defaultLayer] ?: layers[BASE_LAYER] ?: layers.values.first()

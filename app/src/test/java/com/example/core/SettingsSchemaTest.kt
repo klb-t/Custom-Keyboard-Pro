@@ -101,7 +101,7 @@ class SettingsSchemaTest {
             SettingsSchema.withValue(base, "keyGapDp", 7f)
         )
         assertEquals(
-            base.copy(expertMode = true),
+            com.example.core.config.SettingsHierarchy.selectLevel(base, com.example.core.config.SettingsLevel.EXPERT),
             SettingsSchema.withValue(base, "expertMode", true)
         )
         assertEquals(

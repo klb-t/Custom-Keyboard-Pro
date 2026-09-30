@@ -106,6 +106,10 @@ fun KeySurface(
     learner: com.example.core.hitmap.TouchLearner? = null,
     /** Identifies this surface when it reports its geometry; see KeyboardHost. */
     surfaceId: String = "main",
+    /** The authored definition, before Shift/split/free transforms. */
+    gestureIdentity: Any = layout.id,
+    /** Resolved once per authored key, never during a pointer sample. */
+    keySettings: Map<String, Settings> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val layer: LayerDef = layout.layer(layerName) ?: layout.base
@@ -167,11 +171,7 @@ fun KeySurface(
         // A key carrying whole tabs of symbols opens a board that stays open, rather
         // than a strip you have to keep the finger on. Separate state because the two
         // are separate interactions, not two sizes of one.
-        var board by remember { mutableStateOf<PlacedKey?>(null) }
-
-        val gapPx = with(density) { settings.keyGapDp.dp.toPx() }
-        val cornerPx = with(density) { settings.keyCornerDp.dp.toPx() }
-        val swipeThresholdPx = with(density) { settings.swipeThresholdDp.dp.toPx() }
+        var board by remember { mutableStateOf<BoardState?>(null) }
         val slideStepPx = with(density) { 16.dp.toPx() }
 
         background?.let { bitmap ->
@@ -196,18 +196,25 @@ fun KeySurface(
         // does, so the loop keeps running and simply reads the newest geometry.
         val livePlacement by rememberUpdatedState(placement)
         val liveLearnedOffsets by rememberUpdatedState(learnedOffsets)
+        val liveSettings by rememberUpdatedState(settings)
+        val liveKeySettings by rememberUpdatedState(keySettings)
+        val liveOnAction by rememberUpdatedState(onAction)
+        val liveOnKeyDown by rememberUpdatedState(onKeyDown)
+        val liveOnCursorNudge by rememberUpdatedState(onCursorNudge)
+        val liveOnSurfaceSwipe by rememberUpdatedState(onSurfaceSwipe)
+        val liveDensity by rememberUpdatedState(density)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(settings, layerName) {
+                .pointerInput(gestureIdentity, surfaceId, widthPx, heightPx, host, state, learner) {
                     val touches = mutableMapOf<PointerId, Touch>()
 
                     fun resolve(x: Float, y: Float): PlacedKey? =
-                        if (settings.touchModelEnabled) {
+                        if (liveSettings.touchModelEnabled) {
                             KeyPlacement.probableKey(
                                 livePlacement, x, y,
-                                with(density) { settings.touchModelSigmaDp.dp.toPx() },
+                                with(liveDensity) { liveSettings.touchModelSigmaDp.dp.toPx() },
                                 liveLearnedOffsets
                             )
                         } else {
@@ -223,6 +230,7 @@ fun KeySurface(
 
                     fun armTimers(touch: Touch) {
                         val key = touch.placed.key
+                        val policy = touch.policy
                         if (key.repeatable) {
                             // Hold-to-repeat wins over long-press: a key that repeats is a
                             // key you hold down, and having it fire a different action after
@@ -230,16 +238,16 @@ fun KeySurface(
                             val repeatAction = key.actionFor(KeyTrigger.Repeat) ?: key.tapAction
                             if (repeatAction != null) {
                                 touch.repeatJob = scope.launch {
-                                    delay(settings.repeatStartMs)
-                                    var interval = settings.repeatIntervalMs
+                                    delay(policy.repeatStartMs)
+                                    var interval = policy.repeatIntervalMs
                                     while (true) {
-                                        onAction(key, repeatAction)
+                                        touch.dispatch(key, repeatAction)
                                         touch.consumed = true
                                         delay(interval)
                                         // Accelerate, but never past a rate a person can stop.
-                                        val fastest = settings.knobLong(Knobs.REPEAT_FASTEST_MS)
-                                        interval = (interval - settings.knobLong(Knobs.REPEAT_ACCEL_MS))
-                                            .coerceAtLeast(minOf(fastest, settings.repeatIntervalMs))
+                                        val fastest = policy.knobLong(Knobs.REPEAT_FASTEST_MS)
+                                        interval = (interval - policy.knobLong(Knobs.REPEAT_ACCEL_MS))
+                                            .coerceAtLeast(minOf(fastest, policy.repeatIntervalMs))
                                     }
                                 }
                             }
@@ -247,12 +255,12 @@ fun KeySurface(
                         }
 
                         val longPressAction = key.actionFor(KeyTrigger.LongPress)
-                        val hasBoard = settings.longPressPopup && key.popupGroups.isNotEmpty()
-                        val hasPopup = settings.longPressPopup && key.popup.isNotEmpty()
+                        val hasBoard = policy.longPressPopup && key.popupGroups.isNotEmpty()
+                        val hasPopup = policy.longPressPopup && key.popup.isNotEmpty()
                         if (!hasBoard && !hasPopup && longPressAction == null) return
 
                         touch.longPressJob = scope.launch {
-                            delay(settings.longPressMs)
+                            delay(policy.longPressMs)
                             // The quick strip first whenever there is one, even on a key
                             // that also has a board. On a scientific layout the accents
                             // live in the board's first tab, so a language that promotes
@@ -268,7 +276,7 @@ fun KeySurface(
                                 touch.popupOpen = true
 
                                 if (hasBoard) {
-                                    delay(settings.longPressBoardMs)
+                                    delay(policy.longPressBoardMs)
                                     // Only a finger that has neither moved nor let go:
                                     // sliding along the strip is somebody choosing from
                                     // it, and taking the strip away mid-choice would be
@@ -276,20 +284,20 @@ fun KeySurface(
                                     if (touch.popupOpen && popup?.selected == 0) {
                                         popup = null
                                         touch.popupOpen = false
-                                        board = touch.placed
+                                        board = BoardState(touch.placed, touch.dispatch, policy)
                                         touch.consumed = true
-                                        onKeyDown(key)
+                                        liveOnKeyDown(key)
                                     }
                                 }
                             } else if (hasBoard) {
                                 // The board outlives the gesture, so the touch is
                                 // finished here rather than left half-open waiting for
                                 // a finger that has already done its job.
-                                board = touch.placed
+                                board = BoardState(touch.placed, touch.dispatch, policy)
                                 touch.consumed = true
-                                onKeyDown(key)
+                                liveOnKeyDown(key)
                             } else if (longPressAction != null) {
-                                onAction(key, longPressAction)
+                                touch.dispatch(key, longPressAction)
                                 touch.consumed = true
                             }
                         }
@@ -297,14 +305,19 @@ fun KeySurface(
 
                     fun beginTouch(id: PointerId, x: Float, y: Float) {
                         val placed = resolve(x, y) ?: return
-                        val touch = Touch(placed, x, y)
+                        val touch = Touch(placed, x, y, liveKeySettings[placed.key.id] ?: liveSettings, liveOnAction)
                         touches[id] = touch
                         pressed.add(placed.key.id)
-                        onKeyDown(placed.key)
-                        if (settings.keyPreviewPopup && placed.key.tapAction is KeyAction.Text) {
+                        liveOnKeyDown(placed.key)
+                        if (touch.policy.keyPreviewPopup && placed.key.tapAction is KeyAction.Text) {
                             preview = placed
                         }
-                        armTimers(touch)
+                        val action = placed.key.tapAction
+                        if (action is KeyAction.Modifier && action.mode == com.example.core.layout.ModifierMode.MOMENTARY) {
+                            touch.dispatch(placed.key, action)
+                            touch.heldModifier = action.kind
+                            touch.consumed = true
+                        } else armTimers(touch)
                     }
 
                     fun endTouch(id: PointerId, cancelled: Boolean) {
@@ -314,6 +327,9 @@ fun KeySurface(
                         if (preview?.key?.id == touch.placed.key.id) preview = null
 
                         val key = touch.placed.key
+                        touch.heldModifier?.let { state.releaseModifier(it) }
+                        val policy = touch.policy
+                        val thresholdPx = with(liveDensity) { policy.swipeThresholdDp.dp.toPx() }
 
                         if (touch.popupOpen) {
                             val current = popup
@@ -321,7 +337,7 @@ fun KeySurface(
                             touch.popupOpen = false
                             if (!cancelled && current != null) {
                                 current.items.getOrNull(current.selected)?.let { choice ->
-                                    onAction(key, KeyAction.Text(choice))
+                                    touch.dispatch(key, KeyAction.Text(choice))
                                     host.keyReleased(
                                         key, android.os.SystemClock.uptimeMillis() - touch.downAt, fromStrip = true
                                     )
@@ -335,11 +351,11 @@ fun KeySurface(
                         val direction = SwipeDirection.of(
                             touch.currentX - touch.startX,
                             touch.currentY - touch.startY,
-                            swipeThresholdPx
+                            thresholdPx
                         )
                         val swipeAction = direction?.let { key.actionFor(KeyTrigger.Swipe(it)) }
                         if (swipeAction != null) {
-                            onAction(key, swipeAction)
+                            touch.dispatch(key, swipeAction)
                             return
                         }
 
@@ -349,13 +365,13 @@ fun KeySurface(
                         val longSwipe = SwipeDirection.of(
                             touch.currentX - touch.startX,
                             touch.currentY - touch.startY,
-                            swipeThresholdPx * settings.knobFloat(Knobs.LONG_SWIPE_FACTOR)
+                            thresholdPx * policy.knobFloat(Knobs.LONG_SWIPE_FACTOR)
                         )
-                        if (longSwipe != null && onSurfaceSwipe(longSwipe)) return
+                        if (longSwipe != null && liveOnSurfaceSwipe(longSwipe)) return
 
-                        val now = System.currentTimeMillis()
+                        val now = android.os.SystemClock.uptimeMillis()
                         val isDoubleTap = taps.keyId == key.id &&
-                            now - taps.atMillis < settings.doubleTapMs
+                            now - taps.atMillis < policy.doubleTapMs
                         taps.keyId = key.id
                         taps.atMillis = now
 
@@ -363,21 +379,21 @@ fun KeySurface(
                             ?: key.tapAction
                             ?: return
 
-                        if (settings.touchModelEnabled) {
+                        if (policy.touchModelEnabled) {
                             if (action is KeyAction.Backspace) {
                                 learner?.onBackspace()
                             } else {
                                 learner?.onTap(
                                     touch.placed, touch.startX, touch.startY,
-                                    learn = settings.touchModelLearning
+                                    learn = policy.touchModelLearning
                                 )
                             }
                         }
-                        onAction(key, action)
+                        touch.dispatch(key, action)
                         // Only keys that have a strip say anything about the threshold:
                         // how long a tap is held on a key with nothing to open is not a
                         // near miss of anything.
-                        if (settings.longPressPopup && key.popup.isNotEmpty()) {
+                        if (policy.longPressPopup && key.popup.isNotEmpty()) {
                             host.keyReleased(key, android.os.SystemClock.uptimeMillis() - touch.downAt, fromStrip = false)
                         }
                     }
@@ -402,14 +418,16 @@ fun KeySurface(
                         }
 
                         val key = touch.placed.key
+                        val policy = touch.policy
+                        val thresholdPx = with(liveDensity) { policy.swipeThresholdDp.dp.toPx() }
 
                         // Sliding along the space bar scrubs the cursor. It is the one
                         // gesture that has to stay continuous rather than firing on release.
-                        if (settings.spaceSlideCursor && key.tapAction is KeyAction.Space) {
+                        if (policy.spaceSlideCursor && key.tapAction is KeyAction.Space) {
                             val delta = x - touch.slideAnchorX
                             if (abs(delta) >= slideStepPx) {
                                 val steps = (delta / slideStepPx).toInt()
-                                onCursorNudge(steps)
+                                liveOnCursorNudge(steps)
                                 touch.slideAnchorX += steps * slideStepPx
                                 touch.consumed = true
                                 stopTimers(touch)
@@ -418,12 +436,12 @@ fun KeySurface(
                         }
 
                         val travelled = abs(x - touch.startX) + abs(y - touch.startY)
-                        if (travelled < swipeThresholdPx / 2f) return
+                        if (travelled < thresholdPx / 2f) return
 
                         // Past the threshold, a key with a matching swipe binding keeps the
                         // finger; one without it hands over to whichever key is now under it.
                         val direction = SwipeDirection.of(
-                            x - touch.startX, y - touch.startY, swipeThresholdPx
+                            x - touch.startX, y - touch.startY, thresholdPx
                         )
                         if (direction != null && key.actionFor(KeyTrigger.Swipe(direction)) != null) {
                             stopTimers(touch)
@@ -434,23 +452,20 @@ fun KeySurface(
                         if (under.key.id != key.id && !touch.consumed) {
                             stopTimers(touch)
                             pressed.remove(key.id)
-                            val moved = Touch(under, touch.startX, touch.startY)
+                            val moved = Touch(under, touch.startX, touch.startY, liveKeySettings[under.key.id] ?: liveSettings, liveOnAction)
                             moved.currentX = x
                             moved.currentY = y
                             touches[id] = moved
                             pressed.add(under.key.id)
-                            onKeyDown(under.key)
-                            if (settings.keyPreviewPopup) preview = under
+                            liveOnKeyDown(under.key)
+                            if (moved.policy.keyPreviewPopup) preview = under
                             armTimers(moved)
                         }
                     }
 
-                    // The gesture loop is restarted whenever its keys change — a
-                    // rotation, a window resize, a settings write, a layer switch. That
-                    // cancels this coroutine wherever it happens to be, including with a
-                    // finger down and a popup open, and nothing downstream ever hears
-                    // about it. Cleaning up here is what stops a cancelled gesture from
-                    // leaving a popup on screen for the rest of the session.
+                    // Shift and policy writes keep this loop alive. A definition,
+                    // host or size change really does replace the surface; cancel its
+                    // timers/popups and release only modifiers held by these fingers.
                     try {
                         awaitPointerEventScope {
                             while (true) {
@@ -480,24 +495,29 @@ fun KeySurface(
                             }
                         }
                     } finally {
-                        touches.values.forEach { stopTimers(it) }
+                        touches.values.forEach {
+                            stopTimers(it)
+                            it.heldModifier?.let { kind -> state.releaseModifier(kind) }
+                        }
                         touches.clear()
                         popup = null
                         preview = null
+                        board = null
                         pressed.clear()
                     }
                 }
         ) {
             placement.forEach { placed ->
                 if (!placed.key.visible) return@forEach
+                val visualSettings = keySettings[placed.key.id] ?: settings
                 KeyView(
                     placed = placed,
                     isPressed = pressed.contains(placed.key.id),
                     state = state,
-                    settings = settings,
+                    settings = visualSettings,
                     theme = theme,
-                    gapPx = gapPx,
-                    cornerPx = cornerPx
+                    gapPx = with(density) { visualSettings.keyGapDp.dp.toPx() },
+                    cornerPx = with(density) { visualSettings.keyCornerDp.dp.toPx() }
                 )
             }
         }
@@ -508,18 +528,19 @@ fun KeySurface(
             }
         }
 
-        board?.let { anchor ->
+        board?.let { opened ->
+            val anchor = opened.anchor
             val groups = anchor.key.popupGroups
             SymbolBoard(
                 groups = groups,
                 selectedGroupId = BoardMemory.selectedGroup(settings, anchor.key.id, groups),
                 pinnedGroupIds = BoardMemory.pinnedGroups(settings),
                 theme = theme,
-                columns = settings.symbolBoardColumns,
+                columns = opened.policy.symbolBoardColumns,
                 onSelectGroup = { BoardMemory.rememberGroup(anchor.key.id, it) },
                 onTogglePin = { BoardMemory.togglePin(it) },
                 onPick = { symbol ->
-                    onAction(anchor.key, KeyAction.Text(symbol))
+                    opened.dispatch(anchor.key, KeyAction.Text(symbol))
                     // Kept open: picking one symbol from a scientific board is very
                     // often picking three.
                 },
@@ -537,11 +558,20 @@ fun KeySurface(
     }
 }
 
+private data class BoardState(
+    val anchor: PlacedKey,
+    val dispatch: (KeyDef, KeyAction) -> Unit,
+    val policy: Settings
+)
+
 /** Live state of one finger on the surface. */
 private class Touch(
     val placed: PlacedKey,
     val startX: Float,
-    val startY: Float
+    val startY: Float,
+    /** One coherent policy and exact authored dispatch address for this finger. */
+    val policy: Settings,
+    val dispatch: (KeyDef, KeyAction) -> Unit
 ) {
     /** When the finger came down, for learning how long this hand holds a tap. */
     val downAt: Long = android.os.SystemClock.uptimeMillis()
@@ -554,6 +584,7 @@ private class Touch(
     /** An action has already fired for this touch; releasing must not fire another. */
     var consumed: Boolean = false
     var popupOpen: Boolean = false
+    var heldModifier: com.example.core.layout.ModifierKind? = null
 
     /**
      * Where the finger was when the strip opened.

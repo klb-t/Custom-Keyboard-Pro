@@ -238,8 +238,9 @@ object Verbs {
             id = "torch", glyph = "🔦", label = "Torch",
             help = "The camera flash as a light.",
             params = listOf(Param("state", "on, off or toggle.", "toggle")),
+            ability = Abilities.FLASHLIGHT,
             group = GROUP_MEDIA,
-            without = "Needs nothing; says so on a phone with no flash."
+            without = "Explains missing camera access, absent flashlight or a busy camera."
         ),
         VerbSpec(
             id = "vibrate", glyph = "〰", label = "Vibrate",
@@ -401,14 +402,15 @@ object Verbs {
                     "page",
                     "wifi, bluetooth, display, sound, battery, accessibility, keyboard, " +
                         "apps, location, network, notifications, date, language, storage, " +
-                        "developer, or anything else — which opens the main settings.",
+                        "developer, wireless_debug, battery_saver, notification_settings, " +
+                        "or another named route from the phone catalogue.",
                     "wifi"
                 )
             ),
             group = GROUP_OPEN,
             without = "Needs nothing."
         )
-    )
+    ) + com.example.core.phone.PhoneCatalogue.verbs
 
     private val index = ALL.associateBy { it.id }
 

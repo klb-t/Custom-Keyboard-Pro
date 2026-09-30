@@ -184,7 +184,7 @@ object ScienceLayout {
         widthWeight = width,
         style = style,
         bindings = tap(KeyAction.Text(text)),
-        popup = if (groups.isEmpty()) accents else emptyList(),
+        popup = accents,
         popupGroups = groups
     )
 
@@ -213,6 +213,13 @@ object ScienceLayout {
         indicators = indicators
     )
 
+    private val shiftedPunctuation = mapOf(
+        "1" to "!", "2" to "@", "3" to "#", "4" to "$", "5" to "%",
+        "6" to "^", "7" to "&", "8" to "*", "9" to "(", "0" to ")",
+        "-" to "_", "=" to "+", "[" to "{", "]" to "}", "\\" to "|",
+        ";" to ":", "'" to "\"", "," to "<", "." to ">", "/" to "?", "`" to "~"
+    )
+
     /** Digit with its superscript, subscript and the fractions that start with it. */
     private fun digit(d: String, fractions: List<String>, extra: List<String> = emptyList()): KeyDef {
         val supers = mapOf(
@@ -226,8 +233,8 @@ object ScienceLayout {
         return symbolKey(
             id = "d_$d",
             label = d,
-            hint = supers[d],
-            accents = listOfNotNull(supers[d], subs[d]) + fractions + extra
+            hint = shiftedPunctuation[d],
+            accents = (listOfNotNull(shiftedPunctuation[d], supers[d], subs[d]) + fractions + extra).distinct()
         )
     }
 
@@ -250,7 +257,7 @@ object ScienceLayout {
             digit("0", emptyList(), listOf(")", "⁾", "₎", "∅", "⓪", "°")),
             // His placement: the operators live next to the minus and the equals.
             symbolKey(
-                "minus", "-", hint = "−", groups = listOf(
+                "minus", "-", hint = "_", accents = listOf("_", "−", "–", "—", "±"), groups = listOf(
                     PopupGroup(
                         "dashes", "−", listOf("−", "–", "—", "±", "∓", "÷", "⁻", "₋", "¬", "‐", "_"),
                         "Signs and dashes"
@@ -259,7 +266,7 @@ object ScienceLayout {
                 )
             ),
             symbolKey(
-                "equals", "=", hint = "≠", groups = listOf(
+                "equals", "=", hint = "+", accents = listOf("+", "≠", "≈", "≡"), groups = listOf(
                     PopupGroup(
                         "eq", "≠", listOf("≠", "≈", "≡", "≤", "≥", "≪", "≫", "∝", "≜", "≐", "⇒", "⇔", "→", "↔"),
                         "Equality and implication"
@@ -309,9 +316,9 @@ object ScienceLayout {
                     PopupGroup("p_math", "∏", listOf("π", "Π", "∏", "℘", "ℙ", "¶", "∂"), "p in maths"),
                     operators, greekLower
                 ), hint = "π"),
-            symbolKey("lbracket", "[", hint = "⌈", accents = listOf("⟦", "⌈", "⌊", "⟨", "{", "⎡", "⟅")),
-            symbolKey("rbracket", "]", hint = "⌉", accents = listOf("⟧", "⌉", "⌋", "⟩", "}", "⎤", "⟆")),
-            symbolKey("backslash", "\\", hint = "∖", accents = listOf("∖", "∣", "‖", "⫽", "|"))
+            symbolKey("lbracket", "[", hint = "{", accents = listOf("{", "⟦", "⌈", "⌊", "⟨", "⎡", "⟅")),
+            symbolKey("rbracket", "]", hint = "}", accents = listOf("}", "⟧", "⌉", "⌋", "⟩", "⎤", "⟆")),
+            symbolKey("backslash", "\\", hint = "|", accents = listOf("|", "∖", "∣", "‖", "⫽"))
         )
     )
 
@@ -350,8 +357,8 @@ object ScienceLayout {
             letter("j", listOf("ĵ", "ȷ", "ⅉ"), hint = "ĵ"),
             letter("k", listOf("ķ", "ǩ", "κ", "⊗"), hint = "κ"),
             letter("l", listOf("ł", "ĺ", "ľ", "ļ", "ŀ", "λ", "Λ", "ℓ", "∟"), hint = "λ"),
-            symbolKey("semicolon", ";", hint = "·", accents = listOf(":", "·", "∶", "⋮", "⋯", "∴", "∵")),
-            symbolKey("quote", "'", hint = "′", accents = listOf("′", "″", "‴", "`", "´", "\"", "’", "‘")),
+            symbolKey("semicolon", ";", hint = ":", accents = listOf(":", "·", "∶", "⋮", "⋯", "∴", "∵")),
+            symbolKey("quote", "'", hint = "\"", accents = listOf("\"", "′", "″", "‴", "`", "´", "’", "‘")),
             action(
                 "enter", null, KeyAction.Enter, width = 1.8f, icon = "enter",
                 longPress = KeyAction.Text("\n")
@@ -376,9 +383,9 @@ object ScienceLayout {
             letter("b", listOf("β", "♭", "⊥", "ḃ", "ƀ"), hint = "β"),
             letter("n", listOf("ń", "ň", "ñ", "ņ", "ṅ", "ν", "∩", "ℕ", "¬"), hint = "∩"),
             letter("m", listOf("μ", "∓", "ℳ", "ṁ", "µ"), hint = "μ"),
-            symbolKey("comma", ",", hint = "‚", accents = listOf("‚", "„", "⟨", "‹", "¸", "<", "≤")),
-            symbolKey("period", ".", hint = "…", accents = listOf("…", "·", "∙", "⋅", "∘", "⟩", "›", ">", "≥")),
-            symbolKey("slash", "/", hint = "÷", accents = listOf("÷", "∕", "⁄", "?", "¿", "∣", "∤", "‖")),
+            symbolKey("comma", ",", hint = "<", accents = listOf("<", "‚", "„", "⟨", "‹", "¸", "≤")),
+            symbolKey("period", ".", hint = ">", accents = listOf(">", "…", "·", "∙", "⋅", "∘", "⟩", "›", "≥")),
+            symbolKey("slash", "/", hint = "?", accents = listOf("?", "÷", "∕", "⁄", "¿", "∣", "∤", "‖")),
             action(
                 "shift_right", null, KeyAction.Modifier(ModifierKind.SHIFT, ModifierMode.ONE_SHOT),
                 width = 1.6f, style = "modifier", icon = "shift",
@@ -445,6 +452,23 @@ object ScienceLayout {
         heightWeight = 0.95f
     )
 
+    private val baseLayer = LayerDef(
+        name = LayoutDef.BASE_LAYER,
+        rows = listOf(numberRow, topRow, homeRow, bottomRow, modifierRow)
+    )
+
+    private fun shiftedKey(key: KeyDef): KeyDef {
+        val text = (key.tapAction as? KeyAction.Text)?.text ?: return key
+        val shifted = shiftedPunctuation[text] ?: text.uppercase()
+        return key.copy(
+            label = if (key.label == text) shifted else key.label,
+            bindings = key.bindings.map { binding ->
+                if (binding.trigger == KeyTrigger.Tap) binding.copy(action = KeyAction.Text(shifted)) else binding
+            },
+            popup = (if (shiftedPunctuation.containsKey(text)) listOf(text) + key.popup.drop(1) else key.popup.map { it.uppercase() }).distinct()
+        )
+    }
+
     val SCIENCE = LayoutDef(
         id = "science",
         name = "Scientific",
@@ -454,9 +478,10 @@ object ScienceLayout {
         description = "Editing keys on the surface, and every symbol a working " +
             "scientist needs one long press away — placed where its meaning is.",
         layers = mapOf(
-            LayoutDef.BASE_LAYER to LayerDef(
-                name = LayoutDef.BASE_LAYER,
-                rows = listOf(numberRow, topRow, homeRow, bottomRow, modifierRow)
+            LayoutDef.BASE_LAYER to baseLayer,
+            LayoutDef.SHIFT_LAYER to baseLayer.copy(
+                name = LayoutDef.SHIFT_LAYER,
+                rows = baseLayer.rows.map { row -> row.copy(keys = row.keys.map(::shiftedKey)) }
             )
         )
     )

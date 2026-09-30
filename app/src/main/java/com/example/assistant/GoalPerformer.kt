@@ -9,12 +9,16 @@ import com.example.core.assistant.*
 import com.example.core.io.Command
 import com.example.io.Performer
 import com.example.io.PerformerHost
+import com.example.core.phone.PhoneReceipt
+import com.example.core.phone.PhoneOutcome
 import kotlin.math.roundToInt
 
 /** Reuses the existing performer; does not expose editors, macros or arbitrary model-selected code. */
 class GoalPerformer(private val activity: Activity) : PerformerHost {
     override val context: Context get() = activity
     private var notice = ""
+    private var phoneResult: PhoneReceipt? = null
+    override fun phoneReceipt(receipt: PhoneReceipt) { phoneResult = receipt }
     override fun sendKey(keyCode: Int) { error("This host has no target editor") }
     override fun nearbyText() = ""
     override fun commit(text: String) { error("No editor write is authorized") }
@@ -31,7 +35,18 @@ class GoalPerformer(private val activity: Activity) : PerformerHost {
         val action = GoalCatalogue.actions()[step.action]
         require(action != null && action.runnable && action.invalidArguments(step.arguments).isEmpty())
         notice = ""
-        Performer(this).run(Command(step.action, named = step.arguments.toMap()))
+        phoneResult = null
+        val command = Command(step.action, named = step.arguments.toMap())
+        Performer(this).run(command)
+        phoneResult?.let { receipt ->
+            check(receipt.command == command) { "Phone result belongs to a different operation." }
+            val status = when (receipt.outcome) {
+                PhoneOutcome.VERIFIED, PhoneOutcome.OBSERVED -> GoalSession.State.VERIFIED
+                PhoneOutcome.OPENED, PhoneOutcome.REQUESTED -> GoalSession.State.DISPATCHED_UNVERIFIED
+                PhoneOutcome.NEEDS_ACCESS, PhoneOutcome.UNAVAILABLE, PhoneOutcome.FAILED -> GoalSession.State.FAILED
+            }
+            return GoalSession.Receipt(status, receipt.detail)
+        }
         val verified = when (step.action) {
             "volume_set" -> {
                 val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager

@@ -81,9 +81,26 @@ sealed interface ArgumentRule {
         override fun accepts(value: String) = value.length <= max && (allowBlank || value.isNotBlank()) &&
             value.none { it == '\u0000' || (it < ' ' && it != '\n' && it != '\t') }
     }
+    /** A host-owned lexical domain; expressions are never imported from model output. */
+    data class Pattern(val expression: String, val max: Int) : ArgumentRule {
+        private val regex = Regex(expression)
+        init { require(max in 1..2000 && expression.length <= 500) }
+        override fun accepts(value: String) = value.length <= max && regex.matches(value)
+    }
 }
 
 data class GoalArgument(val name: String, val rule: ArgumentRule, val required: Boolean = true)
+/** A host-authored prerequisite that applies only to the selected variant of an operation. */
+data class ArgumentRequirement(val name: String, val equals: String, val need: Requirement) {
+    fun applies(values: Map<String, String>) = values[name] == equals
+}
+sealed interface ArgumentConstraint {
+    fun issue(values: Map<String, String>): String?
+    data class ExcludesWhen(val name: String, val equals: String, val excluded: String) : ArgumentConstraint {
+        override fun issue(values: Map<String, String>): String? =
+            if (values[name] == equals && excluded in values) "$excluded cannot be combined with $name=$equals" else null
+    }
+}
 data class GoalAction(
     val id: String, val label: String, val help: String,
     val arguments: List<GoalArgument> = emptyList(),
@@ -92,7 +109,9 @@ data class GoalAction(
     val runnable: Boolean = false,
     val effects: String,
     val verification: String,
-    val api: String = ""
+    val api: String = "",
+    val constraints: List<ArgumentConstraint> = emptyList(),
+    val argumentNeeds: List<ArgumentRequirement> = emptyList()
 ) {
     fun invalidArguments(values: Map<String, String>): List<String> {
         val known = arguments.associateBy { it.name }
@@ -102,7 +121,7 @@ data class GoalAction(
                 when { v == null && arg.required -> "Missing argument: ${arg.name}"
                     v != null && !arg.rule.accepts(v) -> "Invalid value for ${arg.name}"
                     else -> null }
-            }
+            } + constraints.mapNotNull { it.issue(values) }
     }
 }
 
@@ -153,7 +172,8 @@ object GoalAssessment {
         val action = actions[step.action] ?: return Feasibility(false, listOf(
             CapabilityFact(step.action, Readiness.MISSING_ADAPTER, "Unknown operation. Find or implement an adapter; retain the goal.")))
         val args = action.invalidArguments(step.arguments)
-        val need = FeasibilityCheck.inspect(action.needs, snapshot)
+        val requirements = listOf(action.needs) + action.argumentNeeds.filter { it.applies(step.arguments) }.map { it.need }
+        val need = FeasibilityCheck.inspect(Requirement.All(requirements), snapshot)
         val issues = need.issues + args.map { CapabilityFact("argument", Readiness.SETUP, it) } +
             if (action.runnable) emptyList() else listOf(CapabilityFact(action.id, Readiness.MISSING_ADAPTER,
                 "Listed in the canonical catalogue, but not executable by this assistant host yet.", action.api))

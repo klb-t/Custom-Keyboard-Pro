@@ -25,14 +25,19 @@ import com.example.core.caps.Need
 import com.example.core.config.SettingsStore
 import com.example.core.io.Command
 import com.example.core.io.Verbs
+import com.example.phone.PhoneToolsActivity
 import kotlinx.coroutines.*
 
 /** Explicit, foreground-only proposal/review host. Incoming intents confer no authority. */
 class GoalAssistantActivity : Activity() {
     private val work = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var planning: Job? = null
+    private var executing: Job? = null
     private var generation = 0L
     private var foreground = false
+    private var settingsReady = false
+    private var voiceToken: String? = null
+    private var voiceHidden = false
     private lateinit var goal: EditText
     private lateinit var status: TextView
     private lateinit var plansView: LinearLayout
@@ -40,13 +45,15 @@ class GoalAssistantActivity : Activity() {
     private var session: GoalSession? = null
     private var recognition: ForegroundSpeech? = null
     private fun now() = SystemClock.elapsedRealtime()
-    private fun ready() = foreground && !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+    private fun ready() = foreground && settingsReady && !voiceHidden &&
+        !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
     private fun snapshot() = GoalCatalogue.snapshot(this, ready())
     private fun line(value: String) = TextView(this).apply { text = value; setTextIsSelectable(true); textSize = 15f; setPadding(0, 10, 0, 8) }
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
     private fun tell(value: String) { status.text = value }
     private fun invalidate() {
         generation++; planning?.cancel(); planning = null
+        executing?.cancel(); executing = null
         session?.stop(); session = null; alternatives = emptyList()
         if (::plansView.isInitialized) plansView.removeAllViews()
     }
@@ -65,7 +72,11 @@ class GoalAssistantActivity : Activity() {
         body.addView(goal)
         goal.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { invalidate() }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                // Typing wins over a pending late transcript; never replace a new edit.
+                recognition?.close(); recognition = null
+                invalidate()
+            }
             override fun afterTextChanged(s: Editable?) = Unit
         })
         body.addView(button("Speak on device") { speak() })
@@ -73,12 +84,18 @@ class GoalAssistantActivity : Activity() {
         body.addView(button("Plan with configured model…") { modelPlan() })
         body.addView(button("Phone capabilities and setup") { capabilities() })
         body.addView(button("Choose system assistant") { assistantRole() })
+        body.addView(button("Use this workspace independently of system session") {
+            AssistantSessionVisibility.currentSession.detach(voiceToken)
+            voiceToken = null; voiceHidden = false
+            tell("Foreground workspace. Speech still requires Speak; planning and every effect require review.")
+            render()
+        })
         body.addView(button("Colour organ setup (microphone → Wi-Fi light)") {
             startActivity(Intent(this, ColourOrganActivity::class.java))
         })
         body.addView(button("Import plan JSON") { document(false) })
         body.addView(button("Save plan JSON") { document(true) })
-        status = line("No plan is running. Speech is on-device only in this host; text works on every supported version.")
+        status = line("Loading local settings. No microphone or plan starts automatically.")
         body.addView(status)
         plansView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(plansView)
@@ -86,6 +103,7 @@ class GoalAssistantActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(button("Stop / invalidate pending approvals") {
             generation++; planning?.cancel(); recognition?.close(); recognition = null
+            executing?.cancel(); executing = null
             session?.stop(); tell("Stopped. No further step or model result will execute. Already applied effects are not rolled back."); render()
         })
         root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -95,22 +113,59 @@ class GoalAssistantActivity : Activity() {
             view.setPadding(pad + b.left, b.top, pad + b.right, b.bottom); insets
         }
         setContentView(root); ViewCompat.requestApplyInsets(root)
+        bindVoiceSession(intent)
+        work.launch {
+            withContext(Dispatchers.IO) { SettingsStore.init(this@GoalAssistantActivity) }
+            settingsReady = true
+            if (!voiceHidden) tell("No plan is running. Speech is on-device only in this host; text works on every supported version.")
+            if (foreground) render()
+        }
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        recognition?.close(); recognition = null; invalidate()
+        setIntent(intent)
+        // Even a new system invocation is a fresh input surface, never a restored approval.
+        goal.setText("")
+        bindVoiceSession(intent)
+        tell(if (voiceHidden) "The system voice session ended. Pending work was cancelled." else
+            "New assistant invocation. Enter or speak a goal; no caller text or context was imported.")
+    }
+    private fun bindVoiceSession(source: Intent?) {
+        AssistantSessionVisibility.currentSession.detach(voiceToken)
+        voiceToken = runCatching { source?.getStringExtra(AssistantSessionVisibility.EXTRA_VISIBILITY_TOKEN) }.getOrNull()
+        voiceHidden = false
+        if (voiceToken != null) {
+            val attached = AssistantSessionVisibility.currentSession.attach(voiceToken) {
+                voiceHidden = true
+                recognition?.close(); recognition = null; invalidate()
+                tell("The system voice session ended. Microphone and pending approvals were cancelled. Invoke it again or explicitly use this workspace independently.")
+            }
+            if (!attached) voiceHidden = true
+        }
     }
     override fun onResume() { super.onResume(); foreground = true; if (::plansView.isInitialized) render() }
     override fun onPause() {
         foreground = false; generation++; planning?.cancel(); recognition?.close(); recognition = null
+        executing?.cancel(); executing = null
         session?.pause(); super.onPause()
     }
     override fun onStop() {
         foreground = false; generation++; planning?.cancel(); recognition?.close(); recognition = null
+        executing?.cancel(); executing = null
         session?.pause(); super.onStop()
     }
-    override fun onDestroy() { session?.stop(); work.cancel(); super.onDestroy() }
+    override fun onDestroy() {
+        recognition?.close(); recognition = null
+        AssistantSessionVisibility.currentSession.detach(voiceToken)
+        session?.stop(); work.cancel(); super.onDestroy()
+    }
     private fun accept(values: List<GoalPlan>) {
         session?.stop(); alternatives = values.map { it.detached() }; session = null
         tell("Choose a proposed plan. Permission and API claims from a model are not evidence."); render()
     }
     private fun localCommand() {
+        if (!ready()) return
         val input = goal.text.toString().trim()
         if (!input.startsWith("do:")) return tell("Offline execution requires an explicit do: command. Free-form goals use the configured model.")
         val c = Command.parse(input.removePrefix("do:")) ?: return tell("Empty command.")
@@ -135,6 +190,10 @@ class GoalAssistantActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Send this goal for planning?")
             .setMessage("Provider: ${config.provider}\nModel: ${config.model}\nEndpoint: ${runCatching { java.net.URI(config.effectiveBaseUrl).host }.getOrNull() ?: "configured endpoint"}\n\nSends the text you entered, action definitions and capability availability. No editor, clipboard, screen content or device addresses are included. A result only proposes a plan.")
             .setNegativeButton("Cancel", null).setPositiveButton("Plan") { _, _ ->
+                if (!ready() || goal.text.toString().trim() != input) {
+                    tell("The input or visible session changed. Review the goal again.")
+                    return@setPositiveButton
+                }
                 invalidate(); val token = ++generation; val facts = snapshot(); val actions = GoalCatalogue.actions()
                 tell("Requesting a proposal. Stop discards late results; a provider request already sent may still finish remotely.")
                 planning = work.launch {
@@ -170,13 +229,26 @@ class GoalAssistantActivity : Activity() {
                 if (step.apiHints.isNotEmpty()) append("Unverified API hints: ${step.apiHints.joinToString("; ")}\n")
                 notes[step.id]?.let { append(it) }
             }))
+            if (s.noteWasShortened(step.id) && GoalDispatchPolicy.runOnWorker(step))
+                plansView.addView(button("Inspect this diagnostic in Phone tools") {
+                    if (!ready() || session !== s) return@button
+                    val tab = when (step.action) {
+                        "sensors" -> "sensors"
+                        "app_info" -> "apps"
+                        else -> "overview"
+                    }
+                    runCatching { startActivity(Intent(this, PhoneToolsActivity::class.java).putExtra("tab", tab)) }
+                        .onFailure { tell("Phone tools could not be opened on this device.") }
+                })
             if (!s.stopped && states[step.id] == GoalSession.State.PENDING && s.dependenciesSatisfied(step.id))
                 plansView.addView(button("Review ${step.id}") { review(s, step.id) }.apply { isEnabled = check.ready && ready() })
             if (!s.stopped && states[step.id] == GoalSession.State.DISPATCHED_UNVERIFIED)
                 plansView.addView(button("I observed the effect…") {
                     AlertDialog.Builder(this).setTitle("Confirm actual effect")
                         .setMessage("Expected: ${step.expected}\n\nThis records your observation, not an Android/API verification. It allows dependent steps to be reviewed.")
-                        .setNegativeButton("Not yet", null).setPositiveButton("I confirm") { _, _ -> s.confirmObserved(step.id); render() }.show()
+                        .setNegativeButton("Not yet", null).setPositiveButton("I confirm") { _, _ ->
+                            if (ready() && session === s && !s.stopped) { s.confirmObserved(step.id); render() }
+                        }.show()
                 })
         }
     }
@@ -189,6 +261,25 @@ class GoalAssistantActivity : Activity() {
             .setNegativeButton("Cancel", null).setPositiveButton("Execute") { _, _ ->
                 if (!ready() || session !== s) return@setPositiveButton
                 val ticket = s.begin(review, snapshot(), now()) ?: return@setPositiveButton tell("State changed or approval expired. Review again.")
+                if (GoalDispatchPolicy.runOnWorker(ticket.step)) {
+                    val token = generation
+                    tell("Reading the selected local diagnostic. It will not be sent to the model.")
+                    render()
+                    executing = work.launch {
+                        try {
+                            val receipt = withContext(Dispatchers.IO) {
+                                runCatching { GoalPerformer(this@GoalAssistantActivity).run(ticket.step) }.getOrElse {
+                                    GoalSession.Receipt(GoalSession.State.FAILED, "The local diagnostic could not be read. No mutation was requested.")
+                                }
+                            }
+                            ensureActive()
+                            if (generation != token || !ready() || session !== s) return@launch
+                            // complete verifies this exact active ticket/epoch, including any pause.
+                            if (s.complete(ticket, receipt)) render()
+                        } catch (e: CancellationException) { throw e }
+                    }
+                    return@setPositiveButton
+                }
                 val receipt = runCatching { GoalPerformer(this).run(ticket.step) }.getOrElse {
                     GoalSession.Receipt(GoalSession.State.DISPATCHED_UNVERIFIED, "Execution/readback was interrupted. Inspect the actual effect before continuing.")
                 }
@@ -216,7 +307,11 @@ class GoalAssistantActivity : Activity() {
             if (role != null && role.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) role.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)
             else Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
         } else Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
-        runCatching { startActivity(intent) }.onFailure { tell("Assistant selection is unavailable on this device.") }
+        AlertDialog.Builder(this).setTitle("Select IO Matrix as system assistant?")
+            .setMessage("System assist opens this editable workspace. No recording, screen context or model request starts automatically.\n\nOn Android 12+ the voice service and bounded recognition relay use the installed on-device engine only; a downloaded language must be available. Earlier Android versions use the text ASSIST activity. There is no always-listening hotword or lockscreen execution in this build.\n\nThe system chooses what selection controls your device supports.")
+            .setNegativeButton("Cancel", null).setPositiveButton("Open system selection") { _, _ ->
+                runCatching { startActivity(intent) }.onFailure { tell("Assistant selection is unavailable on this device.") }
+            }.show()
     }
     private fun speak() {
         if (!ready()) return
@@ -227,6 +322,7 @@ class GoalAssistantActivity : Activity() {
         recognition?.close()
         recognition = ForegroundSpeech(this, { ready() }, { words ->
             if (ready()) {
+                recognition = null
                 goal.setText(words); tell("Transcript only. Edit it and explicitly request a plan.")
             }
         }, { tell(it) }).also { it.start() }

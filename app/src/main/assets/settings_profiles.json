@@ -150,5 +150,41 @@
       "ttsProvider": "",
       "asrEngine": "android"
     }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "local-code-typing",
+    "name": "Local: literal code typing",
+    "description": "A compatible partial profile for a selected layout, panel or key; suppresses automatic capitalization, punctuation and quotes.",
+    "values": {
+      "autoCapitalize": false,
+      "doubleSpacePeriod": false,
+      "autoSpaceAfterPunctuation": false,
+      "smartQuotes": false
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "local-prose-typing",
+    "name": "Local: sentence typing",
+    "description": "A compatible partial profile for a selected layout, panel or key; capitalization and double-space sentence punctuation.",
+    "values": {
+      "autoCapitalize": true,
+      "doubleSpacePeriod": true
+    }
+  },
+  {
+    "format": "io.matrix.settings-profile",
+    "version": 1,
+    "id": "local-larger-key-face",
+    "name": "Local: larger key face",
+    "description": "A compatible partial profile for a selected layout, panel or key; larger labels and a clear key face.",
+    "values": {
+      "keyTextScale": 1.25,
+      "keyOpacity": 1.0,
+      "keyLabelOpacity": 1.0
+    }
   }
 ]

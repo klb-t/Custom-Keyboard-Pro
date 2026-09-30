@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.example.core.ai.AiConfig
 import com.example.core.config.Settings
 import com.example.core.config.SettingsStore
+import com.example.core.config.SettingsHierarchy
+import com.example.core.config.SettingsLevel
 import com.example.core.hitmap.HitmapExtractor
 import com.example.core.layout.LayoutAuthoring
 import com.example.core.layout.LayoutDef
@@ -60,7 +62,12 @@ fun LayoutStudioScreen(settings: Settings) {
     var description by remember { mutableStateOf("") }
     var pendingImageMode by remember { mutableStateOf(ImageMode.MASK) }
     var keyListFor by remember { mutableStateOf<LayoutDef?>(null) }
+    var keyListBaseline by remember { mutableStateOf<LayoutDef?>(null) }
     var editingKey by remember { mutableStateOf<com.example.core.layout.KeyDef?>(null) }
+    var editingKeyLayer by remember { mutableStateOf<String?>(null) }
+    var localSettingsFor by remember { mutableStateOf<Pair<LayoutDef, LayoutDef>?>(null) }
+    val level = SettingsHierarchy.level(settings)
+    val advanced = level.includes(SettingsLevel.ADVANCED)
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -118,6 +125,12 @@ fun LayoutStudioScreen(settings: Settings) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+        SettingsSection("Current layout", "This selects a layout. Shared keyboard defaults and this layout's local properties have separate owners.") {
+            ChoiceRow("Active layout", options = layouts.map { it.id }, selected = settings.activeLayoutId,
+                optionLabel = { id -> layouts.firstOrNull { it.id == id }?.name ?: id },
+                onSelect = { id -> SettingsStore.update { it.copy(activeLayoutId = id) } })
+            SettingsLevelSelector(settings)
+        }
 
         SettingsSection(
             title = "Rotation",
@@ -138,7 +151,7 @@ fun LayoutStudioScreen(settings: Settings) {
             )
         }
 
-        SettingsSection("Per-app") {
+        if (advanced) SettingsSection("Per-app") {
             SwitchRow(
                 label = "Remember a layout per app",
                 description = "The layout you last used in an app comes back when you " +
@@ -149,7 +162,7 @@ fun LayoutStudioScreen(settings: Settings) {
             )
         }
 
-        SettingsSection(
+        if (advanced) SettingsSection(
             title = "Make a layout",
             subtitle = "All four produce the same editable JSON."
         ) {
@@ -225,7 +238,7 @@ fun LayoutStudioScreen(settings: Settings) {
                         layout.description?.let { append("\n$it") }
                     },
                     trailing = if (layout.id == settings.activeLayoutId) "active" else null,
-                    onClick = { editing = layout }
+                    onClick = { if (advanced) editing = layout else SettingsStore.update { it.copy(activeLayoutId = layout.id) } }
                 )
                 Divider()
             }
@@ -235,11 +248,14 @@ fun LayoutStudioScreen(settings: Settings) {
     editing?.let { layout ->
         LayoutEditorDialog(
             layout = layout,
+            settings = settings,
             onDismiss = { editing = null },
-            onEditKeys = {
-                keyListFor = layout
+            onEditKeys = { draft ->
+                keyListBaseline = layout
+                keyListFor = draft
                 editing = null
             },
+            onEditLocalSettings = { draft -> localSettingsFor = layout to draft; editing = null },
             onSaved = { saved ->
                 status = "Saved \"${saved.name}\"."
                 editing = null
@@ -247,10 +263,21 @@ fun LayoutStudioScreen(settings: Settings) {
         )
     }
 
+    localSettingsFor?.let { (baseline, draft) ->
+        LayoutInstanceSettingsDialog(layout = draft, settings = settings, onDismiss = { localSettingsFor = null }, onSave = { next ->
+            runCatching {
+                require(LayoutRepository.byId(baseline.id) == baseline) { "This layout changed while it was open. Close and reopen before saving." }
+                LayoutRepository.save(next).getOrThrow()
+                status = "Saved local settings for ${next.name}."
+            }
+        })
+    }
+
     keyListFor?.let { layout ->
         KeyListDialog(
             layout = layout,
             onEdit = { key -> editingKey = key },
+            onEditInstance = { layer, key -> editingKeyLayer = layer; editingKey = key },
             onDismiss = { keyListFor = null }
         )
     }
@@ -262,10 +289,15 @@ fun LayoutStudioScreen(settings: Settings) {
             onDismiss = { editingKey = null },
             onSave = { updated ->
                 if (owner != null) {
-                    val next = LayoutAuthoring.replaceKey(owner, key.id, updated)
-                    LayoutRepository.save(next)
-                        .onSuccess {
-                            keyListFor = next
+                    runCatching {
+                        require(LayoutRepository.byId(owner.id) == keyListBaseline) { "This layout changed while its keys were open. Close and reopen before saving." }
+                        val next = LayoutAuthoring.replaceKeyInstance(owner, editingKeyLayer ?: error("No key layer selected"), key.id, updated)
+                        LayoutRepository.save(next).getOrThrow()
+                        next
+                    }
+                        .onSuccess { next ->
+                            keyListFor = LayoutRepository.byId(next.id) ?: next
+                            keyListBaseline = keyListFor
                             status = "Updated \"${updated.effectiveLabel.ifEmpty { updated.id }}\"."
                         }
                         .onFailure { status = "Could not save it: ${it.message}" }
@@ -342,13 +374,18 @@ private fun blankLayout(): LayoutDef {
 @Composable
 private fun LayoutEditorDialog(
     layout: LayoutDef,
+    settings: Settings,
     onDismiss: () -> Unit,
-    onEditKeys: () -> Unit,
+    onEditKeys: (LayoutDef) -> Unit,
+    onEditLocalSettings: (LayoutDef) -> Unit,
     onSaved: (LayoutDef) -> Unit
 ) {
     var json by remember(layout.id) { mutableStateOf(LayoutJson.writeString(layout)) }
     var error by remember(layout.id) { mutableStateOf<String?>(null) }
     var showSchema by remember { mutableStateOf(false) }
+    fun currentDraft(): LayoutDef = LayoutJson.parse(json).also {
+        require(it.id == layout.id) { "The layout ID identifies this edit target. Create a new layout to use another ID." }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -360,7 +397,13 @@ private fun LayoutEditorDialog(
                         style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(6.dp))
                 }
-                TextRow(
+                InfoRow("Owner: layout ${layout.id}. Panels and keys are instances inside this layout; shared defaults are edited in Settings explorer.")
+                ActionRow("Local settings & inheritance", "Select a layout, panel or key; inspect effective values and inherit/override", onClick = {
+                    runCatching { currentDraft() }.onSuccess(onEditLocalSettings).onFailure { error = it.message }
+                })
+                val geometryDraft = remember(json) { runCatching { currentDraft() }.getOrNull() }
+                geometryDraft?.let { current -> LayoutGeometryEditor(current, onChange = { next -> json = LayoutJson.writeString(next); error = null }) }
+                if (SettingsHierarchy.level(settings).includes(SettingsLevel.EXPERT)) TextRow(
                     label = "Layout JSON",
                     value = json,
                     singleLine = false,
@@ -370,6 +413,7 @@ private fun LayoutEditorDialog(
                         error = null
                     }
                 )
+                else InfoRow("Structured layout/key editing is available here. Raw layout JSON and complete setting metadata are available at Expert level.")
                 if (showSchema) {
                     Text(
                         LayoutGenerator.SCHEMA,
@@ -381,7 +425,10 @@ private fun LayoutEditorDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val parsed = runCatching { LayoutJson.parse(json) }
+                val parsed = runCatching {
+                    require(LayoutRepository.byId(layout.id) == layout) { "This layout changed while it was open. Close and reopen before saving." }
+                    currentDraft()
+                }
                 parsed.onSuccess { updated ->
                     LayoutRepository.save(updated)
                         .onSuccess { onSaved(updated) }
@@ -391,7 +438,7 @@ private fun LayoutEditorDialog(
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onEditKeys) { Text("Keys") }
+                TextButton(onClick = { runCatching { currentDraft() }.onSuccess(onEditKeys).onFailure { error = it.message } }) { Text("Keys") }
                 TextButton(onClick = { showSchema = !showSchema }) {
                     Text(if (showSchema) "Hide format" else "Format")
                 }

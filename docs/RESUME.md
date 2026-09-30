@@ -1,10 +1,74 @@
 # IO Matrix — current work and recovery point
 
-Updated: 2026-09-29 (UTC).
+Updated: 2026-09-30 (UTC).
 Repository: `klb-t/Custom-Keyboard-Pro`.
-Active work branch: `feat/goal-assistant-2026-09-29`.
+Active work branch: `feat/phone-workspace-2026-09-30`.
 
-## Current implementation: first goal-assistant and reactive-light slice
+## Current work: scoped settings, keyboard authoring and native phone assistant
+
+Based on `badd2525b65fbacc5b593792251252c3f3dc577b` of the goal-assistant branch.
+Version is being prepared as **4.5.0 / code 11** with the existing package and
+signing key. Until the final gate and artifact are recorded, **4.4.2 remains the
+last verified published APK**. Keep all earlier branches/releases intact.
+
+The canonical settings model now has independent visibility levels (Basic,
+Advanced, Expert, Debugger), actual ownership, and sparse typed overrides at layout,
+panel and exact authored key/layer scopes. Priority is key > panel > layout > shared
+keyboard defaults. The global policy can suppress panel/key overrides, or all local
+overrides, without deleting them. The instance editor displays the effective value,
+source and suppressed values, and captures/applies validated profiles. Basic has a
+smaller standard keyboard surface; Debugger separately exposes explicitly
+registered, bounded live variables rather than reflection or arbitrary expressions.
+See [SETTINGS_SCOPE_AND_LEVELS.md](SETTINGS_SCOPE_AND_LEVELS.md).
+
+The keyboard slice adds toolbar-row data/profiles, source composition, context
+visibility and global/layout/panel overrides. Visual layout geometry editing,
+stable multi-touch across modifier-layer changes and shifted punctuation in the
+science layout are being finalized. Do not claim these final changes passed until
+the next full gate is recorded.
+
+Phone tools use actual local platform inventories, explicit foreground sensor
+sessions, app/usage inspection and contextual special-access routes. Typed audited
+phone operations join the existing `Verbs`/`Performer`, including configured
+rotation/timeout readback and honest requested/setup outcomes. The goal host has
+17 runnable typed bindings, with argument-sensitive prerequisites. It does not
+invent package/sensor identities, transmit diagnostic snapshots to the model, grant
+access by opening a settings screen, force-stop other apps, or write secure developer
+flags. See [PHONE_TOOLS.md](PHONE_TOOLS.md) and the researched capability matrix
+[ANDROID_PHONE_CAPABILITIES.md](ANDROID_PHONE_CAPABILITIES.md).
+
+API 31+ has a real VoiceInteractionService/session/recognition host with on-device
+push-to-talk, editable goals and lifecycle-bound cancellation. No hotword, locked
+screen execution or hidden background recording is claimed. Session reviews and
+tickets are bound to an exact session; copied/mutated proposals cannot reuse a
+prior approval. See [SYSTEM_VOICE_ASSISTANT.md](SYSTEM_VOICE_ASSISTANT.md).
+
+The exact repository-version Android toolchain is now available locally (Gradle
+9.7.1, JDK 17, SDK 36.1). The inherited goal/capture code compiled against the real
+SDK. An intermediate full gate passed **891 tests: 890 passed, zero failures or
+errors, one existing skip**, and built a signed APK. More edits followed that
+snapshot, so it is diagnostic evidence, not final 4.5.0 validation. Lint and the
+final frozen-source suite/build are pending. See [LOCAL_ANDROID_BUILD.md](LOCAL_ANDROID_BUILD.md).
+GitHub Actions monthly allowance is exhausted until October; do not repeatedly
+queue builds. Source checkpoints use `[skip ci]` and local exact-version gates.
+
+The AI evaluator exports the actual production prompt/catalogue and validates
+responses through production JSON/argument rules, with a persistent cumulative
+2 USD cap. Its six harness tests and actual Robolectric production bridge passed;
+the live OpenRouter catalogue returned 464 models. **Zero live completions have
+run**: the earlier encrypted credential lost its matching private identity. A new
+public encrypted handoff form was delivered to the user; no private key or API
+credential belongs in this repository. Continue coding while awaiting the uploaded
+encrypted JSON. See [GOAL_AI_EVALUATION.md](GOAL_AI_EVALUATION.md).
+
+Next concrete gate: freeze toolbar/editor, phone, voice and settings owners; run
+full tests, intact Android lint and assemble at the declared versions; inspect any
+real diagnostics; publish a source checkpoint and installable signed APK. Then run
+live model evaluation if the credential has arrived. Physical phone, assistant role,
+microphone/sensors, OEM shade/navigation, real cloud/Google-account and bulb checks
+remain device acceptance work.
+
+## Previous checkpoint: first goal-assistant and reactive-light slice
 
 Work branch: `feat/goal-assistant-2026-09-29`, stacked on
 `feat/conversation-capture-2026-09-29` at `b3db2c8663bb64e57429df92869f1a8231f6bac6`.

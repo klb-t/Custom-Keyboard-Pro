@@ -7,6 +7,13 @@
     <!-- Used by configured providers and explicit user-authorized local device sessions. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Requested only for a selected flashlight/sensor session. No camera capture here. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
     <!--
       Optional, granted by the user on a settings screen: the pocket lock without the
@@ -46,6 +53,22 @@
         android:theme="@style/Theme.MyApplication">
 
         <activity android:name=".sync.DeviceSyncActivity" android:exported="false" android:label="Device sync" />
+        <activity android:name=".phone.PhoneToolsActivity" android:exported="false" android:label="Phone tools" />
+        <!-- System-selected assistant services: bound by Android, with a real local speech relay. -->
+        <service android:name=".assistant.GoalVoiceInteractionService" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" android:process=":voice_interactor"
+            android:enabled="@bool/goal_voice_service_enabled" android:label="IO Matrix assistant">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/goal_voice_interaction" />
+        </service>
+        <service android:name=".assistant.GoalVoiceSessionService" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" android:enabled="@bool/goal_voice_service_enabled" />
+        <service android:name=".assistant.GoalRecognitionService" android:exported="true"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION" android:enabled="@bool/goal_voice_service_enabled"
+            android:label="IO Matrix on-device speech">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+            <meta-data android:name="android.speech" android:resource="@xml/goal_recognition" />
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -25,8 +25,12 @@ class GoalJsonTest {
     }
     @Test fun argumentsAreStringsNotExecutableObjects() {
         val raw = GoalJson.write(listOf(plan()))
-        fails(raw.replace("\"iomatrix://colour-organ\"", "{\"run\":\"code\"}"))
-        fails(raw.replace("\"iomatrix://colour-organ\"", "true"))
+        fun withTarget(value: Any) = org.json.JSONObject(raw).also { document ->
+            document.getJSONArray("alternatives").getJSONObject(0).getJSONArray("steps")
+                .getJSONObject(0).getJSONObject("arguments").put("target", value)
+        }.toString()
+        fails(withTarget(org.json.JSONObject().put("run", "code")))
+        fails(withTarget(true))
     }
     @Test fun versionIsAnIntegerAndSupported() {
         fails(GoalJson.write(listOf(plan())).replace("\"version\": 1", "\"version\": \"1\""))

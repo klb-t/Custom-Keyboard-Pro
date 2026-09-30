@@ -30,6 +30,7 @@ import com.example.ui.kb.ThemeStore
 @Composable
 fun AppearanceScreen(settings: Settings) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+        SharedSettingsScopeNotice(settings)
 
         SettingsSection("Theme") {
             Row(
