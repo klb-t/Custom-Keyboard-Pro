@@ -6,17 +6,24 @@ snapshot. The credential belongs in an owner-only file outside Git, never in a
 fixture, prompt, command argument value, report or configuration committed here.
 The evaluator reads a file path; it never prints the key or provider error bodies.
 
-Checkpoint on 2026-09-30: the bridge executed successfully with the real Android
-SDK/Robolectric API 33 and exported 50 production actions and both prompts. The
-official public model catalogue returned 464 records. The evaluator's Python
-fixture/reporting smoke checks, seven offline guard tests and shell syntax checks
-passed. The guard tests use a fake transport solely to check budget stopping,
-private-file handling and suppression of duplicate potentially billed dispatch;
-they are not model results. **No completion
-request has run yet**: the old encrypted upload's matching private RSA identity was
-not recoverable. A fresh public-key handoff was prepared; live evaluation requires
-the resulting encrypted upload. This is a credential blocker, not a network,
-fixture or schema-validation success disguised as a real model result.
+## Current evidence — 2026-10-02
+
+The initial bridge checkpoint exported 50 production actions and both prompts with
+real Android SDK/Robolectric API 33. Its catalogue query returned 464 records;
+these are historical counts, not a claim about today's live catalogue.
+
+Later recovery notes record **45 baseline calls plus 12 comparison calls**, with
+reported total **USD 1.098135722**. Their raw ledger, unchanged first responses and
+final production-validation report were not recovered with the source. Some
+responses were empty/truncated. Consequently no final planning-quality result,
+model ranking or successful prompt revision is certified. Do not repeat uncertain
+billed dispatches or reset the cumulative USD 2 evaluation budget. This recovery
+made no paid provider requests.
+
+The evaluator and its seven offline guard tests remain reproducible. They test
+budget stopping, private-file handling and suppression of duplicate potentially
+billed dispatch; fake-transport results are not live model results. A fresh run in
+a new directory is a new experiment, not recovery of the missing ledger.
 
 `GoalEvaluationBridgeTest` exports the actual `GoalPrompt.system` and
 `GoalCatalogue.actions` under two declared synthetic prerequisite scenarios.
@@ -60,7 +67,9 @@ calls, schema acceptance, canonical argument acceptance and focused fixture chec
 Review raw synthetic responses before drawing conclusions about planning quality.
 
 The HTTP body follows the existing OpenAI-compatible `AiClient` messages,
-temperature (0.3) and goal host output budget (4096). It adds only provider price
+baseline temperature (0.3) and output budget (4096). The Android host now
+resolves persisted task profiles; record their concrete resolved parameters when
+comparing current production behavior. The evaluator baseline adds provider price
 caps to bound evaluation spend. It deliberately does not enable `response_format`
 or tools absent from the app's baseline request. HTTP uses normal certificate
 validation, rejects redirects, limits response size and uses a timeout. Calls do

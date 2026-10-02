@@ -60,8 +60,9 @@ Build using the versions declared in the repository:
 gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The active implementation is on `feat/phone-workspace-2026-09-30`, stacked on
-`feat/goal-assistant-2026-09-29`. Preserve the earlier working APK and branches.
+The integrated implementation is on `main`. Read `docs/RESUME.md` and
+`docs/HANDOFF_2026-10-02_TO_CLAUDE.md` for the current validation and boundaries.
+Preserve earlier working APKs, historical commits and work branches.
 Inspect the remote before pushing to avoid overwriting concurrent work.
 
 ## Resuming interrupted work
