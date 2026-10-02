@@ -30,6 +30,9 @@ their dated test counts do not certify later source.
 - [Local Android build](LOCAL_ANDROID_BUILD.md): pinned toolchain, bootstrap and actual gate commands.
 - [Current work/recovery](RESUME.md): active source and the current validation boundary.
 - [Validation receipts](validation/): machine-readable evidence for exact checkpoints.
+- [Integration and recovery](INTEGRATION_2026-10-02.md): preserved branches and decisions.
+- [Experiment index](experiments/README.md): reproduction commands and missing evidence.
+- [Claude handoff](HANDOFF_2026-10-02_TO_CLAUDE.md): current integrated contract and next steps.
 - [Development history](history/README.md): preserved dated handoffs and interrupted-session observations.
 - [Development rules](../AGENTS.md): invariants and recovery procedure for contributors and agents.
 - [Project license](../LICENSE), [commercial licensing](../COMMERCIAL_LICENSE.md) and [third-party material](LICENSES.md).

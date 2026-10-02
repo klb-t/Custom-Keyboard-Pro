@@ -1,7 +1,8 @@
 import com.example.core.assistant.GoalPlanTest
 
 fun main(args: Array<String>) {
-    val instances = listOf(GoalPlanTest(), com.example.core.devices.ReactiveLightTest())
+    val instances = listOf(GoalPlanTest(), com.example.core.assistant.GoalSessionTest(),
+        com.example.core.assistant.GoalAgentTest(), com.example.core.devices.ReactiveLightTest())
     var count = 0; var failed = 0
     for (instance in instances) for (test in instance.javaClass.declaredMethods.filter {
         it.getAnnotation(org.junit.Test::class.java) != null

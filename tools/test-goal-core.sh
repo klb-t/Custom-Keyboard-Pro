@@ -13,6 +13,6 @@ package org.junit
 annotation class Test
 KOTLIN
 kotlinc app/src/main/java/com/example/core/assistant/*.kt app/src/main/java/com/example/core/devices/*.kt \
-  app/src/test/java/com/example/core/assistant/GoalPlanTest.kt app/src/test/java/com/example/core/devices/ReactiveLightTest.kt \
+  app/src/test/java/com/example/core/assistant/*Test.kt app/src/test/java/com/example/core/devices/ReactiveLightTest.kt \
   "$out/Test.kt" tools/RunGoalTests.kt -include-runtime -d "$out/tests.jar"
 java -jar "$out/tests.jar"

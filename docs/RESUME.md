@@ -5,7 +5,7 @@ Integration branch: `integrate/2026-10-02`; the tested result is being promoted 
 `main` without rewriting existing history.
 
 Start with `../AGENTS.md`, `README.md`, `INTEGRATION_2026-10-02.md` and
-`HANDOFF_2026-10-02_TO_CLAUDE.md`. The earlier state is preserved verbatim at
+`HANDOFF_2026-10-02_TO_CLAUDE.md`. The earlier state is preserved with relative links adapted at
 `history/RESUME_2026-09-30.md`. It is historical evidence, not current instructions.
 
 Recovered source: `dd739d1` inherits the capture, goal assistant, phone workspace,
