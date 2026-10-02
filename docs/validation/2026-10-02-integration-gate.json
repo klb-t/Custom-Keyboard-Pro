@@ -1,0 +1,119 @@
+{
+  "status": "PASS",
+  "completedUtc": "2026-10-02T20:50:36.168647+00:00",
+  "sourceRevision": "9b5dd24c903d5c4b7ea0c1025625db56d70f8491",
+  "localCompiledSourceRevision": "93ee2159532574a3bcb0b23872ec8744ceab7ee9",
+  "publishedSourceTree": "553da40a4e783197ecd4480eea898a122e0e3279",
+  "localRevisionObservedAfterGate": "d0373b675d0c4c85616d155308d3f980c8d2ab4a",
+  "sourceFingerprint": "b1a69d6e2928fd827fe78b6a639394cc40a6aac2d8e672793ecae7fdf8b0547d",
+  "sourceFingerprintScope": "Tracked app/, gradle/, build.gradle.kts, settings.gradle.kts, gradle.properties, debug.keystore; excludes docs/tools and generated outputs",
+  "sourceFingerprintBefore": "b1a69d6e2928fd827fe78b6a639394cc40a6aac2d8e672793ecae7fdf8b0547d",
+  "sourceFingerprintAfter": "b1a69d6e2928fd827fe78b6a639394cc40a6aac2d8e672793ecae7fdf8b0547d",
+  "sourceUnchanged": true,
+  "sourceInputs": 386,
+  "sourceWorktreeClean": false,
+  "sourceWorktreeNote": "Docs/tools may be edited while frozen Android inputs remain identical. Published and local compiled checkpoints have the same Git tree.",
+  "compile": {
+    "production": "PASS",
+    "unitTests": "PASS"
+  },
+  "unit": {
+    "suites": 101,
+    "counts": {
+      "tests": 974,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 974
+    },
+    "failures": [],
+    "skipped": []
+  },
+  "lint": {
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 121,
+    "severityCounts": {
+      "Warning": 121
+    },
+    "checkCounts": {
+      "ApplySharedPref": 1,
+      "InlinedApi": 7,
+      "UnusedAttribute": 1,
+      "RedundantLabel": 1,
+      "GradleDependency": 2,
+      "NewerVersionAvailable": 5,
+      "SwitchIntDef": 1,
+      "DrawAllocation": 1,
+      "ObsoleteSdkInt": 4,
+      "StaticFieldLeak": 10,
+      "UnusedResources": 7,
+      "IconDipSize": 2,
+      "UseKtx": 36,
+      "ClickableViewAccessibility": 1,
+      "SetTextI18n": 42
+    },
+    "disabledChecks": [],
+    "baselineUsed": false
+  },
+  "apk": {
+    "path": "app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 21470495,
+    "sha256": "96cbdceb9ff7f664ac2bab87c0bcf23c1f73d2a03c32b2572aa02001cb85ed4a",
+    "package": "com.aistudio.qwertykey.xyzabc",
+    "versionCode": 12,
+    "versionName": "4.5.1",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "signatureVerified": true,
+    "signatureScheme": "v2",
+    "signerCertificateSha256": "63a3ce6c6b4f80437594d421ec7e6e15d3c5a37821ca31f23c15732e868dddd1"
+  },
+  "toolchain": {
+    "jdk": "Temurin 17.0.20.1+1",
+    "gradle": "9.7.1",
+    "androidPlatform": "android-36.1",
+    "buildToolsInstalled": [
+      "36.0.0",
+      "36.1.0"
+    ],
+    "gradleHeap": "4 GiB",
+    "maxWorkers": 1,
+    "scheduling": "Separate sequential unit, lint and assemble invocations"
+  },
+  "logs": [
+    {
+      "gate": "compile-and-unit",
+      "file": "2026-10-02/integration-unit-2026-10-02.log",
+      "sha256": "136b1871f024670f54e2cc4c07bad3e97dd334a6146fc86e4f4ced78e0925d2c",
+      "status": "PASS"
+    },
+    {
+      "gate": "lint",
+      "file": "2026-10-02/integration-lint-2026-10-02.log",
+      "sha256": "846311ded2f213f4d15593fd2ae2ffd1a9bab872207d70cec44d53f907b36f8d",
+      "status": "PASS"
+    },
+    {
+      "gate": "assemble",
+      "file": "2026-10-02/integration-assemble-2026-10-02.log",
+      "sha256": "a3de4c805724d9b778acc9e4c837e1bb07be3081e78364667084190d78f103ad",
+      "status": "PASS"
+    }
+  ],
+  "physicalDeviceTested": false,
+  "githubActionsUsed": false,
+  "independentVerification": {
+    "apkSha256": true,
+    "zipIntegrity": true,
+    "goalAgentDexClassPresent": true,
+    "systemVoiceServiceDexClassPresent": true,
+    "signatureAndPackageVersion": true,
+    "goalJvmTests": 101,
+    "captureJvmTests": 51,
+    "captureAdapterFixtureChecks": 16,
+    "browserFixtureAssertions": 43,
+    "evaluatorGuardTests": 7,
+    "actualLoomBridgeTests": 12
+  }
+}

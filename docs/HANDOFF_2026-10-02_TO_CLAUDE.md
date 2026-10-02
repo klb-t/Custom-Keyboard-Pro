@@ -39,7 +39,7 @@ distinct. Cancel does not fabricate rollback or confirmed failure after dispatch
 
 `GoalAgentTest` adds ten lifecycle cases; `GoalSessionTest` retains thirteen
 approval/cancellation cases. The standalone harness now includes both classes.
-The full Gradle suite is still required for Android/API/JSON/UI coverage.
+The full Gradle suite passed, including the three shared-format bridge cases.
 
 ### Existing ecosystem-agent interoperability
 
@@ -64,7 +64,13 @@ proposal receipt is not a completed phone task.
 
 ## Validation
 
-Full combined Android gate: **PENDING_FINAL_GATE**.
+Full combined Android gate **PASS**: production/test compilation passed; **974/974
+unit tests**, zero failures/errors/skips; intact lint **0 errors / 121 warnings**;
+signed APK **4.5.1 / code 12**, 21,470,495 bytes. Its SHA-256 is
+`96cbdceb9ff7f664ac2bab87c0bcf23c1f73d2a03c32b2572aa02001cb85ed4a`.
+The debug certificate matches previous updates. Build logs are retained alongside
+the receipt at `validation/2026-10-02/`. No physical-device test is implied.
+
 The authoritative machine receipt is `validation/2026-10-02-integration-gate.json`.
 The gate fingerprints all Android build/test inputs before and after execution;
 documentation-only follow-ups do not recertify a changed implementation.

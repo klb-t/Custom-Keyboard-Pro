@@ -27,8 +27,9 @@ or rewriting of earlier releases is needed.
 ## Interrupted work resolved by this integration
 
 The final combined source gate had conflicting historical messages (960/961 tests,
-OOM, low disk, a later artifact). Run and record a new exact-source Android gate.
-The current receipt supersedes earlier claims only for its fingerprinted source.
+OOM, low disk, a later artifact). A new exact-source Android gate passed: 974/974 tests, intact lint zero errors
+(121 warnings), and signed APK 4.5.1. The current receipt supersedes earlier
+claims only for its fingerprinted Android inputs.
 
 The voice service already relayed speech into the goal activity. The integration
 adds a shared reusable agent lifecycle and tests for text/voice proposal ownership,
