@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "alternatives": [
+    {
+      "title": "Review colour-organ setup 🎵",
+      "steps": [
+        {
+          "id": "setup",
+          "action": "open",
+          "arguments": {"target": "iomatrix://colour-organ"},
+          "after": [],
+          "reason": "Review the audio route and paired bulb before enabling capture.",
+          "expected": "The local setup panel is visible.",
+          "apiHints": []
+        },
+        {
+          "id": "verify",
+          "action": "missing.device_observation",
+          "arguments": {},
+          "after": ["setup"],
+          "reason": "An opened panel is not evidence that the bulb reacts to music.",
+          "expected": "A locally observed bulb response; this fixture does not assert it.",
+          "apiHints": []
+        }
+      ]
+    }
+  ]
+}
