@@ -33,7 +33,8 @@ class GoalAssistantActivity : Activity() {
     private val work = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var planning: Job? = null
     private var executing: Job? = null
-    private var generation = 0L
+    private val agent = GoalAgent()
+    private var incomingGoalSource = GoalAgent.InputSource.TEXT
     private var foreground = false
     private var settingsReady = false
     private var voiceToken: String? = null
@@ -41,8 +42,8 @@ class GoalAssistantActivity : Activity() {
     private lateinit var goal: EditText
     private lateinit var status: TextView
     private lateinit var plansView: LinearLayout
-    private var alternatives = emptyList<GoalPlan>()
-    private var session: GoalSession? = null
+    private val alternatives get() = agent.proposals
+    private val session get() = agent.session
     private var recognition: ForegroundSpeech? = null
     private fun now() = SystemClock.elapsedRealtime()
     private fun ready() = foreground && settingsReady && !voiceHidden &&
@@ -51,10 +52,10 @@ class GoalAssistantActivity : Activity() {
     private fun line(value: String) = TextView(this).apply { text = value; setTextIsSelectable(true); textSize = 15f; setPadding(0, 10, 0, 8) }
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
     private fun tell(value: String) { status.text = value }
-    private fun invalidate() {
-        generation++; planning?.cancel(); planning = null
+    private fun invalidate(editedText: String? = null) {
+        planning?.cancel(); planning = null
         executing?.cancel(); executing = null
-        session?.stop(); session = null; alternatives = emptyList()
+        if (editedText == null) agent.clear() else agent.editGoal(editedText, incomingGoalSource)
         if (::plansView.isInitialized) plansView.removeAllViews()
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,7 +76,7 @@ class GoalAssistantActivity : Activity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 // Typing wins over a pending late transcript; never replace a new edit.
                 recognition?.close(); recognition = null
-                invalidate()
+                invalidate(s?.toString().orEmpty())
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
@@ -102,9 +103,9 @@ class GoalAssistantActivity : Activity() {
         // Stop is outside the scrollable plan and remains reachable for long proposals.
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(button("Stop / invalidate pending approvals") {
-            generation++; planning?.cancel(); recognition?.close(); recognition = null
+            planning?.cancel(); planning = null; recognition?.close(); recognition = null
             executing?.cancel(); executing = null
-            session?.stop(); tell("Stopped. No further step or model result will execute. Already applied effects are not rolled back."); render()
+            agent.cancel(); tell("Stopped. No further step or model result will execute. Already applied effects are not rolled back."); render()
         })
         root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
@@ -146,27 +147,27 @@ class GoalAssistantActivity : Activity() {
     }
     override fun onResume() { super.onResume(); foreground = true; if (::plansView.isInitialized) render() }
     override fun onPause() {
-        foreground = false; generation++; planning?.cancel(); recognition?.close(); recognition = null
+        foreground = false; planning?.cancel(); planning = null; recognition?.close(); recognition = null
         executing?.cancel(); executing = null
-        session?.pause(); super.onPause()
+        agent.pause(); super.onPause()
     }
     override fun onStop() {
-        foreground = false; generation++; planning?.cancel(); recognition?.close(); recognition = null
+        foreground = false; planning?.cancel(); planning = null; recognition?.close(); recognition = null
         executing?.cancel(); executing = null
-        session?.pause(); super.onStop()
+        agent.pause(); super.onStop()
     }
     override fun onDestroy() {
         recognition?.close(); recognition = null
         AssistantSessionVisibility.currentSession.detach(voiceToken)
-        session?.stop(); work.cancel(); super.onDestroy()
+        agent.cancel(); work.cancel(); super.onDestroy()
     }
     private fun accept(values: List<GoalPlan>) {
-        session?.stop(); alternatives = values.map { it.detached() }; session = null
+        agent.offerPlans(values)
         tell("Choose a proposed plan. Permission and API claims from a model are not evidence."); render()
     }
     private fun localCommand() {
         if (!ready()) return
-        val input = goal.text.toString().trim()
+        val input = agent.goal
         if (!input.startsWith("do:")) return tell("Offline execution requires an explicit do: command. Free-form goals use the configured model.")
         val c = Command.parse(input.removePrefix("do:")) ?: return tell("Empty command.")
         val spec = Verbs.byId(c.verb)
@@ -183,7 +184,7 @@ class GoalAssistantActivity : Activity() {
     }
     private fun modelPlan() {
         if (!ready()) return
-        val input = goal.text.toString().trim()
+        val input = agent.goal
         if (input.isEmpty()) return tell("Describe the goal first.")
         val config = AiConfig.from(SettingsStore.current, task = com.example.core.ai.AiRequestTask.GOAL_PLAN)
         config.configurationProblem?.let { return tell(it) }
@@ -191,21 +192,25 @@ class GoalAssistantActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Send this goal for planning?")
             .setMessage("Provider: ${config.provider}\nModel: ${config.model}\nEndpoint: ${runCatching { java.net.URI(config.effectiveBaseUrl).host }.getOrNull() ?: "configured endpoint"}\n\nSends the text you entered, action definitions and capability availability. No editor, clipboard, screen content or device addresses are included. A result only proposes a plan.")
             .setNegativeButton("Cancel", null).setPositiveButton("Plan") { _, _ ->
-                if (!ready() || goal.text.toString().trim() != input) {
+                if (!ready() || agent.goal != input) {
                     tell("The input or visible session changed. Review the goal again.")
                     return@setPositiveButton
                 }
-                invalidate(); val token = ++generation; val facts = snapshot(); val actions = GoalCatalogue.actions()
+                invalidate(); val turn = agent.beginPlanning(); val facts = snapshot(); val actions = GoalCatalogue.actions()
                 tell("Requesting a proposal. Stop discards late results; a provider request already sent may still finish remotely.")
                 planning = work.launch {
                     try {
                         val raw = AiClient.complete(config, GoalPrompt.system(actions.values, facts), input).getOrThrow()
                         ensureActive()
-                        if (generation != token || goal.text.toString().trim() != input || !ready()) return@launch
+                        if (!agent.isCurrent(turn) || !ready()) return@launch
                         val values = withContext(Dispatchers.Default) { GoalJson.read(raw, input) }
-                        ensureActive(); if (generation == token && ready()) accept(values)
+                        ensureActive()
+                        if (ready() && agent.finishPlanning(turn, values)) {
+                            tell("Choose a proposed plan. Permission and API claims from a model are not evidence."); render()
+                        }
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { if (generation == token) tell("Planning failed, or the model returned an invalid/oversized plan. Nothing was executed.") }
+                    catch (_: Exception) { if (agent.failPlanning(turn)) tell("Planning failed, or the model returned an invalid/oversized plan. Nothing was executed.") }
+                    finally { agent.failPlanning(turn) }
                 }
             }.show()
     }
@@ -213,9 +218,11 @@ class GoalAssistantActivity : Activity() {
         plansView.removeAllViews()
         val s = session
         if (s == null) {
-            alternatives.forEach { p ->
+            alternatives.forEachIndexed { index, p ->
                 plansView.addView(line("${p.title}\n" + p.steps.joinToString("\n") { "${it.id}: ${it.action} ${it.arguments}" }))
-                plansView.addView(button("Inspect this plan") { session = GoalSession(p, GoalCatalogue.actions()); render() })
+                plansView.addView(button("Inspect this plan") {
+                    if (ready()) { agent.selectPlan(index, GoalCatalogue.actions()); render() }
+                }.apply { isEnabled = ready() })
             }; return
         }
         plansView.addView(line("${s.plan.title}\n${if (s.stopped) "STOPPED" else if (s.allEffectsConfirmed()) "Every step confirmed (see evidence types below)" else "Not complete"}"))
@@ -248,22 +255,22 @@ class GoalAssistantActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("Confirm actual effect")
                         .setMessage("Expected: ${step.expected}\n\nThis records your observation, not an Android/API verification. It allows dependent steps to be reviewed.")
                         .setNegativeButton("Not yet", null).setPositiveButton("I confirm") { _, _ ->
-                            if (ready() && session === s && !s.stopped) { s.confirmObserved(step.id); render() }
+                            if (ready() && session === s && !s.stopped) { agent.confirmObserved(step.id); render() }
                         }.show()
                 })
         }
     }
     private fun review(s: GoalSession, id: String) {
         if (!ready() || session !== s) return
-        val review = runCatching { s.review(id, snapshot(), now()) }.getOrNull() ?: return render()
+        val review = runCatching { agent.review(id, snapshot(), now()) }.getOrNull() ?: return render()
         if (!review.feasible.ready) return render()
         AlertDialog.Builder(this).setTitle("Execute exactly this step?")
             .setMessage("${review.step.action}\n${review.step.arguments}\n\n${review.effects}\n\nVerification: ${review.verification}\n\nNo other step is authorized by this confirmation.")
             .setNegativeButton("Cancel", null).setPositiveButton("Execute") { _, _ ->
                 if (!ready() || session !== s) return@setPositiveButton
-                val ticket = s.begin(review, snapshot(), now()) ?: return@setPositiveButton tell("State changed or approval expired. Review again.")
+                val ticket = agent.begin(review, snapshot(), now()) ?: return@setPositiveButton tell("State changed or approval expired. Review again.")
                 if (GoalDispatchPolicy.runOnWorker(ticket.step)) {
-                    val token = generation
+                    val token = agent.revision
                     tell("Reading the selected local diagnostic. It will not be sent to the model.")
                     render()
                     executing = work.launch {
@@ -274,9 +281,9 @@ class GoalAssistantActivity : Activity() {
                                 }
                             }
                             ensureActive()
-                            if (generation != token || !ready() || session !== s) return@launch
+                            if (agent.revision != token || !ready() || session !== s) return@launch
                             // complete verifies this exact active ticket/epoch, including any pause.
-                            if (s.complete(ticket, receipt)) render()
+                            if (agent.complete(ticket, receipt)) render()
                         } catch (e: CancellationException) { throw e }
                     }
                     return@setPositiveButton
@@ -284,7 +291,7 @@ class GoalAssistantActivity : Activity() {
                 val receipt = runCatching { GoalPerformer(this).run(ticket.step) }.getOrElse {
                     GoalSession.Receipt(GoalSession.State.DISPATCHED_UNVERIFIED, "Execution/readback was interrupted. Inspect the actual effect before continuing.")
                 }
-                s.complete(ticket, receipt); render()
+                agent.complete(ticket, receipt); render()
             }.show()
     }
     private fun capabilities() {
@@ -324,14 +331,16 @@ class GoalAssistantActivity : Activity() {
         recognition = ForegroundSpeech(this, { ready() }, { words ->
             if (ready()) {
                 recognition = null
-                goal.setText(words); tell("Transcript only. Edit it and explicitly request a plan.")
+                incomingGoalSource = GoalAgent.InputSource.VOICE
+                try { goal.setText(words) } finally { incomingGoalSource = GoalAgent.InputSource.TEXT }
+                tell("Transcript only. Edit it and explicitly request a plan.")
             }
         }, { tell(it) }).also { it.start() }
     }
     @Suppress("DEPRECATION")
     private fun document(save: Boolean) {
         if (save && alternatives.isEmpty()) return tell("No proposed plan to save.")
-        if (!save && goal.text.isBlank()) return tell("Enter the goal to bind the imported plan to first.")
+        if (!save && agent.goal.isBlank()) return tell("Enter the goal to bind the imported plan to first.")
         val intent = Intent(if (save) Intent.ACTION_CREATE_DOCUMENT else Intent.ACTION_OPEN_DOCUMENT)
             .addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
         if (save) intent.putExtra(Intent.EXTRA_TITLE, "IO-Matrix-plan.json")
@@ -342,7 +351,7 @@ class GoalAssistantActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode !in setOf(8811, 8812) || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        val input = goal.text.toString().trim(); val saved = alternatives.map { it.detached() }; val token = generation
+        val input = agent.goal; val saved = alternatives.map { it.detached() }; val token = agent.revision
         work.launch {
             try {
                 if (requestCode == 8811) {
@@ -361,7 +370,7 @@ class GoalAssistantActivity : Activity() {
                         }; GoalJson.read(raw, input)
                     }
                     ensureActive()
-                    if (token == generation && input == goal.text.toString().trim()) { invalidate(); accept(result) }
+                    if (token == agent.revision && input == agent.goal) { invalidate(); accept(result) }
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { tell("Plan import/save failed. No action was run; a failed save may leave a partial document.") }
