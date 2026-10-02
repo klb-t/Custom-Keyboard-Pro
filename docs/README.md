@@ -20,7 +20,7 @@ their dated test counts do not certify later source.
 | Area | Guides |
 |---|---|
 | Keyboard, settings and profiles | [Authoring and toolbar](KEYBOARD_AUTHORING_TOOLBAR.md), [owners and inheritance](SETTINGS_SCOPE_AND_LEVELS.md), [Expert controls](EXPERT_SETTINGS_AND_PROFILES.md), [prediction](PREDICTION.md), [tiles and lock](TILES-AND-LOCK.md) |
-| Assistant and phone | [Universal target](UNIVERSAL_ASSISTANT.md), [initial goal/light implementation](GOAL_ASSISTANT_IMPLEMENTATION.md), [system voice host](SYSTEM_VOICE_ASSISTANT.md), [phone tools](PHONE_TOOLS.md), [Android capability research](ANDROID_PHONE_CAPABILITIES.md) |
+| Assistant and phone | [Universal target](UNIVERSAL_ASSISTANT.md), [initial goal/light implementation](GOAL_ASSISTANT_IMPLEMENTATION.md), [system voice host](SYSTEM_VOICE_ASSISTANT.md), [ecosystem agent bridge](ECOSYSTEM_AGENT_BRIDGE.md), [phone tools](PHONE_TOOLS.md), [Android capability research](ANDROID_PHONE_CAPABILITIES.md) |
 | Providers and model calls | [Provider discovery](PROVIDERS.md), [capability-first onboarding](PROVIDER_ONBOARDING.md), [AI request profiles](AI_TASK_PROFILES.md), [goal-model evaluator](GOAL_AI_EVALUATION.md) |
 | Capture and workspace | [Conversation capture](CONVERSATION_CAPTURE.md), [accessibility-tree inspection](ACCESSIBILITY_TREE_CAPTURE.md), [clipboard recovery](CLIPBOARD_WORKSPACE.md), [media hub](MEDIA_HUB.md) |
 | Credentials and portability | [Vault and Autofill](VAULT_AND_AUTOFILL.md), [vault backup](VAULT_BACKUP.md), [manual device sync](DEVICE_SYNC.md) |

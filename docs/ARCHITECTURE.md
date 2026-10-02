@@ -83,7 +83,7 @@ operation does not prove that every host has an audited executable binding.
 **One goal runtime across voice and text.** `GoalCatalogue` projects the canonical
 verbs and capability facts; its runnable bindings are the host's audited subset,
 not a definition of the product's eventual limits. `GoalJson` validates proposals,
-`GoalSession` detaches plan data and binds expiring review/tickets to exact parameters,
+`GoalAgent` / `GoalSession` detaches plan data and binds expiring review/tickets to exact parameters,
 and `GoalPerformer` supplies the foreground host to `Performer`. The system voice
 adapter adds activation and a revocable visibility lease, not execution approval.
 Cancellation and pause invalidate pending approvals and late results. Typed receipts
@@ -93,7 +93,7 @@ and [the initial execution contract](GOAL_ASSISTANT_IMPLEMENTATION.md).
 
 **Two kinds of composition.** Matrix `Planner` searches data transformations under
 an explicit cost/privacy/information policy. Wires bind configured input events to
-actions; `GoalSession` orders reviewed effects under prerequisites and outcome
+actions; `GoalAgent` / `GoalSession` orders reviewed effects under prerequisites and outcome
 checks. The reactive-light slice uses Matrix smoothing and a separate `LightSink`
 transport, but is not yet a saved general streaming graph. Keep these contracts
 distinct when extending composition rather than treating one successful path as

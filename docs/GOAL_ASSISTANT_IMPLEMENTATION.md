@@ -1,6 +1,6 @@
 # Goal assistant and reactive-light implementation checkpoint
 
-This document records the initial 2026-09-29 slice. The current 2026-09-30 host,
+This document records the initial 2026-09-29 slice. The integrated host,
 phone bindings, system voice service and validation state are recorded in
 [RESUME.md](RESUME.md), [PHONE_TOOLS.md](PHONE_TOOLS.md) and
 [SYSTEM_VOICE_ASSISTANT.md](SYSTEM_VOICE_ASSISTANT.md).
@@ -10,6 +10,26 @@ capture PR #3 at `b3db2c8`. **Not a new verified Android release. Keep APK 4.4.2
 The open-ended product contract remains [UNIVERSAL_ASSISTANT.md](UNIVERSAL_ASSISTANT.md).
 This is the first executable slice, not a claim that every phone capability or
 arbitrary external API is already integrated.
+
+## Shared agent lifecycle — 2026-10-02
+
+`GoalAssistantActivity` routes both typed edits and speech transcripts to the same
+`GoalAgent.editGoal`. The source is recorded as TEXT or VOICE. A new edit revokes
+prior planner turns, proposals and execution approvals. `beginPlanning`/`finishPlanning`
+accept only the current goal, turn identity and controller; cancelled/late/other-host
+results cannot replace it. Validated alternatives are detached from caller mutation.
+
+`selectPlan` creates the existing `GoalSession`. Review, begin, receipt and observed
+effect confirmation still use that session's frozen catalogue, current capability
+evidence and typed `GoalPerformer`/`Performer`. Pause/cancel revoke active turns and
+approval epochs while preserving uncertain dispatched effects honestly. Ten new
+GoalAgent tests plus the existing thirteen session-binding tests cover these paths.
+
+The optional [ecosystem agent bridge](ECOSYSTEM_AGENT_BRIDGE.md) injects a proposal
+Tool into the real Loom prototype and exchanges existing version-1 plan definitions.
+The existing Android import feeds the same controller and review path. The current
+bridge transports proposals; remote phone execution and observation return remain
+future integration work.
 
 ## Open the host
 

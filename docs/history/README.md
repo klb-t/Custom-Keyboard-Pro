@@ -14,3 +14,7 @@ beside the functional guides because it also documents plan, approval and transp
 contracts. It is explicitly the 2026-09-29 slice; current voice and phone extensions
 are described separately. Git history and preserved branches retain the incremental
 source changes and experiments without requiring old session notes on the first page.
+
+[Previous recovery state](RESUME_2026-09-30.md) retains the earlier combined
+status; its relative Markdown links are adapted to this folder. Original bytes and
+all source commit identities remain in Git history.

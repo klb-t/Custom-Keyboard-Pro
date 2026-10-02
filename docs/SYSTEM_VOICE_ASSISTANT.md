@@ -6,6 +6,9 @@ real `VoiceInteractionService`, `VoiceInteractionSessionService` / session and
 The system assist gesture opens `GoalAssistantActivity`. The transcript remains
 editable; model planning and individual typed effects retain the existing explicit
 review/approval flow in `GOAL_ASSISTANT_IMPLEMENTATION.md`.
+Since the 2026-10-02 integration, `GoalAgent` owns the shared voice/text planner turn,
+proposal and session lifecycle. Voice session visibility and Android microphone
+lifetime remain host responsibilities; a transcript never restores an approval.
 
 ## Selection and version boundary
 

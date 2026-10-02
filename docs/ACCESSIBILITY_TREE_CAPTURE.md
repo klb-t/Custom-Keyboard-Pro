@@ -1,5 +1,11 @@
 # Accessibility tree and collapsed conversation content
 
+Current integration: see [RESUME.md](RESUME.md) and the
+[2026-10-02 handoff](HANDOFF_2026-10-02_TO_CLAUDE.md).
+The original checkpoint and validation paragraphs below are historical; their
+branch/APK/test counts do not describe the current combined source. Real-app and
+physical-device acceptance remain separate from the automated build gate.
+
 Follow-up to draft PR #3, 2026-09-29. Source implementation only: not a new APK.
 Keep release 4.4.2 until the complete Android build, lint and device gates pass.
 

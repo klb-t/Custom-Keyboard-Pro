@@ -10,6 +10,7 @@ This index separates reproducible mechanisms from unavailable provider evidence.
 | Scoped keyboard/phone/voice host | `d4d8c4e`, `c75e41c` | `tools/local-android-build.sh` | Earlier exact gate in `../validation/2026-09-30-core-gate.json`; does not certify later changes. |
 | Task profiles, strict JSON and clipboard recovery | `654a422`, `1aa502c`, `cdc6c5f`, `d7a861b`, `dd739d1` | Complete Gradle unit/lint/assembly gate | Integrated source; current gate is recorded in the new validation receipt. |
 | Real OpenRouter planning experiment | `tools/evaluate-goal-ai.py` + `GoalEvaluationBridgeTest` | `../GOAL_AI_EVALUATION.md` | Historical recovery notes report 45 baseline + 12 comparison calls, USD 1.098135722; raw ledger and final production-validation outputs were not recovered. No certified quality score or automatic paid replay. |
+| Ecosystem proposal bridge | `tools/agent_bridge.py` + pinned Loom runtime | `python3 tools/test_agent_bridge.py` with `IOMATRIX_LOOM_SOURCE` set | 12 Python guards/actual-runtime tests; three Android parser tests belong to the full gate. |
 | Shared voice/text agent lifecycle | `core/assistant/GoalAgent.kt` | `GoalAgentTest`, standalone goal tests and full Android gate | Local agent lifecycle with frozen review and stale-result rejection; no cloud deployment implied. |
 
 No failed/unknown experiment is promoted as a successful result. The raw first responses,

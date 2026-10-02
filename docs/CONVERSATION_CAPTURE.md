@@ -1,5 +1,11 @@
 # Conversation capture — exposed text, details and structure
 
+Current integration: see [RESUME.md](RESUME.md) and the
+[2026-10-02 handoff](HANDOFF_2026-10-02_TO_CLAUDE.md).
+The original checkpoint and validation paragraphs below are historical; their
+branch/APK/test counts do not describe the current combined source. Real-app and
+physical-device acceptance remain separate from the automated build gate.
+
 Status: implementation on `feat/conversation-capture-2026-09-29`, based on active
 branch commit `9b76a39b4fbbfb98e961eeeb225091381b7983eb`. This is **not a new verified
 Android release**. Keep the existing 4.4.2 APK until the Android build/device gates
