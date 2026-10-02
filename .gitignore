@@ -19,3 +19,5 @@ local.properties
 # debugConfig signing config for why: a fixed debug key is what lets one APK
 # install over another instead of demanding an uninstall every time.
 __pycache__/
+# Obsolete external UI scaffold; no application consumer.
+/metadata.json

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-command -v kotlinc >/dev/null
-command -v java >/dev/null
 out=build/goal-checks
 mkdir -p "$out"
 # Only the annotation is a shim. Production JVM mechanisms and test bodies run unchanged.
@@ -12,7 +10,7 @@ package org.junit
 @Retention(AnnotationRetention.RUNTIME)
 annotation class Test
 KOTLIN
-kotlinc app/src/main/java/com/example/core/assistant/*.kt app/src/main/java/com/example/core/devices/*.kt \
+bash tools/run-standalone-kotlin.sh "$out/tests.jar" RunGoalTestsKt "$out/light-requests.json" \
+  app/src/main/java/com/example/core/assistant/*.kt app/src/main/java/com/example/core/devices/*.kt \
   app/src/test/java/com/example/core/assistant/*Test.kt app/src/test/java/com/example/core/devices/ReactiveLightTest.kt \
-  "$out/Test.kt" tools/RunGoalTests.kt -include-runtime -d "$out/tests.jar"
-java -jar "$out/tests.jar"
+  "$out/Test.kt" tools/RunGoalTests.kt

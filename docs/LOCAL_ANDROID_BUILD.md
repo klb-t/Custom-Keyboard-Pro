@@ -109,3 +109,12 @@ A successful Android compile, tests, lint and APK are separate gates. Report the
 actual outcomes and the exact source revision; local setup alone passes none of
 them. The existing debug keystore must be used for an update-compatible APK.
 Physical-device, real-account and hardware acceptance remain separate checks.
+
+## Standalone mechanism checks
+
+`tools/test-goal-core.sh` and `tools/test-capture-core.sh` accept an installed
+`kotlinc`, or use the Kotlin compiler/standard library bundled with pinned Gradle
+9.7.1 after bootstrap. Set `IO_TOOLCHAIN_ROOT` for a custom installation. They run
+unchanged JVM test bodies with only the JUnit Test annotation supplied by a small
+shim; the full Android gate uses actual JUnit/Robolectric. The standalone goal
+harness includes GoalPlan, GoalSession, GoalAgent and reactive-light tests.
