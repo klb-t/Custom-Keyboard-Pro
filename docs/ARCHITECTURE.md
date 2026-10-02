@@ -1,5 +1,32 @@
 # Architecture
 
+IO Matrix separates authored configuration, platform access and execution authority.
+The keyboard, goal assistant and configured automation share command metadata and
+the performer; each host supplies its own allowed context and lifecycle. Matrix
+conversion is a separate planner over information transformations, not the assistant's
+effect plan. See [current validation](RESUME.md) and [the guide index](README.md).
+
+## Runtime paths
+
+```mermaid
+flowchart TD
+    Layout["JSON layout and key trigger"] --> IME["IME host and EditorController"]
+    IME --> Performer["Verbs and Performer"]
+    Inputs["Configured Wires and input events"] --> Engine["EngineRuntime"]
+    Engine --> Performer
+    Speech["Voice host or text goal"] --> Goal["Reviewed goal plan and GoalSession"]
+    Goal --> Performer
+    Performer --> Adapters["Audited phone and platform adapters"]
+    Adapters --> Receipts["Observed, requested or failed receipt"]
+    Receipts --> Goal
+```
+
+This diagram describes dispatch relationships, not equivalent authority. The goal
+host does not inherit keyboard editor access, macro execution or accessibility
+context merely because it uses the same performer. Speech yields editable text;
+the goal runtime validates a bounded plan and binds approvals to exact steps.
+Opening setup and requesting an effect are distinguished from verifying the result.
+
 ## The idea
 
 A keyboard is a rendering of a document. `LayoutDef` describes every key, what it
@@ -27,7 +54,12 @@ these contracts across interfaces, learned knowledge or other projects.
 | `core.layout` | The layout model, its JSON codec, key geometry and hit testing, the built-in layouts, and the two authoring paths (bitmap and model-written). |
 | `core.config` | Shared persisted `Settings`, schema/levels/ownership, sparse instance overrides and resolved host-local snapshots. |
 | `core.io`, `core.phone` | Canonical verb metadata, typed phone requests, prerequisites and outcome contracts. |
+| `core.assistant`, `assistant` | Bounded effect plans, prerequisite/DAG checks, session approvals, strict JSON and Android goal/voice hosts. |
 | `io`, `phone`, `assistant` | Host/platform adapters, explicit local phone sessions and reviewed goal/voice execution. |
+| `core.engine`, `engine` | Configured Wires, event matching, sensor/network adapters and runtime attachment. |
+| `core.matrix` | Data/representation/transport contracts, transformation plans, stream stages and provenance. |
+| `core.capture`, `io.capture` | Bounded conversation/tree observations, review and exports. |
+| `core.vault`, `vault`, `core.security`, `sync` | Credential trust, authenticated storage/Autofill, protected persistence and explicit portability. |
 | `core.text` | Grapheme-safe deletion, word and line boundaries, capitalisation rules, dead-key composition. |
 | `core.data` | Room: clipboard history, the personal dictionary, the word-bigram model, text shortcuts. |
 | `core.suggest` | Merges local and model suggestions for the strip. |
@@ -47,6 +79,25 @@ The goal assistant reuses those operations with its own reviewed, bounded host.
 Extend an existing catalogue/adapter when adding another instance of a capability;
 add a new `KeyAction` only for a genuinely new kind of keyboard intent. A declared
 operation does not prove that every host has an audited executable binding.
+
+**One goal runtime across voice and text.** `GoalCatalogue` projects the canonical
+verbs and capability facts; its runnable bindings are the host's audited subset,
+not a definition of the product's eventual limits. `GoalJson` validates proposals,
+`GoalSession` detaches plan data and binds expiring review/tickets to exact parameters,
+and `GoalPerformer` supplies the foreground host to `Performer`. The system voice
+adapter adds activation and a revocable visibility lease, not execution approval.
+Cancellation and pause invalidate pending approvals and late results. Typed receipts
+retain requested-but-unverified effects; dependencies wait for verification or an
+explicit observed-effect confirmation. See [voice lifetime](SYSTEM_VOICE_ASSISTANT.md)
+and [the initial execution contract](GOAL_ASSISTANT_IMPLEMENTATION.md).
+
+**Two kinds of composition.** Matrix `Planner` searches data transformations under
+an explicit cost/privacy/information policy. Wires bind configured input events to
+actions; `GoalSession` orders reviewed effects under prerequisites and outcome
+checks. The reactive-light slice uses Matrix smoothing and a separate `LightSink`
+transport, but is not yet a saved general streaming graph. Keep these contracts
+distinct when extending composition rather than treating one successful path as
+proof that every adapter is interchangeable. See [IO-MATRIX.md](IO-MATRIX.md).
 
 **One editor.** Every change to the user's text goes through `EditorController`. The
 rules about what backspace removes, when a capital is implied, and what counts as a

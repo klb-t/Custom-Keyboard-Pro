@@ -150,7 +150,7 @@ It does not supersede the current capture build/device gates in `RESUME.md`.
 
 - [IO Matrix model and planner](IO-MATRIX.md)
 - [Use-case-derived development](USE-CASES.md)
-- [Existing permission-backed extension direction](HANDOFF_2026-09-27.md)
+- [Existing permission-backed extension direction](history/HANDOFF_2026-09-27.md)
 - [Current implementation checkpoint and remaining gates](RESUME.md)
 
 Primary platform references consulted on 2026-09-29; recheck against the target

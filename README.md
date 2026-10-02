@@ -1,162 +1,126 @@
 # IO Matrix
 
-An Android keyboard where the layout is data, not code — so anything the built-in
-layouts can do, a layout you make can do too.
+IO Matrix is a configurable Android input and automation layer. Its first host is a
+keyboard: layouts, gestures, settings and action bindings are data that users can
+inspect, edit and reuse. The same action contracts support phone tools and a
+voice/text assistant that proposes plans, checks prerequisites and executes reviewed
+steps.
 
-It works completely on its defaults. Nothing needs to be configured, no account, no
-key, no network. Everything is adjustable if you want it to be.
+Core typing works offline without an account, model, accessibility service or vault.
+Android 7.0+ (API 24) is supported; the system voice-service host and explicit
+on-device speech route require Android 12+ (API 31) and an available local engine.
 
-## Long-term product target
+## What is implemented
 
-The keyboard is the first host, not the product's boundary. The target includes all
-special functions, special permissions and advanced phone capabilities, external
-devices, and a voice/text assistant that analyses goals, finds required APIs and
-prerequisites, composes executable plans and verifies their effects. A Wi-Fi LED bulb
-made into a music-responsive colour organ is one explicit composition scenario.
-See [universal capabilities and assistant requirements](docs/UNIVERSAL_ASSISTANT.md).
-This is the development target, **not a claim that the assistant or all integrations
-are implemented in the current APK**.
+| Area | Available in source | Acceptance and remaining scope |
+|---|---|---|
+| Keyboard and layouts | JSON layouts; visual geometry editing; colour masks; screenshot tracing; optional model authoring; modifiers, compose sequences, macros and swipe/chord bindings | Editor, terminal, multi-touch and OEM behavior need device coverage. Glide typing is not implemented. |
+| Settings and profiles | One canonical settings model; Basic/Advanced/Expert/Debugger views; layout/panel/key inheritance; validated partial imports; contextual controls | Debugger exposes registered variables. Profile sharing transfers configuration, not permissions or credentials. |
+| Matrix and automation | Explicit data types, representations, transports and transform provenance; ranked conversion routes; Wires, sensors and network streams | Availability depends on configured sources and adapters. Arbitrary API discovery and general streaming-graph composition remain open. |
+| Voice and goal assistant | Editable on-device transcripts; typed plan proposals; prerequisite/DAG validation; reviewed execution through shared action adapters; explicit outcome states | Speech alone does not authorize an effect. System role selection, recognition Binder behavior and physical effects need device acceptance. |
+| Phone tools | Local device/app/sensor inventories, bounded foreground sensor sessions, contextual access setup and typed platform actions | An opened settings screen grants no access. Privileged ADB/root/device-owner execution has no connected adapter. |
+| Reactive light | Explicit microphone RMS → smoothing → colour/brightness → Yeelight LAN music-mode session, with synthetic preview | This is level-reactive output. Physical bulb/firmware acceptance, beat analysis and additional protocols remain open. |
+| Capture and clipboard | Reviewed accessibility-tree/DOM capture, image-byte retention, persistent Trash and batch Undo | Only exposed or deliberately inspected content is captured. Browser helper is a standalone script; receiving apps may accept only one clipboard item. |
+| Models, media and vault | Capability-first provider setup; optional chat/OCR/speech/embedding routes; user-granted local/cloud files; authenticated vault/Autofill, backup and manual sync | Provider, account, real Keystore, browser Autofill and cloud grants need their own acceptance checks. Vault sync and payment processing are not implemented. |
 
-## What it does
+This table describes implementation scope, not certification of every integration.
+[Current recovery and validation state](docs/RESUME.md) identifies the source revision,
+build evidence and remaining gates. Dated receipts are retained in
+[development history](docs/history/README.md).
 
-**Layouts are documents.** A layout describes its keys, what each one looks like, and
-what it does under every way of touching it: tap, long press, double tap, hold-repeat,
-eight swipe directions, and chords with another key. All of it is JSON you can read,
-edit, export and import.
+## Start using it
 
-**Four ways to make one.**
+1. Install a verified APK from the
+   [repository releases](https://github.com/klb-t/Custom-Keyboard-Pro/releases), or
+   build the current source below. Check the release or recovery receipt for the
+   exact version and validation state.
+2. Open **IO Matrix**, choose **Enable the keyboard**, then **Choose this keyboard**.
+   The default layout is usable immediately.
+3. Use the toolbar's settings button for layout and contextual customization;
+   long-press it for Expert controls. Features requiring accessibility, microphone,
+   storage grants, a model or special access explain their prerequisites in context.
+4. Open **Goal assistant** from the action panel for a text goal or explicit
+   push-to-talk. System assistant selection is available from that workspace.
+   Review the proposed steps and their effects before execution.
 
-| | |
-|---|---|
-| Paint a **colour mask** | One flat colour per key. Any shape, anywhere on the image, which becomes the keyboard's background. Exact — nothing is guessed. |
-| **Trace a screenshot** | Finds the rows and keys by looking for the gaps. On device, offline, instant, and a guess. |
-| **Read a screenshot with a model** | Reads the glyphs and infers what each key should do, including long-press alternates. |
-| **Describe it in words** | "Like Hacker's Keyboard but with a lit Caps Lock and swipe-up digits" — and it writes the JSON. |
+Layouts support tap, long press, double tap, hold-repeat, eight swipe directions and
+chords. Shift, Ctrl, Alt, Meta, Fn and AltGr have momentary, one-shot, toggled and
+locked states with visible indicators. Real key events support terminals and remote
+desktops. Built-in English/Polish suggestions and local dictionary learning work
+without a model.
 
-**Real modifiers, with lamps.** Shift, Ctrl, Alt, Meta, Fn and AltGr, each momentary,
-one-shot, toggled or locked — and a per-key indicator showing which. Caps, Num and
-Scroll Lock have their own, and there is an optional status strip for all of them.
-Ctrl+C, Tab, Esc and the function row are sent as real key events, so they reach
-terminals and remote desktops.
+Optional AI uses configured OpenAI-compatible, Anthropic or Gemini routes, including
+local endpoints such as Ollama, LM Studio and vLLM. System dictation, an explicit
+on-device-only route and remote Whisper-compatible endpoints have distinct privacy
+and setup requirements. See [provider setup](docs/PROVIDER_ONBOARDING.md) and
+[system speech lifecycle](docs/SYSTEM_VOICE_ASSISTANT.md).
 
-**Things other keyboards do not have.** X11 compose sequences (`Compose`, `-`, `>`
-gives →), dead keys for every Latin accent, hex Unicode entry, macros, per-key touch
-weights, and a long swipe across the keyboard bound to any action you like.
+## Build and verify
 
-**Dictation that lets you choose.** The recogniser returns a ranked list and the
-second entry is often the right one, so the alternatives are shown and you pick.
-The system recogniser needs no key; whether it sends audio to a server depends on
-the installed service. An explicit on-device-only engine is offered when Android
-reports it available. Remote Whisper-compatible endpoints are also supported.
+The project declares Gradle **9.7.1**, JDK **17**, Android SDK **36.1** and target SDK
+**36**. There is no committed Gradle wrapper binary. The pinned local bootstrap and
+build scripts restore the exact toolchain and run compilation, unit tests, lint and
+APK assembly in separate stages:
 
-**AI, if you want it and on your terms.** Any OpenAI-compatible endpoint, Anthropic,
-Gemini, or a model on your own machine through Ollama, LM Studio or vLLM. Inline
-completion in the suggestion strip, and a panel of text tasks you can extend. All of
-it off until you turn it on.
-
-**Suggestions that work on day one.** Common English and Polish word lists are built
-in; your own dictionary and next-word model build up alongside them, on the device.
-You can inspect, edit and delete every word it has learned, and import a real word
-list.
-
-**Shapes.** Full width, one-handed left or right, split, or a floating panel you drag
-where you want — with touches outside it going through to the app underneath.
-
-## Configuration and phone tools
-
-The toolbar's settings button opens contextual customization, expert settings and
-profiles, provider setup, files/media and the vault. Holding the button opens the
-expert view directly; the toolbar remains available when suggestions are off.
-
-* **Expert controls and profiles:** searchable controls, exact numeric values,
-  validated JSON, per-option reset, ten partial settings profiles and local intent
-  search that works without an AI account. Profile imports preview changes and
-  preserve unrelated settings; credentials are excluded from portable exports.
-* **Levels and ownership:** Basic, Advanced, Expert and Debugger are independent
-  of where a setting belongs. Keyboard defaults cascade through layout, panel and
-  authored key overrides; the defaults policy can suppress local overrides. The
-  selected-instance editor shows the effective value and source, with inheritance
-  reset and instance profiles. Debugger inspects explicitly published live variables.
-* **Toolbar and authoring:** toolbar rows compose suggestions, tools and contextual
-  actions, with reusable row profiles. The layout editor supports visual key
-  selection, drag/reorder, free geometry, alignment, spacing and draft undo.
-* **Phone tools and assistant:** local device/app/sensor inspection, bounded
-  foreground sensor sessions and contextual permission routes use audited typed
-  operations. API 31+ includes a system voice-session host with on-device push-to-talk.
-  The goal assistant proposes reviewed steps and reports actual outcome states;
-  missing privileged routes and adapters remain visible work.
-* **Quick settings:** hold either tile for its options. Keyboard launch collapses the
-  shade; optional shortcut sessions keep the keyboard active across focus changes.
-  Touch, volume, media and delivered navigation keys have separate lock policies.
-* **Models first:** choose a capability or name a model, inspect providers and evidence,
-  follow signup/key steps, then explicitly test and save the route. Embeddings,
-  speech, OCR and chat have separate configuration.
-* **Files and cloud media:** one browser over folders/files explicitly selected from
-  Android storage providers, with MIME profiles, search, open/share/copy and visible
-  errors when an account or grant is unavailable.
-* **Passwords and cards:** a separate device-authenticated vault, login CSV import,
-  explicit app/browser trust and authenticated Autofill. Existing managers and
-  wallet apps stay accessible. This is not a payment processor or NFC wallet.
-
-See [the implementation handoff](docs/HANDOFF_2026-09-27.md) for exact scope,
-verification limits and remaining integrations.
-
-## Privacy
-
-Two rules, enforced in the code that could break them rather than at each call site:
-
-1. In a password field, or an editor that asked not to be personalised, nothing is
-   suggested, learned, recorded to the clipboard, or sent to a model — whatever else
-   is switched on.
-2. User content is sent only through configured features or an explicit request.
-   Public catalogue refreshes need no account and send neither typed content nor API
-   keys. System dictation follows the installed recogniser's processing policy;
-   select the available on-device-only engine for a strict local speech route.
-
-Settings are encrypted with a device-bound Android Keystore key and excluded from
-backup; hardware backing depends on the device. API keys are omitted from portable
-profile exports. The vault uses a separate
-key requiring device authentication. Read [vault behavior and recovery
-limits](docs/VAULT_AND_AUTOFILL.md) before relying on it as your only credential store.
-
-## Building
-
-No Gradle wrapper binary is committed. CI provisions Gradle through
-`gradle/actions/setup-gradle`. Use the declared Gradle 9.7.1, JDK 17 and Android
-SDK 36.1 locally; see [local setup](docs/LOCAL_ANDROID_BUILD.md).
-
-```bash
-gradle :app:assembleDebug
-gradle :app:testDebugUnitTest
+```sh
+python3 tools/bootstrap-android.py --accept-licenses
+bash tools/local-android-build.sh
 ```
 
-`debug.keystore` is intentionally versioned **only for debug builds**, so an APK built
-on another machine/CI run can be installed over the previous debug APK without losing
-local test state. It is not a release-signing credential and must never be reused for a
-production release.
+With an existing matching toolchain, the standard Gradle gate is:
 
-## Documentation
+```sh
+gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
 
-- [`ECOSYSTEM.md`](ECOSYSTEM.md) — shared ecosystem direction and iOmatrix's role.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it is put together and where
-  the decisions live.
-- [`docs/LAYOUT_FORMAT.md`](docs/LAYOUT_FORMAT.md) — the layout JSON, in full.
-- [`docs/RESUME.md`](docs/RESUME.md) — current branch, actual validation and next gates.
-- [`docs/SETTINGS_SCOPE_AND_LEVELS.md`](docs/SETTINGS_SCOPE_AND_LEVELS.md) — owners, cascade and levels.
-- [`docs/PHONE_TOOLS.md`](docs/PHONE_TOOLS.md) — local phone adapters and their limits.
-- [`docs/SYSTEM_VOICE_ASSISTANT.md`](docs/SYSTEM_VOICE_ASSISTANT.md) — system entry and speech lifecycle.
+The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. See
+[local build details](docs/LOCAL_ANDROID_BUILD.md) for environment setup, logs,
+focused tests and constrained-memory builds. Unit tests, lint, assembly and device
+acceptance establish different things; the latest result belongs in the current
+receipt rather than a permanent badge.
 
-## Not included
+`debug.keystore` is intentionally versioned **only for debug builds**, so debug APKs
+from another machine can update an existing installation without losing local test
+state. It is not a release-signing credential and must never be reused for a
+production release. Release signing requires a separate supplied keystore.
 
-**Glide typing.** Tracing a word across the keys needs a large frequency-weighted
-word list to decode against; the bundled lists are a few hundred words, enough for
-suggestions and correction but far too small for a glide decoder. Shipping the gesture
-without the data behind it would produce a feature that feels broken. Importing a real
-word list is the groundwork; the decoder is not written.
+## Architecture and privacy
+
+Hosts share `Verbs`/`Performer` and audited platform adapters. Keyboard layouts use
+`LayoutDef`, resolved geometry and a common editor controller. Settings retain
+ownership and inheritance provenance. Matrix transformations distinguish the data
+from its representation and record lost, inferred and generated information.
+[Architecture](docs/ARCHITECTURE.md) explains the runtime paths;
+[the documentation index](docs/README.md) maps the contracts and feature guides.
+
+Password fields and editors requesting no personalized learning are excluded from
+suggestions, learning, macro capture, clipboard history and model context. User
+content leaves through configured features or an explicit request; public catalogue
+refreshes send neither typed content nor API keys. Generic system dictation follows
+the installed recognizer's policy; an explicit local route is available when Android
+reports an on-device engine.
+
+Settings use a device-bound Android Keystore key and are excluded from backup;
+hardware backing depends on the device. Portable profiles omit API credentials.
+The separate vault requires device authentication and has explicit recovery limits:
+read [vault/Autofill](docs/VAULT_AND_AUTOFILL.md) and
+[portable vault backup](docs/VAULT_BACKUP.md) before relying on it as a sole store.
+
+## Direction
+
+The long-term assistant target includes advanced phone capabilities, external
+devices, API and prerequisite discovery, composed execution and effect verification.
+A music-responsive Wi-Fi light is one concrete composition scenario. The current
+adapters are incremental steps toward that target, not a permanent command-list
+boundary. See [universal assistant requirements](docs/UNIVERSAL_ASSISTANT.md).
+
+[ECOSYSTEM.md](ECOSYSTEM.md) records iOmatrix's possible role across the wider
+projects. Shared representations and procedures do not transfer access or execution
+authority; those integrations remain independently scoped.
 
 ## Licensing
 
-This project is **source-available**, not OSI open-source. Noncommercial use is licensed
-under the PolyForm Noncommercial License 1.0.0; see `LICENSE`.
-
-Commercial use requires a separate written license; see `COMMERCIAL_LICENSE.md`.
+This project is **source-available**, not OSI open-source. Noncommercial use is
+licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use
+requires a separate written license; see [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
+Bundled third-party material is documented in [docs/LICENSES.md](docs/LICENSES.md).
